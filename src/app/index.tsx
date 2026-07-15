@@ -1,17 +1,16 @@
-import { Text, View, StyleSheet } from "react-native";
+import { SafeAreaView, StyleSheet } from 'react-native';
+import { SignIn } from '../ui/SignIn';
+import { useSession } from '../ui/useSession';
+import { WeightScreen } from '../ui/WeightScreen';
 
 export default function Index() {
+  const { session, loading } = useSession();
+  if (loading) return null;
   return (
-    <View style={styles.container}>
-      <Text>Edit src/app/index.tsx to edit this screen.</Text>
-    </View>
+    <SafeAreaView style={styles.safe}>
+      {session ? <WeightScreen /> : <SignIn />}
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-});
+const styles = StyleSheet.create({ safe: { flex: 1 } });

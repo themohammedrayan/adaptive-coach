@@ -46,8 +46,9 @@ Module folders are created when their module is built.
   rewrites historical entries.
 - The AI coach **narrates, never computes** — displayed numbers always come
   from engine state, never from coach text.
-- API keys never ship in the client; all Claude calls go through a Supabase
-  Edge Function.
+- API keys never ship in the client; all model API calls go through the
+  `coach-note` Supabase Edge Function (currently OpenAI `gpt-5-mini`;
+  provider is swappable server-side only).
 - Android-only v1, Expo **dev build** (native Health Connect module — not
   Expo Go).
 

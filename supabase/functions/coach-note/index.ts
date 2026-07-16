@@ -1,4 +1,4 @@
-// Coaching BRD §3/§10 — the Edge Function. Runs on Deno; the Claude API
+// Coaching BRD §3/§10 — the Edge Function. Runs on Deno; the model API
 // key lives only here (never on the device). Contract:
 //   POST /coach-note  { Authorization: Bearer <user JWT>, body: { payload } }
 //   -> 200 { note: CoachNote }  |  4xx/5xx { error: string }
@@ -9,8 +9,8 @@ import { COACH_NOTE_JSON_SCHEMA, SYSTEM_PROMPT } from '../_shared/prompt.ts';
 import { fallbackNote, validateNote } from '../_shared/coachNoteLogic.ts';
 import type { CoachNote, CoachNoteContent, CoachPayload } from '../_shared/types.ts';
 
-const MODEL_ID = 'claude-sonnet-5';
-const CLAUDE_TIMEOUT_MS = 20_000;
+const MODEL_ID = 'gpt-5-mini';
+const MODEL_TIMEOUT_MS = 20_000;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,38 +67,37 @@ function toRow(userId: string, note: CoachNote): Omit<CoachNoteRow, 'id'> & { us
   };
 }
 
-async function callClaude(payload: CoachPayload): Promise<CoachNoteContent | null> {
+async function callModel(payload: CoachPayload): Promise<CoachNoteContent | null> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), CLAUDE_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), MODEL_TIMEOUT_MS);
   try {
-    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       signal: controller.signal,
       headers: {
-        'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '',
-        'anthropic-version': '2023-06-01',
+        authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY') ?? ''}`,
         'content-type': 'application/json',
       },
       body: JSON.stringify({
         model: MODEL_ID,
-        max_tokens: 1024,
-        system: SYSTEM_PROMPT,
-        // Sonnet 5 defaults to adaptive thinking when `thinking` is omitted —
-        // this is a small narrative task, not deep reasoning, so disable it.
-        thinking: { type: 'disabled' },
-        messages: [{ role: 'user', content: JSON.stringify(payload) }],
-        output_config: {
-          effort: 'low',
-          format: { type: 'json_schema', schema: COACH_NOTE_JSON_SCHEMA },
+        max_completion_tokens: 1024,
+        // Small narrative task, not deep reasoning — keep it fast and cheap.
+        reasoning_effort: 'minimal',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: JSON.stringify(payload) },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'coach_note', strict: true, schema: COACH_NOTE_JSON_SCHEMA },
         },
       }),
     });
     if (!resp.ok) return null;
     const data = await resp.json();
-    if (data.stop_reason === 'refusal') return null;
-    const textBlock = (data.content ?? []).find((b: { type: string }) => b.type === 'text');
-    if (!textBlock) return null;
-    const parsed = JSON.parse(textBlock.text);
+    const message = data.choices?.[0]?.message;
+    if (!message || message.refusal || typeof message.content !== 'string') return null;
+    const parsed = JSON.parse(message.content);
     const fields: (keyof CoachNoteContent)[] = [
       'changeExplanation',
       'weeklyReview',
@@ -161,7 +160,7 @@ Deno.serve(async (req) => {
   let model: string | null;
 
   try {
-    const modelNote = await callClaude(payload);
+    const modelNote = await callModel(payload);
     if (modelNote && validateNote(modelNote, payload)) {
       content = modelNote;
       source = 'model';

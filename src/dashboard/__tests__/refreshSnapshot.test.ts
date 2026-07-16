@@ -1,13 +1,30 @@
+const mockNote = {
+  id: 'note-1',
+  weekOf: '2026-07-15',
+  changeExplanation: 'Target held.',
+  weeklyReview: 'You logged 10 of 14 days.',
+  stallRead: 'On track.',
+  suggestion: 'Keep it up.',
+  source: 'model' as const,
+  model: 'claude-sonnet-5',
+  generatedAt: '2026-07-15T09:00:00.000Z',
+  payloadHash: 'abc123',
+};
+
+jest.mock('../reminders', () => ({ notifyCoachNoteReady: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../coaching', () => ({
+  buildGoalSummary: jest.fn().mockReturnValue({ startWeightKg: 90, goalWeightKg: 75, horizonDays: 180, daysElapsed: 44 }),
+  assembleCoachPayload: jest.fn().mockReturnValue({}),
+  generateCoachNote: jest.fn(() => Promise.resolve(mockNote)),
+}));
+
 import { MemoryStore as DataSyncMemoryStore } from '../../data-sync';
 import type { BodyMetricRow } from '../../data-sync';
 import type { EngineState, Profile } from '../../engine';
 import { addLogEntry, createFood, MemoryStore as FoodLogMemoryStore } from '../../food-log';
-import { buildPlaceholderCoachNote } from '../coachNotePlaceholder';
 import { notifyCoachNoteReady } from '../reminders';
 import { refreshDashboardSnapshot } from '../refreshSnapshot';
 import { MemoryStore as DashboardMemoryStore } from '../store.memory';
-
-jest.mock('../reminders', () => ({ notifyCoachNoteReady: jest.fn().mockResolvedValue(undefined) }));
 
 const TODAY = '2026-07-15';
 
@@ -100,14 +117,19 @@ describe('refreshDashboardSnapshot — Dashboard BRD §C AT7', () => {
     const persistedResult = await deps.dashboardStore.getLastResult();
     expect(persistedResult?.result.targetKcal).toBe(snapshot.result?.targetKcal);
 
+    // The coach-note chain is fire-and-forget (generateCoachNote().then(notifyCoachNoteReady)) —
+    // flush the microtask queue before asserting the mock was called.
+    await Promise.resolve();
+    await Promise.resolve();
     expect(notifyCoachNoteReady).toHaveBeenCalledTimes(1);
-    const [firedNote] = (notifyCoachNoteReady as jest.Mock).mock.calls[0];
-    expect(firedNote).toEqual(buildPlaceholderCoachNote(snapshot.result!, TODAY));
+    expect(notifyCoachNoteReady).toHaveBeenCalledWith(mockNote);
   });
 
   it('holds the cached result and does not re-fire the reminder when the recompute gate has not elapsed', async () => {
     const deps = await seedDeps();
     await refreshDashboardSnapshot(deps, TODAY); // first recompute, sets lastRecomputeDate
+    await Promise.resolve();
+    await Promise.resolve();
     (notifyCoachNoteReady as jest.Mock).mockClear();
 
     const nextDaySnapshot = await refreshDashboardSnapshot(deps, '2026-07-16'); // 1 day later, gate not elapsed

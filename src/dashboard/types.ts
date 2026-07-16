@@ -1,4 +1,4 @@
-import type { EngineResult, EngineState, IsoDate, Profile, Reason } from '../engine';
+import type { EngineResult, EngineState, IsoDate, Profile } from '../engine';
 import type { DailyTotals } from '../food-log';
 
 export interface Point {
@@ -11,18 +11,6 @@ export type Range = '30' | '90' | 'all';
 export interface DayStatus {
   date: IsoDate;
   logged: boolean;
-}
-
-/**
- * Provisional — owned by Dashboard until the Coaching module exists and
- * either takes this over or supersedes it. Delete alongside
- * coachNotePlaceholder.ts when Coaching ships.
- */
-export interface CoachNote {
-  id: string;
-  weekOf: IsoDate;
-  headline: string;
-  reasons: Reason[];
 }
 
 export type ReminderKind = 'morningWeighIn' | 'eveningLog' | 'coachNoteReady';

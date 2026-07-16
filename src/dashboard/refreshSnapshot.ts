@@ -1,10 +1,11 @@
+import { assembleCoachPayload, buildGoalSummary, generateCoachNote } from '../coaching';
 import { buildMeasurementSeries } from '../data-sync';
 import type { BodyMetricsStore } from '../data-sync';
-import { addDays, dateRange, nextEngineState, recompute } from '../engine';
+import { addDays, computeTrend, dateRange, DEFAULT_CONFIG, nextEngineState, recompute } from '../engine';
 import type { IsoDate } from '../engine';
 import { dailyTotals, toDayLog } from '../food-log';
 import type { FoodLogStore } from '../food-log';
-import { buildPlaceholderCoachNote } from './coachNotePlaceholder';
+import { buildAdherenceSummary } from './adherence';
 import { notifyCoachNoteReady } from './reminders';
 import type { DashboardStore } from './store';
 import type { DashboardSnapshot } from './types';
@@ -60,8 +61,16 @@ export async function refreshDashboardSnapshot(
     const next = nextEngineState(engineState, result, today);
     await dashStore.setEngineState(next);
     await dashStore.setLastResult(today, result);
-    // Recompute→reminder wiring (BRD §B2.3): fire-and-forget, never blocks the snapshot.
-    void notifyCoachNoteReady(buildPlaceholderCoachNote(result, today)).catch(() => {});
+    // Recompute→coach note→reminder wiring (BRD §B2.3): fire-and-forget, never blocks the snapshot.
+    // The Edge Function already resolves API failures to a fallback note server-side; this
+    // .catch only guards transport-level failures (offline device, function unreachable).
+    const trend = computeTrend(measurements, { start: addDays(today, -13), end: today }, DEFAULT_CONFIG.ewmaHalfLifeDays);
+    const adherenceSummary = buildAdherenceSummary(last14, result.targetKcal);
+    const goal = buildGoalSummary(profile, next, today);
+    const payload = assembleCoachPayload(result, adherenceSummary, goal, today, trend);
+    void generateCoachNote(payload)
+      .then((note) => notifyCoachNoteReady(note))
+      .catch(() => {});
     return { profile, engineState: next, result, resultComputedAt: today, last14 };
   }
 

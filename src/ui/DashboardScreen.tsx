@@ -6,7 +6,6 @@ import { getDataSyncRuntime } from '../data-sync/runtime';
 import {
   buildAdherenceSummary,
   buildBodyFatSeries,
-  buildPlaceholderCoachNote,
   buildWeightSeries,
   configureNotificationHandler,
   isEmptyConsumption,
@@ -24,6 +23,7 @@ import { MacroRings } from '../dashboard/components/MacroRings';
 import { WeightTrendChart } from '../dashboard/components/WeightTrendChart';
 import { getDashboardRuntime } from '../dashboard/runtime';
 import { addDays } from '../engine';
+import { getLatestCoachNote, type CoachNote } from '../coaching';
 import { getFoodLogRuntime } from '../food-log/runtime';
 import { ProfileSetupScreen } from './ProfileSetupScreen';
 
@@ -38,6 +38,7 @@ export function DashboardScreen() {
   });
   const [bodyFatSeries, setBodyFatSeries] = useState<Point[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [coachNote, setCoachNote] = useState<CoachNote | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     const [dashRt, foodRt, dataRt] = await Promise.all([
@@ -51,6 +52,7 @@ export function DashboardScreen() {
       today,
     );
     setSnapshot(snap);
+    void getLatestCoachNote().then(setCoachNote).catch(() => {});
 
     if (snap.profile !== null) {
       configureNotificationHandler();
@@ -111,11 +113,9 @@ export function DashboardScreen() {
   if (snapshot === null) return null;
   if (snapshot.profile === null) return <ProfileSetupScreen onDone={load} />;
 
-  const today = snapshot.last14[snapshot.last14.length - 1]?.localDate ?? snapshot.profile.startDate;
   const todayTotals = snapshot.last14[snapshot.last14.length - 1] ?? null;
   const consumed = todayTotals ? toMacros(todayTotals) : { proteinG: 0, carbG: 0, fatG: 0, fiberG: 0 };
   const adherence = buildAdherenceSummary(snapshot.last14, snapshot.result?.targetKcal ?? null);
-  const coachNote = snapshot.result !== null ? buildPlaceholderCoachNote(snapshot.result, today) : null;
 
   return (
     <ScrollView

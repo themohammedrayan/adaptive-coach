@@ -1,11 +1,12 @@
 import { SchedulableTriggerInputTypes } from 'expo-notifications';
+import type { CoachNote } from '../coaching';
 import type { IsoDate } from '../engine';
 import { dailyTotals } from '../food-log';
 import { getFoodLogRuntime } from '../food-log/runtime';
 import { defaultAdapter, type NotificationsAdapter } from './notifications';
 import { nextEveningTrigger, REMINDER_IDS } from './reminderSchedule';
 import { getDashboardRuntime } from './runtime';
-import type { CoachNote, ReminderConfig, ReminderKind } from './types';
+import type { ReminderConfig, ReminderKind } from './types';
 
 export interface ScheduleContext {
   today: IsoDate;
@@ -105,7 +106,7 @@ export async function notifyCoachNoteReadyCore(
   if (!granted) return;
   await adapter.scheduleNotificationAsync({
     identifier: REMINDER_IDS.coachNoteReady,
-    content: { title: 'Your weekly note is ready', body: note.headline },
+    content: { title: 'Your weekly note is ready', body: note.changeExplanation },
     trigger: null, // deliver immediately — the recompute event already happened
   });
 }

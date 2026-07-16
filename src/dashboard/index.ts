@@ -4,7 +4,6 @@ export { projectedFinishCopy } from './copy';
 export { isEmptyConsumption, toMacros } from './adapters';
 export { buildBodyFatSeries, buildWeightSeries } from './series';
 export { buildAdherenceSummary, type AdherenceSummary } from './adherence';
-export { buildPlaceholderCoachNote } from './coachNotePlaceholder';
 export { nextEveningTrigger, REMINDER_IDS } from './reminderSchedule';
 export {
   configureNotificationHandler,

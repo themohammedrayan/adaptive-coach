@@ -8,7 +8,7 @@ import {
   scheduleRemindersCore,
 } from '../reminders';
 import { REMINDER_IDS } from '../reminderSchedule';
-import type { CoachNote } from '../types';
+import type { CoachNote } from '../../coaching';
 
 function permission(granted: boolean): NotificationPermissionsStatus {
   return { granted, status: granted ? 'granted' : 'denied', canAskAgain: true, expires: 'never' } as NotificationPermissionsStatus;
@@ -104,7 +104,18 @@ describe('scheduleRemindersCore — Dashboard BRD §C AT6', () => {
 });
 
 function note(): CoachNote {
-  return { id: 'n1', weekOf: TODAY, headline: 'Target held at 1900 kcal.', reasons: [] };
+  return {
+    id: 'n1',
+    weekOf: TODAY,
+    changeExplanation: 'Target held at 1900 kcal.',
+    weeklyReview: 'You logged 10 of 14 days.',
+    stallRead: 'On track.',
+    suggestion: 'Keep it up.',
+    source: 'model',
+    model: 'claude-sonnet-5',
+    generatedAt: '2026-07-15T09:00:00.000Z',
+    payloadHash: 'abc123',
+  };
 }
 
 describe('notifyCoachNoteReadyCore — Dashboard BRD §C AT7 support', () => {

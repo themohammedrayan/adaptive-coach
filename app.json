@@ -43,6 +43,7 @@
         }
       ],
       "expo-health-connect",
+      "expo-notifications",
       [
         "expo-build-properties",
         {

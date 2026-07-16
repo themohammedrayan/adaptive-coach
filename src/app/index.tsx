@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Button, SafeAreaView, StyleSheet, View } from 'react-native';
+import { DashboardScreen } from '../ui/DashboardScreen';
 import { FoodLogScreen } from '../ui/FoodLogScreen';
 import { SignIn } from '../ui/SignIn';
 import { useSession } from '../ui/useSession';
 import { WeightScreen } from '../ui/WeightScreen';
 
-type Tab = 'weight' | 'food-log';
+type Tab = 'weight' | 'food-log' | 'dashboard';
 
 export default function Index() {
   const { session, loading } = useSession();
@@ -23,8 +24,11 @@ export default function Index() {
       <View style={styles.tabBar}>
         <Button title="Weight" onPress={() => setTab('weight')} disabled={tab === 'weight'} />
         <Button title="Food Log" onPress={() => setTab('food-log')} disabled={tab === 'food-log'} />
+        <Button title="Dashboard" onPress={() => setTab('dashboard')} disabled={tab === 'dashboard'} />
       </View>
-      {tab === 'weight' ? <WeightScreen /> : <FoodLogScreen />}
+      {tab === 'weight' && <WeightScreen />}
+      {tab === 'food-log' && <FoodLogScreen />}
+      {tab === 'dashboard' && <DashboardScreen />}
     </SafeAreaView>
   );
 }

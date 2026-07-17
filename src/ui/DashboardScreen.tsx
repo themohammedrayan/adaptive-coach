@@ -5,24 +5,30 @@ import type { BodyMetricRow } from '../data-sync';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import {
   buildAdherenceSummary,
+  buildBodyCompositionSummary,
   buildBodyFatSeries,
+  buildChallengeProgress,
   buildWeightSeries,
   configureNotificationHandler,
   isEmptyConsumption,
   refreshDashboardSnapshot,
   scheduleReminders,
   toMacros,
+  type BodyCompositionEntry,
   type DashboardSnapshot,
   type Point,
   type Range,
 } from '../dashboard';
 import { AdherenceStrip } from '../dashboard/components/AdherenceStrip';
+import { BodyCompositionCard } from '../dashboard/components/BodyCompositionCard';
 import { BodyFatTrend } from '../dashboard/components/BodyFatTrend';
+import { ChallengeCard } from '../dashboard/components/ChallengeCard';
 import { LatestCoachNote } from '../dashboard/components/LatestCoachNote';
 import { MacroRings } from '../dashboard/components/MacroRings';
 import { WeightTrendChart } from '../dashboard/components/WeightTrendChart';
 import { getDashboardRuntime } from '../dashboard/runtime';
 import { addDays } from '../engine';
+import type { IsoDate } from '../engine';
 import { getLatestCoachNote, type CoachNote } from '../coaching';
 import { getFoodLogRuntime } from '../food-log/runtime';
 import { ProfileSetupScreen } from './ProfileSetupScreen';
@@ -37,6 +43,8 @@ export function DashboardScreen() {
     trend: [],
   });
   const [bodyFatSeries, setBodyFatSeries] = useState<Point[]>([]);
+  const [bodyComposition, setBodyComposition] = useState<BodyCompositionEntry[]>([]);
+  const [today, setToday] = useState<IsoDate | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [remindersWarning, setRemindersWarning] = useState<string | null>(null);
   const [coachNote, setCoachNote] = useState<CoachNote | null>(null);
@@ -48,6 +56,7 @@ export function DashboardScreen() {
       getDataSyncRuntime(),
     ]);
     const today = foodRt.toLocalDate(foodRt.nowUtc());
+    setToday(today);
     const snap = await refreshDashboardSnapshot(
       { dashboardStore: dashRt.store, foodLogStore: foodRt.store, dataSyncStore: dataRt.store },
       today,
@@ -85,6 +94,23 @@ export function DashboardScreen() {
 
     const bodyFatRows: BodyMetricRow[] = await dataRt.store.listByType('body_fat', dateRangeSpec);
     setBodyFatSeries(buildBodyFatSeries(bodyFatRows, dateRangeSpec));
+
+    const [leanMassRows, boneMassRows, bodyWaterRows]: BodyMetricRow[][] = await Promise.all([
+      dataRt.store.listByType('lean_mass', dateRangeSpec),
+      dataRt.store.listByType('bone_mass', dateRangeSpec),
+      dataRt.store.listByType('body_water', dateRangeSpec),
+    ]);
+    setBodyComposition(
+      buildBodyCompositionSummary(
+        {
+          weight: weightRows,
+          lean_mass: leanMassRows,
+          bone_mass: boneMassRows,
+          body_water: bodyWaterRows,
+        },
+        dateRangeSpec,
+      ),
+    );
   }, []);
 
   const load = useCallback(async () => {
@@ -120,6 +146,10 @@ export function DashboardScreen() {
   const todayTotals = snapshot.last14[snapshot.last14.length - 1] ?? null;
   const consumed = todayTotals ? toMacros(todayTotals) : { proteinG: 0, carbG: 0, fatG: 0, fiberG: 0 };
   const adherence = buildAdherenceSummary(snapshot.last14, snapshot.result?.targetKcal ?? null);
+  const challenge =
+    snapshot.result !== null && snapshot.engineState !== null && today !== null
+      ? buildChallengeProgress(snapshot.profile, snapshot.engineState.startWeightKg, snapshot.result, today)
+      : null;
 
   return (
     <ScrollView
@@ -140,6 +170,8 @@ export function DashboardScreen() {
         range={range}
       />
 
+      {challenge !== null && <ChallengeCard progress={challenge} />}
+
       {snapshot.result !== null ? (
         <MacroRings target={snapshot.result.macros} consumed={consumed} />
       ) : (
@@ -149,6 +181,8 @@ export function DashboardScreen() {
       <AdherenceStrip days={adherence.days} avgIntake={adherence.avgIntake} avgTarget={adherence.avgTarget} />
 
       <BodyFatTrend series={bodyFatSeries} />
+
+      <BodyCompositionCard entries={bodyComposition} />
 
       <LatestCoachNote note={coachNote} />
 

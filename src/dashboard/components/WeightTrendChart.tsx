@@ -1,7 +1,10 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
+import { computeYAxisScale } from '../chartScale';
 import { projectedFinishCopy } from '../copy';
 import type { WeightTrendChartProps } from './types';
+
+const Y_AXIS_SECTIONS = 4;
 
 const RANGE_LABEL: Record<WeightTrendChartProps['range'], string> = {
   '30': 'Last 30 days',
@@ -26,7 +29,8 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
   });
 
   const values = trend.map((p) => p.value);
-  const maxValue = Math.max(goalWeight, ...values, 1) * 1.05;
+  const { min, max } = computeYAxisScale(values, [goalWeight], { minSpan: 2 });
+  const yAxisSpan = max - min;
 
   return (
     <View style={styles.container}>
@@ -42,7 +46,10 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
         showReferenceLine1
         referenceLine1Position={goalWeight}
         referenceLine1Config={{ color: '#047857', dashWidth: 4, dashGap: 4, labelText: `Goal ${goalWeight}kg` }}
-        maxValue={maxValue}
+        yAxisOffset={min}
+        maxValue={yAxisSpan}
+        noOfSections={Y_AXIS_SECTIONS}
+        stepValue={yAxisSpan / Y_AXIS_SECTIONS}
         height={180}
         adjustToWidth
         xAxisLabelTextStyle={styles.axisLabel}

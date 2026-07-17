@@ -1,7 +1,14 @@
 import type { IsoDate, Source } from '../engine';
 
 /** Data-Sync BRD §3 — internal metric types, stored in SI units. */
-export type MetricType = 'weight' | 'body_fat' | 'lean_mass' | 'bone_mass' | 'height' | 'bmr';
+export type MetricType =
+  | 'weight'
+  | 'body_fat'
+  | 'lean_mass'
+  | 'bone_mass'
+  | 'body_water'
+  | 'height'
+  | 'bmr';
 
 /** One normalized row (BRD §6). Local id is deterministic: `${source}:${externalId}`. */
 export interface BodyMetricRow {

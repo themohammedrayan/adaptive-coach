@@ -17,6 +17,7 @@ const RECORD_TYPE_BY_METRIC: Record<MetricType, RecordType> = {
   body_fat: 'BodyFat',
   lean_mass: 'LeanBodyMass',
   bone_mass: 'BoneMass',
+  body_water: 'BodyWaterMass',
   height: 'Height',
   bmr: 'BasalMetabolicRate',
 };
@@ -52,6 +53,7 @@ function toHCRecord(record: {
       break;
     case 'lean_mass':
     case 'bone_mass':
+    case 'body_water':
       value = (r.mass as { inKilograms?: number } | undefined)?.inKilograms;
       unit = 'kg';
       break;

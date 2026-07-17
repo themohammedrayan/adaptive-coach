@@ -1,6 +1,6 @@
 import { computeTrend, DEFAULT_CONFIG } from '../engine';
 import type { IsoDate, Measurement } from '../engine';
-import type { BodyMetricRow } from '../data-sync';
+import type { BodyMetricRow, MetricType } from '../data-sync';
 import type { Point } from './types';
 
 /** Dashboard BRD §A2.1 — raw weigh-ins + EWMA trend line, as two point series. */
@@ -19,17 +19,18 @@ export function buildWeightSeries(
 }
 
 /**
- * Dashboard BRD §A2.4 — local per-day average of body-fat readings. Gap
- * days are omitted (not interpolated, unlike the weight trend) — the
- * component itself renders null when this series is empty.
+ * Dashboard BRD §A2.4 — local per-day average for a given metric. Gap days
+ * are omitted (not interpolated, unlike the weight trend) — components
+ * render null/hide the row when a series comes back empty.
  */
-export function buildBodyFatSeries(
+export function buildMetricSeries(
   rows: BodyMetricRow[],
+  metricType: MetricType,
   range: { start: IsoDate; end: IsoDate },
 ): Point[] {
   const byDate = new Map<IsoDate, number[]>();
   for (const r of rows) {
-    if (r.metricType !== 'body_fat' || r.deletedAt !== null) continue;
+    if (r.metricType !== metricType || r.deletedAt !== null) continue;
     if (r.localDate < range.start || r.localDate > range.end) continue;
     const values = byDate.get(r.localDate) ?? [];
     values.push(r.valueSI);
@@ -41,4 +42,11 @@ export function buildBodyFatSeries(
       date,
       value: values.reduce((s, v) => s + v, 0) / values.length,
     }));
+}
+
+export function buildBodyFatSeries(
+  rows: BodyMetricRow[],
+  range: { start: IsoDate; end: IsoDate },
+): Point[] {
+  return buildMetricSeries(rows, 'body_fat', range);
 }

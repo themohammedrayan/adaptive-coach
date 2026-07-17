@@ -36,6 +36,7 @@ export const READ_TYPES: MetricType[] = [
   'body_fat',
   'lean_mass',
   'bone_mass',
+  'body_water',
   'height',
   'bmr',
 ];

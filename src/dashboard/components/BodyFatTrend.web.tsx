@@ -1,4 +1,5 @@
 import { Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import { computeYAxisScale } from '../chartScale';
 import type { BodyFatTrendProps } from './types';
 
 /**
@@ -8,11 +9,13 @@ import type { BodyFatTrendProps } from './types';
  */
 export function BodyFatTrend({ series }: BodyFatTrendProps) {
   if (series.length === 0) return null;
+  const values = series.map((p) => p.value);
+  const { min, max } = computeYAxisScale(values, [], { minSpan: 2 });
   return (
     <ResponsiveContainer width="100%" height={80}>
       <LineChart data={series}>
         <XAxis dataKey="date" tick={{ fontSize: 9 }} hide />
-        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9 }} width={30} />
+        <YAxis domain={[min, max]} tick={{ fontSize: 9 }} width={30} />
         <Line type="monotone" dataKey="value" stroke="#b45309" strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>

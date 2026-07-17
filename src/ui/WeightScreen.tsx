@@ -22,6 +22,7 @@ export function WeightScreen() {
   const [rows, setRows] = useState<BodyMetricRow[]>([]);
   const [input, setInput] = useState('');
   const [sync, setSync] = useState<SyncResult | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -38,7 +39,11 @@ export function WeightScreen() {
         const rt = await getDataSyncRuntime();
         const result = await rt.sync(force);
         if (result.ran) setSync(result);
+        setSyncError(null);
         await refresh();
+      } catch (e) {
+        // An HC adapter/store failure must be visible, not an unhandled rejection.
+        setSyncError(e instanceof Error ? e.message : String(e));
       } finally {
         setBusy(false);
       }
@@ -81,6 +86,7 @@ export function WeightScreen() {
         <Text style={styles.status}>
           Last sync: {lastSyncAt ? new Date(lastSyncAt).toLocaleString() : 'never'}
         </Text>
+        {syncError !== null && <Text style={styles.error}>Sync failed: {syncError}</Text>}
         <Button title={busy ? 'Syncing…' : 'Sync now'} onPress={() => runSync(true)} disabled={busy} />
       </View>
 
@@ -110,6 +116,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12 },
   statusRow: { gap: 4 },
   status: { color: '#666', fontSize: 12 },
+  error: { color: '#c00', fontSize: 12 },
   empty: { textAlign: 'center', color: '#999', marginTop: 24 },
   row: {
     flexDirection: 'row',

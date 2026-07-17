@@ -11,7 +11,7 @@ See [AGENTS.md](AGENTS.md) for structure, build order, and hard rules.
 ## Stack
 
 - React Native / Expo SDK 57 (dev build, Android-only v1) + expo-router
-- Supabase — Postgres, Auth, Edge Functions (Claude API proxy)
+- Supabase — Postgres, Auth, Edge Functions (model API proxy for coach notes)
 - Health Connect via `react-native-health-connect` (from module 2 onward)
 
 ## Develop

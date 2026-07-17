@@ -55,6 +55,13 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
       return setError('Height must be 100–250 cm.');
     if (!Number.isFinite(goalN) || goalN < 30 || goalN > 300)
       return setError('Goal weight must be 30–300 kg.');
+    // Master BRD §9 — v1 is weight-loss only; the engine has no gain-mode
+    // safety caps (surplus ceiling, gain rate cap), so block that path.
+    if (goalN >= currentWeightKg)
+      return setError(
+        'v1 supports weight loss only — set a goal below your current weight ' +
+          `(${currentWeightKg.toFixed(1)} kg).`,
+      );
     if (!Number.isFinite(horizonN) || horizonN < 7 || horizonN > 1095)
       return setError('Horizon must be 7–1095 days.');
 
@@ -148,9 +155,14 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
         ))}
       </View>
 
-      {currentWeightKg !== null && mode !== null && (
+      {currentWeightKg !== null && mode === 'lose' && (
         <Text style={styles.mode}>
           Current: {currentWeightKg.toFixed(1)}kg → Mode: {mode}
+        </Text>
+      )}
+      {currentWeightKg !== null && mode !== null && mode !== 'lose' && (
+        <Text style={styles.warning}>
+          v1 supports weight loss only — the goal must be below your current weight.
         </Text>
       )}
       {currentWeightKg === null && (

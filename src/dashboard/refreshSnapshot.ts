@@ -70,7 +70,7 @@ export async function refreshDashboardSnapshot(
     const payload = assembleCoachPayload(result, adherenceSummary, goal, today, trend);
     void generateCoachNote(payload)
       .then((note) => notifyCoachNoteReady(note))
-      .catch(() => {});
+      .catch((e) => console.warn('[coaching] note generation failed (will retry next recompute):', e));
     return { profile, engineState: next, result, resultComputedAt: today, last14 };
   }
 

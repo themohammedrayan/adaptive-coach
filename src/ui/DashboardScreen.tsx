@@ -38,6 +38,7 @@ export function DashboardScreen() {
   });
   const [bodyFatSeries, setBodyFatSeries] = useState<Point[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [remindersWarning, setRemindersWarning] = useState<string | null>(null);
   const [coachNote, setCoachNote] = useState<CoachNote | null>(null);
 
   const loadSnapshot = useCallback(async () => {
@@ -58,8 +59,11 @@ export function DashboardScreen() {
       configureNotificationHandler();
       try {
         await scheduleReminders(await dashRt.store.getReminderConfig());
-      } catch {
-        // Permission denial or scheduling failure must never affect the rest of the screen (BRD §B2).
+        setRemindersWarning(null);
+      } catch (e) {
+        // Permission denial or scheduling failure must never affect the rest of the screen (BRD §B2)
+        // — but it should be visible, not silent.
+        setRemindersWarning(e instanceof Error ? e.message : String(e));
       }
     }
     return { snap, today };
@@ -150,6 +154,10 @@ export function DashboardScreen() {
 
       {isEmptyConsumption(consumed) && (
         <Text style={styles.hint}>Nothing logged today yet — head to the Food Log tab.</Text>
+      )}
+
+      {remindersWarning !== null && (
+        <Text style={styles.hint}>Reminders unavailable: {remindersWarning}</Text>
       )}
     </ScrollView>
   );

@@ -9,6 +9,7 @@ import {
   YAxis,
 } from 'recharts';
 import { useTheme } from '../../ui/theme';
+import { computeYAxisScale } from '../chartScale';
 import { projectedFinishCopy } from '../copy';
 import type { WeightTrendChartProps } from './types';
 
@@ -31,6 +32,8 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
     trend: p.value,
     raw: rawByDate.get(p.date) ?? null,
   }));
+  const values = trend.map((p) => p.value);
+  const { min, max } = computeYAxisScale(values, [goalWeight], { minSpan: 2 });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -38,7 +41,7 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
         <ComposedChart data={merged}>
           <CartesianGrid stroke={t.chart.grid} vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: t.muted }} stroke={t.chart.grid} />
-          <YAxis domain={['auto', 'auto']} tick={{ fontSize: 10, fill: t.muted }} stroke="transparent" />
+          <YAxis domain={[min, max]} tick={{ fontSize: 10, fill: t.muted }} stroke="transparent" />
           <ReferenceLine
             y={goalWeight}
             stroke={t.chart.goal}

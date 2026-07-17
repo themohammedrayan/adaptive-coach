@@ -1,24 +1,40 @@
 import { useEffect, useState } from 'react';
-import { Button, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ACTIVITY_LEVELS, refreshDashboardSnapshot } from '../dashboard';
 import { getDashboardRuntime } from '../dashboard/runtime';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import type { Mode, Profile } from '../engine';
 import { getFoodLogRuntime } from '../food-log/runtime';
+import { AppButton, Card, Chip, Field, Row } from './kit';
+import { space, type, useTheme } from './theme';
 
 /**
  * One-time Profile capture (Dashboard BRD's user-approved glue — see the
- * module plan's Context section). Requires an existing weigh-in, since
- * that value seeds EngineState.startWeightKg; on save it also runs the
- * first forced recompute so a real target appears immediately.
+ * module plan's Context section) and, with `initial`, the edit-goal form.
+ * EngineState.startWeightKg is seeded from a weigh-in: an existing one if
+ * present, otherwise the inline "current weight" field captured here. On
+ * save it also runs the first forced recompute so a real target appears
+ * immediately.
  */
-export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
-  const [sex, setSex] = useState<Profile['sex']>('male');
-  const [age, setAge] = useState('');
-  const [heightCm, setHeightCm] = useState('');
-  const [goalWeightKg, setGoalWeightKg] = useState('');
-  const [horizonDays, setHorizonDays] = useState('180');
-  const [activityFactor, setActivityFactor] = useState(ACTIVITY_LEVELS[2].value);
+export function ProfileSetupScreen({
+  onDone,
+  initial,
+  onCancel,
+}: {
+  onDone: () => void;
+  initial?: Profile;
+  onCancel?: () => void;
+}) {
+  const t = useTheme();
+  const [sex, setSex] = useState<Profile['sex']>(initial?.sex ?? 'male');
+  const [age, setAge] = useState(initial ? String(initial.age) : '');
+  const [heightCm, setHeightCm] = useState(initial ? String(initial.heightCm) : '');
+  const [goalWeightKg, setGoalWeightKg] = useState(initial ? String(initial.goalWeightKg) : '');
+  const [horizonDays, setHorizonDays] = useState(initial ? String(initial.horizonDays) : '180');
+  const [activityFactor, setActivityFactor] = useState(
+    initial?.activityFactor ?? ACTIVITY_LEVELS[2].value,
+  );
+  const [weightInput, setWeightInput] = useState('');
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,20 +47,28 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
     })();
   }, []);
 
+  // With no weigh-in yet, the inline field supplies the starting weight.
+  const inlineWeight = Number(weightInput.replace(',', '.'));
+  const effectiveWeight =
+    currentWeightKg ??
+    (weightInput !== '' && Number.isFinite(inlineWeight) && inlineWeight > 0 && inlineWeight <= 400
+      ? inlineWeight
+      : null);
+
   const goalN = Number(goalWeightKg);
   const mode: Mode | null =
-    currentWeightKg === null || goalWeightKg === '' || !Number.isFinite(goalN)
+    effectiveWeight === null || goalWeightKg === '' || !Number.isFinite(goalN)
       ? null
-      : goalN < currentWeightKg
+      : goalN < effectiveWeight
         ? 'lose'
-        : goalN > currentWeightKg
+        : goalN > effectiveWeight
           ? 'gain'
           : 'maintain';
 
   const save = async () => {
     setError(null);
-    if (currentWeightKg === null) {
-      setError('Log a weigh-in on the Weight tab first.');
+    if (effectiveWeight === null) {
+      setError('Enter your current weight to seed the starting point.');
       return;
     }
     const ageN = Number(age);
@@ -57,10 +81,10 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
       return setError('Goal weight must be 30–300 kg.');
     // Master BRD §9 — v1 is weight-loss only; the engine has no gain-mode
     // safety caps (surplus ceiling, gain rate cap), so block that path.
-    if (goalN >= currentWeightKg)
+    if (goalN >= effectiveWeight)
       return setError(
         'v1 supports weight loss only — set a goal below your current weight ' +
-          `(${currentWeightKg.toFixed(1)} kg).`,
+          `(${effectiveWeight.toFixed(1)} kg).`,
       );
     if (!Number.isFinite(horizonN) || horizonN < 7 || horizonN > 1095)
       return setError('Horizon must be 7–1095 days.');
@@ -72,6 +96,10 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
         getFoodLogRuntime(),
         getDataSyncRuntime(),
       ]);
+      if (currentWeightKg === null) {
+        // First-run path: record the inline weigh-in before profile save.
+        await dataRt.addWeightKg(effectiveWeight);
+      }
       const today = foodRt.toLocalDate(foodRt.nowUtc());
 
       const profile: Profile = {
@@ -81,16 +109,21 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
         activityFactor,
         goalWeightKg: goalN,
         horizonDays: horizonN,
-        startDate: today,
+        startDate: initial?.startDate ?? today,
         mode: mode ?? 'maintain',
       };
       await dashRt.store.setProfile(profile);
-      await dashRt.store.setEngineState({
-        prevTargetKcal: null,
-        mode: profile.mode,
-        lastRecomputeDate: null,
-        startWeightKg: currentWeightKg,
-      });
+      const existingState = await dashRt.store.getEngineState();
+      await dashRt.store.setEngineState(
+        existingState !== null
+          ? { ...existingState, mode: profile.mode }
+          : {
+              prevTargetKcal: null,
+              mode: profile.mode,
+              lastRecomputeDate: null,
+              startWeightKg: effectiveWeight,
+            },
+      );
       await refreshDashboardSnapshot(
         { dashboardStore: dashRt.store, foodLogStore: foodRt.store, dataSyncStore: dataRt.store },
         today,
@@ -102,91 +135,96 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
     }
   };
 
+  const editing = initial !== undefined;
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Set up your goal</Text>
+    <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <View style={styles.intro}>
+          <Text style={[type.title, { color: t.ink }]}>
+            {editing ? 'Edit your goal' : 'Set up your goal'}
+          </Text>
+          <Text style={[type.caption, { color: t.secondary }]}>
+            {editing
+              ? 'Your target recomputes right after you save.'
+              : 'A few details seed your first calorie and macro target — it self-corrects weekly from there.'}
+          </Text>
+        </View>
 
-      <View style={styles.row}>
-        <TouchableOpacity onPress={() => setSex('male')}>
-          <Text style={[styles.chip, sex === 'male' && styles.chipActive]}>Male</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => setSex('female')}>
-          <Text style={[styles.chip, sex === 'female' && styles.chipActive]}>Female</Text>
-        </TouchableOpacity>
-      </View>
+        <Card style={styles.card}>
+          <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Sex</Text>
+          <Row>
+            <Chip label="Male" active={sex === 'male'} onPress={() => setSex('male')} />
+            <Chip label="Female" active={sex === 'female'} onPress={() => setSex('female')} />
+          </Row>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Age"
-        keyboardType="number-pad"
-        value={age}
-        onChangeText={setAge}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Height (cm)"
-        keyboardType="decimal-pad"
-        value={heightCm}
-        onChangeText={setHeightCm}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Goal weight (kg)"
-        keyboardType="decimal-pad"
-        value={goalWeightKg}
-        onChangeText={setGoalWeightKg}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Horizon (days)"
-        keyboardType="number-pad"
-        value={horizonDays}
-        onChangeText={setHorizonDays}
-      />
+          <Row gap={space.m}>
+            <Field label="Age" placeholder="28" keyboardType="number-pad" value={age} onChangeText={setAge} style={styles.flex} />
+            <Field label="Height (cm)" placeholder="175" keyboardType="decimal-pad" value={heightCm} onChangeText={setHeightCm} style={styles.flex} />
+          </Row>
 
-      <Text style={styles.label}>Activity level</Text>
-      <View style={styles.row}>
-        {ACTIVITY_LEVELS.map((level) => (
-          <TouchableOpacity key={level.label} onPress={() => setActivityFactor(level.value)}>
-            <Text style={[styles.chip, activityFactor === level.value && styles.chipActive]}>
-              {level.label}
+          <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Activity level</Text>
+          <Row style={styles.wrap}>
+            {ACTIVITY_LEVELS.map((level) => (
+              <Chip
+                key={level.label}
+                label={level.label}
+                active={activityFactor === level.value}
+                onPress={() => setActivityFactor(level.value)}
+              />
+            ))}
+          </Row>
+        </Card>
+
+        <Card style={styles.card}>
+          {currentWeightKg === null && (
+            <Field
+              label="Current weight (kg)"
+              placeholder="82.4"
+              keyboardType="decimal-pad"
+              value={weightInput}
+              onChangeText={setWeightInput}
+            />
+          )}
+          <Row gap={space.m}>
+            <Field label="Goal weight (kg)" placeholder="75" keyboardType="decimal-pad" value={goalWeightKg} onChangeText={setGoalWeightKg} style={styles.flex} />
+            <Field label="Horizon (days)" placeholder="180" keyboardType="number-pad" value={horizonDays} onChangeText={setHorizonDays} style={styles.flex} />
+          </Row>
+
+          {effectiveWeight !== null && mode === 'lose' && (
+            <Text style={[type.caption, { color: t.accent, fontWeight: '600' }]}>
+              {effectiveWeight.toFixed(1)} kg now → {goalN} kg goal
             </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          )}
+          {effectiveWeight !== null && mode !== null && mode !== 'lose' && (
+            <Text style={[type.caption, { color: t.warning }]}>
+              v1 supports weight loss only — the goal must be below your current weight.
+            </Text>
+          )}
+        </Card>
 
-      {currentWeightKg !== null && mode === 'lose' && (
-        <Text style={styles.mode}>
-          Current: {currentWeightKg.toFixed(1)}kg → Mode: {mode}
-        </Text>
-      )}
-      {currentWeightKg !== null && mode !== null && mode !== 'lose' && (
-        <Text style={styles.warning}>
-          v1 supports weight loss only — the goal must be below your current weight.
-        </Text>
-      )}
-      {currentWeightKg === null && (
-        <Text style={styles.warning}>
-          Log a weigh-in on the Weight tab first — it seeds your starting point.
-        </Text>
-      )}
+        {error !== null && (
+          <Text style={[type.caption, { color: t.danger, textAlign: 'center' }]}>{error}</Text>
+        )}
 
-      {error !== null && <Text style={styles.error}>{error}</Text>}
-
-      <Button title={busy ? 'Saving…' : 'Save'} onPress={save} disabled={busy || currentWeightKg === null} />
-    </View>
+        <AppButton
+          title={editing ? 'Save changes' : 'Start coaching'}
+          onPress={save}
+          busy={busy}
+          disabled={effectiveWeight === null}
+        />
+        {onCancel !== undefined && (
+          <AppButton title="Cancel" onPress={onCancel} variant="ghost" disabled={busy} />
+        )}
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, gap: 12 },
-  title: { fontSize: 18, fontWeight: '700' },
-  row: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12 },
-  label: { fontSize: 13, color: '#666', marginTop: 4 },
-  chip: { borderWidth: 1, borderColor: '#ccc', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 },
-  chipActive: { backgroundColor: '#e8f0fe', borderColor: '#1a56db', color: '#1a56db' },
-  mode: { fontSize: 13, color: '#047857', fontWeight: '600' },
-  warning: { fontSize: 13, color: '#b45309' },
-  error: { fontSize: 13, color: '#c00' },
+  flex: { flex: 1 },
+  container: { padding: space.l, gap: space.l },
+  intro: { gap: space.xs },
+  card: { gap: space.m },
+  wrap: { flexWrap: 'wrap' },
 });

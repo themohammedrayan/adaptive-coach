@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Button,
+  KeyboardAvoidingView,
+  Modal,
+  Pressable,
+  ScrollView,
   SectionList,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -25,6 +27,8 @@ import {
   type Unit,
 } from '../food-log';
 import { getFoodLogRuntime } from '../food-log/runtime';
+import { AppButton, Card, Chip, Dot, EmptyState, Field, Row } from './kit';
+import { radius, space, type, useTheme, type Theme } from './theme';
 
 const MEALS: { key: Meal; label: string }[] = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -34,9 +38,11 @@ const MEALS: { key: Meal; label: string }[] = [
 ];
 
 export function FoodLogScreen() {
+  const t = useTheme();
   const [today, setToday] = useState<string | null>(null);
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [foodNames, setFoodNames] = useState<Map<string, string>>(new Map());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [activeMeal, setActiveMeal] = useState<Meal | null>(null);
   const [busy, setBusy] = useState(false);
@@ -47,6 +53,9 @@ export function FoodLogScreen() {
     setToday(localDate);
     setEntries(await rt.store.listEntriesByDate(localDate));
     setUnits(await rt.store.listUnits());
+    // Include archived so historical entries still resolve to a name.
+    const foods = await rt.store.listFoods(true);
+    setFoodNames(new Map(foods.map((f: Food) => [f.id, f.name])));
     const favs = await rt.store.listFavorites();
     setFavoriteIds(new Set(favs.map((f: Favorite) => f.foodId)));
   }, []);
@@ -55,12 +64,14 @@ export function FoodLogScreen() {
     void refresh();
   }, [refresh]);
 
+  const unitNames = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
+
   const sections = useMemo(
     () =>
       MEALS.map(({ key, label }) => {
         const data = entries.filter((e) => e.meal === key);
         const subtotal = sumEntryMacros(data);
-        return { key, meal: key, title: `${label} · ${Math.round(subtotal.kcal)} kcal`, data };
+        return { key, meal: key, label, kcal: Math.round(subtotal.kcal), data };
       }),
     [entries],
   );
@@ -96,42 +107,74 @@ export function FoodLogScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.totalLine}>
-          {Math.round(dayTotal.kcal)} kcal · P {Math.round(dayTotal.protein)}g · C{' '}
-          {Math.round(dayTotal.carb)}g · F {Math.round(dayTotal.fat)}g · Fiber{' '}
-          {Math.round(dayTotal.fiber)}g
-          {dayTotal.macrosIncomplete ? ' (macros incomplete)' : ''}
-        </Text>
-        <Button title={busy ? 'Copying…' : 'Copy yesterday'} onPress={copyYesterday} disabled={busy} />
-      </View>
-
+    <View style={styles.flex}>
       <SectionList
         sections={sections}
         keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.list}
+        stickySectionHeadersEnabled={false}
+        ListHeaderComponent={
+          <Card style={styles.summary}>
+            <Row style={styles.spaceBetween}>
+              <Text style={[type.hero, { color: t.ink }]}>
+                {Math.round(dayTotal.kcal)}
+                <Text style={[type.heading, { color: t.muted }]}> kcal</Text>
+              </Text>
+              <AppButton
+                title="Copy yesterday"
+                onPress={copyYesterday}
+                variant="secondary"
+                small
+                busy={busy}
+              />
+            </Row>
+            <Row style={styles.wrap} gap={space.m}>
+              <MacroPill color={t.chart.protein} label={`P ${Math.round(dayTotal.protein)}g`} t={t} />
+              <MacroPill color={t.chart.carb} label={`C ${Math.round(dayTotal.carb)}g`} t={t} />
+              <MacroPill color={t.chart.fat} label={`F ${Math.round(dayTotal.fat)}g`} t={t} />
+              <MacroPill color={t.muted} label={`Fiber ${Math.round(dayTotal.fiber)}g`} t={t} />
+            </Row>
+            {dayTotal.macrosIncomplete && (
+              <Text style={[type.caption, { color: t.warning }]}>
+                Some foods are kcal-only — macro totals are incomplete.
+              </Text>
+            )}
+          </Card>
+        }
         renderSectionHeader={({ section }) => (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <Button title="+ Add" onPress={() => setActiveMeal(section.meal)} />
-          </View>
+          <Row style={[styles.sectionHeader, styles.spaceBetween]}>
+            <Text style={[type.heading, { color: t.ink }]}>
+              {section.label}
+              {section.data.length > 0 && (
+                <Text style={[type.caption, { color: t.muted }]}>  {section.kcal} kcal</Text>
+              )}
+            </Text>
+            <AppButton title="+ Add" onPress={() => setActiveMeal(section.meal)} variant="ghost" small />
+          </Row>
         )}
         renderItem={({ item }) => (
-          <View style={styles.entryRow}>
-            <Text style={styles.entryName}>
-              {item.quantity} × {item.unitId} ({Math.round(item.grams)}g)
+          <View style={[styles.entryRow, { backgroundColor: t.card, borderColor: t.hairline }]}>
+            <View style={styles.flex}>
+              <Text style={[type.body, { color: t.ink, fontWeight: '500' }]} numberOfLines={1}>
+                {foodNames.get(item.foodId) ?? 'Food'}
+              </Text>
+              <Text style={[type.caption, { color: t.muted }]}>
+                {item.quantity} × {unitNames.get(item.unitId) ?? item.unitId} · {Math.round(item.grams)}g
+              </Text>
+            </View>
+            <Text style={[type.body, { color: t.secondary, marginRight: space.m }]}>
+              {Math.round(item.kcal)} kcal
             </Text>
-            <Text style={styles.entryKcal}>{Math.round(item.kcal)} kcal</Text>
-            <TouchableOpacity onPress={() => deleteEntry(item.id)}>
-              <Text style={styles.deleteLabel}>Delete</Text>
+            <TouchableOpacity onPress={() => deleteEntry(item.id)} hitSlop={8}>
+              <Text style={{ color: t.muted, fontSize: 16 }}>✕</Text>
             </TouchableOpacity>
           </View>
         )}
-        ListEmptyComponent={<Text style={styles.empty}>Nothing logged today yet.</Text>}
+        ListEmptyComponent={<EmptyState message="Nothing logged today yet." />}
       />
 
       {activeMeal !== null && (
-        <AddPanel
+        <AddSheet
           meal={activeMeal}
           units={units}
           favoriteIds={favoriteIds}
@@ -144,7 +187,16 @@ export function FoodLogScreen() {
   );
 }
 
-function AddPanel({
+function MacroPill({ color, label, t }: { color: string; label: string; t: Theme }) {
+  return (
+    <Row gap={6}>
+      <Dot color={color} />
+      <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>{label}</Text>
+    </Row>
+  );
+}
+
+function AddSheet({
   meal,
   units,
   favoriteIds,
@@ -159,6 +211,7 @@ function AddPanel({
   onClose: () => void;
   onLogged: () => void;
 }) {
+  const t = useTheme();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Food[]>([]);
   const [favorites, setFavorites] = useState<Food[]>([]);
@@ -203,80 +256,92 @@ function AddPanel({
     onLogged();
   };
 
-  if (selected !== null) {
-    return (
-      <View style={styles.panel}>
-        <Text style={styles.panelTitle}>{selected.name}</Text>
-        <View style={styles.addRow}>
-          <TextInput
-            style={styles.qtyInput}
-            keyboardType="decimal-pad"
-            value={quantity}
-            onChangeText={setQuantity}
-          />
-          <View style={styles.unitRow}>
-            {units.map((u) => (
-              <TouchableOpacity key={u.id} onPress={() => setUnitId(u.id)}>
-                <Text style={[styles.unitChip, unitId === u.id && styles.unitChipActive]}>
-                  {u.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-        <View style={styles.addRow}>
-          <Button title="Log" onPress={logSelected} />
-          <Button title="Back" onPress={() => setSelected(null)} />
-        </View>
-      </View>
-    );
-  }
-
-  if (showCreate) {
-    return <CreateFoodForm defaultUnitId={units[0]?.id ?? ''} units={units} onDone={(food) => { setShowCreate(false); pickFood(food); }} onCancel={() => setShowCreate(false)} />;
-  }
+  const mealLabel = MEALS.find((m) => m.key === meal)?.label ?? meal;
 
   return (
-    <View style={styles.panel}>
-      <View style={styles.addRow}>
-        <TextInput
-          style={styles.input}
-          placeholder="Search your foods…"
-          value={query}
-          onChangeText={runSearch}
-        />
-        <Button title="Close" onPress={onClose} />
-      </View>
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <View style={[styles.sheet, { backgroundColor: t.card, borderColor: t.hairline }]}>
+          <View style={[styles.handle, { backgroundColor: t.wash }]} />
 
-      {query.trim() === '' && favorites.length > 0 && (
-        <>
-          <Text style={styles.panelSubtitle}>Favorites</Text>
-          {favorites.map((f) => (
-            <FoodRow key={f.id} food={f} isFavorite onToggleFavorite={onToggleFavorite} onPick={pickFood} />
-          ))}
-        </>
-      )}
-
-      {query.trim() !== '' && (
-        <>
-          {results.map((f) => (
-            <FoodRow
-              key={f.id}
-              food={f}
-              isFavorite={favoriteIds.has(f.id)}
-              onToggleFavorite={onToggleFavorite}
-              onPick={pickFood}
+          {selected !== null ? (
+            <View style={styles.sheetBody}>
+              <Text style={[type.title, { color: t.ink }]}>{selected.name}</Text>
+              <Text style={[type.caption, { color: t.muted }]}>
+                {Math.round(selected.kcalPer100g)} kcal / 100g · adding to {mealLabel}
+              </Text>
+              <Row gap={space.m}>
+                <Field
+                  label="Quantity"
+                  keyboardType="decimal-pad"
+                  value={quantity}
+                  onChangeText={setQuantity}
+                  style={styles.qty}
+                />
+                <View style={[styles.flex, { gap: 6 }]}>
+                  <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Unit</Text>
+                  <Row style={styles.wrap} gap={6}>
+                    {units.map((u) => (
+                      <Chip key={u.id} label={u.name} active={unitId === u.id} onPress={() => setUnitId(u.id)} />
+                    ))}
+                  </Row>
+                </View>
+              </Row>
+              <AppButton title={`Log to ${mealLabel}`} onPress={logSelected} />
+              <AppButton title="Back" onPress={() => setSelected(null)} variant="ghost" />
+            </View>
+          ) : showCreate ? (
+            <CreateFoodForm
+              defaultUnitId={units[0]?.id ?? ''}
+              units={units}
+              initialName={query}
+              onDone={(food) => {
+                setShowCreate(false);
+                pickFood(food);
+              }}
+              onCancel={() => setShowCreate(false)}
             />
-          ))}
-          {results.length === 0 && (
-            <View style={styles.addRow}>
-              <Text style={styles.empty}>No matches for "{query}".</Text>
-              <Button title={`Create '${query}'`} onPress={() => setShowCreate(true)} />
+          ) : (
+            <View style={styles.sheetBody}>
+              <Text style={[type.heading, { color: t.ink }]}>Add to {mealLabel}</Text>
+              <Field placeholder="Search your foods…" value={query} onChangeText={runSearch} autoFocus />
+              <ScrollView style={styles.resultList} keyboardShouldPersistTaps="handled">
+                {query.trim() === '' && favorites.length > 0 && (
+                  <>
+                    <Text style={[type.overline, { color: t.muted, marginBottom: space.s }]}>Favorites</Text>
+                    {favorites.map((f) => (
+                      <FoodRow key={f.id} food={f} isFavorite onToggleFavorite={onToggleFavorite} onPick={pickFood} t={t} />
+                    ))}
+                  </>
+                )}
+                {query.trim() !== '' && (
+                  <>
+                    {results.map((f) => (
+                      <FoodRow
+                        key={f.id}
+                        food={f}
+                        isFavorite={favoriteIds.has(f.id)}
+                        onToggleFavorite={onToggleFavorite}
+                        onPick={pickFood}
+                        t={t}
+                      />
+                    ))}
+                    {results.length === 0 && (
+                      <View style={styles.noMatch}>
+                        <Text style={[type.caption, { color: t.muted }]}>No matches for “{query}”.</Text>
+                        <AppButton title={`Create “${query}”`} onPress={() => setShowCreate(true)} variant="secondary" small />
+                      </View>
+                    )}
+                  </>
+                )}
+              </ScrollView>
+              <AppButton title="Close" onPress={onClose} variant="ghost" />
             </View>
           )}
-        </>
-      )}
-    </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -285,37 +350,44 @@ function FoodRow({
   isFavorite,
   onToggleFavorite,
   onPick,
+  t,
 }: {
   food: Food;
   isFavorite: boolean;
   onToggleFavorite: (foodId: string) => void;
   onPick: (food: Food) => void;
+  t: Theme;
 }) {
   return (
-    <View style={styles.foodRow}>
-      <TouchableOpacity style={styles.foodRowMain} onPress={() => onPick(food)}>
-        <Text style={styles.foodName}>{food.name}</Text>
-        <Text style={styles.foodMeta}>{Math.round(food.kcalPer100g)} kcal/100g</Text>
+    <Row style={styles.foodRow}>
+      <TouchableOpacity style={styles.flex} onPress={() => onPick(food)}>
+        <Text style={[type.body, { color: t.ink, fontWeight: '500' }]}>{food.name}</Text>
+        <Text style={[type.caption, { color: t.muted }]}>{Math.round(food.kcalPer100g)} kcal/100g</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => onToggleFavorite(food.id)}>
-        <Text style={styles.star}>{isFavorite ? '★' : '☆'}</Text>
+      <TouchableOpacity onPress={() => onToggleFavorite(food.id)} hitSlop={8}>
+        <Text style={{ fontSize: 20, color: isFavorite ? t.accent : t.muted }}>
+          {isFavorite ? '★' : '☆'}
+        </Text>
       </TouchableOpacity>
-    </View>
+    </Row>
   );
 }
 
 function CreateFoodForm({
   defaultUnitId,
   units,
+  initialName,
   onDone,
   onCancel,
 }: {
   defaultUnitId: string;
   units: Unit[];
+  initialName: string;
   onDone: (food: Food) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState('');
+  const t = useTheme();
+  const [name, setName] = useState(initialName);
   const [kcalOnly, setKcalOnly] = useState(false);
   const [protein, setProtein] = useState('');
   const [carb, setCarb] = useState('');
@@ -352,78 +424,68 @@ function CreateFoodForm({
   };
 
   return (
-    <View style={styles.panel}>
-      <Text style={styles.panelTitle}>New food (per 100g)</Text>
-      <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />
-      <TouchableOpacity onPress={() => setKcalOnly(!kcalOnly)}>
-        <Text style={styles.toggleLabel}>
-          {kcalOnly ? '☑' : '☐'} kcal-only (I don't know the macros)
-        </Text>
-      </TouchableOpacity>
+    <View style={styles.sheetBody}>
+      <Text style={[type.heading, { color: t.ink }]}>New food (per 100g)</Text>
+      <Field label="Name" placeholder="Chicken curry" value={name} onChangeText={setName} />
+      <Row>
+        <Chip label="Full macros" active={!kcalOnly} onPress={() => setKcalOnly(false)} />
+        <Chip label="kcal only" active={kcalOnly} onPress={() => setKcalOnly(true)} />
+      </Row>
       {kcalOnly ? (
-        <TextInput
-          style={styles.input}
-          placeholder="Calories per 100g"
+        <Field
+          label="Calories per 100g"
+          placeholder="240"
           keyboardType="decimal-pad"
           value={kcal}
           onChangeText={setKcal}
         />
       ) : (
-        <View style={styles.addRow}>
-          <TextInput style={styles.qtyInput} placeholder="Protein g" keyboardType="decimal-pad" value={protein} onChangeText={setProtein} />
-          <TextInput style={styles.qtyInput} placeholder="Carb g" keyboardType="decimal-pad" value={carb} onChangeText={setCarb} />
-          <TextInput style={styles.qtyInput} placeholder="Fat g" keyboardType="decimal-pad" value={fat} onChangeText={setFat} />
-        </View>
+        <Row gap={space.m}>
+          <Field label="Protein g" placeholder="0" keyboardType="decimal-pad" value={protein} onChangeText={setProtein} style={styles.flex} />
+          <Field label="Carb g" placeholder="0" keyboardType="decimal-pad" value={carb} onChangeText={setCarb} style={styles.flex} />
+          <Field label="Fat g" placeholder="0" keyboardType="decimal-pad" value={fat} onChangeText={setFat} style={styles.flex} />
+        </Row>
       )}
-      <TextInput style={styles.input} placeholder="Fiber g (optional)" keyboardType="decimal-pad" value={fiber} onChangeText={setFiber} />
-      {units.length > 0 && <Text style={styles.panelSubtitle}>Default unit: {units.find((u) => u.id === defaultUnitId)?.name}</Text>}
-      <View style={styles.addRow}>
-        <Button title="Save" onPress={save} />
-        <Button title="Cancel" onPress={onCancel} />
-      </View>
+      <Field label="Fiber g (optional)" placeholder="0" keyboardType="decimal-pad" value={fiber} onChangeText={setFiber} />
+      {units.length > 0 && (
+        <Text style={[type.caption, { color: t.muted }]}>
+          Default unit: {units.find((u) => u.id === defaultUnitId)?.name}
+        </Text>
+      )}
+      <AppButton title="Save food" onPress={save} />
+      <AppButton title="Cancel" onPress={onCancel} variant="ghost" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: { padding: 16, gap: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#ddd' },
-  totalLine: { fontSize: 14, fontWeight: '600' },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#f4f4f5',
-  },
-  sectionTitle: { fontWeight: '600' },
+  flex: { flex: 1 },
+  wrap: { flexWrap: 'wrap' },
+  spaceBetween: { justifyContent: 'space-between' },
+  list: { padding: space.l, paddingTop: space.s, paddingBottom: space.xl },
+  summary: { gap: space.m, marginBottom: space.s },
+  sectionHeader: { marginTop: space.l, marginBottom: space.s },
   entryRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eee',
+    padding: space.m,
+    paddingHorizontal: space.l,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.control,
+    marginBottom: 6,
   },
-  entryName: { flex: 1 },
-  entryKcal: { color: '#666', marginHorizontal: 8 },
-  deleteLabel: { color: '#c00' },
-  empty: { textAlign: 'center', color: '#999', padding: 12 },
-  panel: { padding: 16, gap: 8, borderTopWidth: 1, borderTopColor: '#ddd', maxHeight: '55%' },
-  panelTitle: { fontWeight: '700', fontSize: 16 },
-  panelSubtitle: { color: '#666', marginTop: 8 },
-  addRow: { flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' },
-  input: { flex: 1, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10, minWidth: 120 },
-  qtyInput: { width: 70, borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 10 },
-  unitRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flex: 1 },
-  unitChip: { borderWidth: 1, borderColor: '#ccc', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
-  unitChipActive: { backgroundColor: '#e8f0fe', borderColor: '#1a56db', color: '#1a56db' },
-  foodRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
-  foodRowMain: { flex: 1 },
-  foodName: { fontWeight: '600' },
-  foodMeta: { color: '#666', fontSize: 12 },
-  star: { fontSize: 18, paddingHorizontal: 8 },
-  toggleLabel: { color: '#1a56db' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+  sheet: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingBottom: space.xl,
+    maxHeight: '85%',
+  },
+  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, marginTop: 10 },
+  sheetBody: { padding: space.l, gap: space.m },
+  resultList: { maxHeight: 320 },
+  qty: { width: 110 },
+  foodRow: { paddingVertical: 10 },
+  noMatch: { gap: space.s, alignItems: 'flex-start', paddingVertical: space.s },
 });

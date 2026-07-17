@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
+import { useTheme } from '../../ui/theme';
 import type { BodyFatTrendProps } from './types';
 
 /**
@@ -7,26 +8,28 @@ import type { BodyFatTrendProps } from './types';
  * body-comp is syncing (empty series -> renders null, hidden entirely).
  */
 export function BodyFatTrend({ series }: BodyFatTrendProps) {
+  const t = useTheme();
   if (series.length === 0) return null;
   const data = series.map((p) => ({ value: p.value, label: p.date }));
   return (
-    <View style={styles.container}>
+    <View>
       <LineChart
         data={data}
-        color1="#b45309"
+        color1={t.chart.bodyFat}
         thickness1={2}
         hideDataPoints
         hideRules
         height={80}
         adjustToWidth
-        xAxisLabelTextStyle={styles.axisLabel}
-        yAxisTextStyle={styles.axisLabel}
+        yAxisColor="transparent"
+        xAxisColor={t.chart.grid}
+        xAxisLabelTextStyle={[styles.axisLabel, { color: t.muted }]}
+        yAxisTextStyle={[styles.axisLabel, { color: t.muted }]}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: 4 },
-  axisLabel: { fontSize: 9, color: '#666' },
+  axisLabel: { fontSize: 9 },
 });

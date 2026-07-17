@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Button, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { buildMeasurementSeries } from '../data-sync';
 import type { BodyMetricRow } from '../data-sync';
 import { getDataSyncRuntime } from '../data-sync/runtime';
@@ -25,11 +25,18 @@ import { getDashboardRuntime } from '../dashboard/runtime';
 import { addDays } from '../engine';
 import { getLatestCoachNote, type CoachNote } from '../coaching';
 import { getFoodLogRuntime } from '../food-log/runtime';
-import { ProfileSetupScreen } from './ProfileSetupScreen';
+import type { Tab } from '../app/index';
+import { AppButton, Card, Overline, Row, SegmentedControl } from './kit';
+import { space, type, useTheme } from './theme';
 
-const RANGE_OPTIONS: Range[] = ['30', '90', 'all'];
+const RANGE_OPTIONS: { value: Range; label: string }[] = [
+  { value: '30', label: '30 days' },
+  { value: '90', label: '90 days' },
+  { value: 'all', label: 'All' },
+];
 
-export function DashboardScreen() {
+export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
+  const t = useTheme();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [range, setRange] = useState<Range>('30');
   const [weightSeries, setWeightSeries] = useState<{ raw: Point[]; trend: Point[] }>({
@@ -114,8 +121,8 @@ export function DashboardScreen() {
     }
   };
 
-  if (snapshot === null) return null;
-  if (snapshot.profile === null) return <ProfileSetupScreen onDone={load} />;
+  // Profile creation is handled by the app-level onboarding gate.
+  if (snapshot === null || snapshot.profile === null) return null;
 
   const todayTotals = snapshot.last14[snapshot.last14.length - 1] ?? null;
   const consumed = todayTotals ? toMacros(todayTotals) : { proteinG: 0, carbG: 0, fatG: 0, fiberG: 0 };
@@ -123,49 +130,70 @@ export function DashboardScreen() {
 
   return (
     <ScrollView
-      style={styles.container}
+      contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <View style={styles.rangeRow}>
-        {RANGE_OPTIONS.map((r) => (
-          <Button key={r} title={r === 'all' ? 'All' : `${r}d`} onPress={() => setRange(r)} disabled={range === r} />
-        ))}
-      </View>
+      <Card style={styles.card}>
+        <Row style={styles.cardHeader}>
+          <Overline>Today</Overline>
+          {isEmptyConsumption(consumed) && onNavigate !== undefined && (
+            <AppButton title="Log food" onPress={() => onNavigate('food')} variant="ghost" small />
+          )}
+        </Row>
+        {snapshot.result !== null ? (
+          <MacroRings target={snapshot.result.macros} consumed={consumed} />
+        ) : (
+          <Text style={[type.caption, { color: t.muted, textAlign: 'center' }]}>
+            Building your target — check back after logging a few days.
+          </Text>
+        )}
+      </Card>
 
-      <WeightTrendChart
-        raw={weightSeries.raw}
-        trend={weightSeries.trend}
-        goalWeight={snapshot.profile.goalWeightKg}
-        projectedFinish={snapshot.result?.projectedFinishDate ?? null}
-        range={range}
-      />
+      <Card style={styles.card}>
+        <Overline>Weight trend</Overline>
+        <SegmentedControl options={RANGE_OPTIONS} value={range} onChange={setRange} />
+        <WeightTrendChart
+          raw={weightSeries.raw}
+          trend={weightSeries.trend}
+          goalWeight={snapshot.profile.goalWeightKg}
+          projectedFinish={snapshot.result?.projectedFinishDate ?? null}
+          range={range}
+        />
+      </Card>
 
-      {snapshot.result !== null ? (
-        <MacroRings target={snapshot.result.macros} consumed={consumed} />
-      ) : (
-        <Text style={styles.pending}>Building your target — check back after logging a few days.</Text>
+      <Card style={styles.card}>
+        <Overline>Last 14 days</Overline>
+        <AdherenceStrip days={adherence.days} avgIntake={adherence.avgIntake} avgTarget={adherence.avgTarget} />
+      </Card>
+
+      {bodyFatSeries.length > 0 && (
+        <Card style={styles.card}>
+          <Overline>Body fat</Overline>
+          <BodyFatTrend series={bodyFatSeries} />
+        </Card>
       )}
 
-      <AdherenceStrip days={adherence.days} avgIntake={adherence.avgIntake} avgTarget={adherence.avgTarget} />
-
-      <BodyFatTrend series={bodyFatSeries} />
-
-      <LatestCoachNote note={coachNote} />
-
-      {isEmptyConsumption(consumed) && (
-        <Text style={styles.hint}>Nothing logged today yet — head to the Food Log tab.</Text>
-      )}
+      <Card style={styles.card}>
+        <Row style={styles.cardHeader}>
+          <Overline>Coach</Overline>
+          {onNavigate !== undefined && coachNote !== null && (
+            <AppButton title="All notes" onPress={() => onNavigate('coach')} variant="ghost" small />
+          )}
+        </Row>
+        <LatestCoachNote note={coachNote} />
+      </Card>
 
       {remindersWarning !== null && (
-        <Text style={styles.hint}>Reminders unavailable: {remindersWarning}</Text>
+        <Text style={[type.caption, { color: t.warning, textAlign: 'center' }]}>
+          Reminders unavailable: {remindersWarning}
+        </Text>
       )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16 },
-  rangeRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginBottom: 12 },
-  pending: { textAlign: 'center', color: '#999', marginVertical: 16 },
-  hint: { textAlign: 'center', color: '#999', marginTop: 12, fontSize: 12 },
+  container: { padding: space.l, paddingTop: space.s, gap: space.m, paddingBottom: space.xl },
+  card: { gap: space.m },
+  cardHeader: { justifyContent: 'space-between' },
 });

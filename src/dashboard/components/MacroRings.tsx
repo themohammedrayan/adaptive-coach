@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import type { Macros } from '../../engine';
+import { useTheme, type Theme } from '../../ui/theme';
 import { isEmptyConsumption } from '../adapters';
 
 /** Dashboard BRD §A5 — literal component signature. */
@@ -34,10 +35,6 @@ function Ring({ pct, color, radius, strokeWidth }: { pct: number; color: string;
   );
 }
 
-const RING_COLOR = { protein: '#1a56db', carb: '#047857', fat: '#b45309' };
-const EMPTY_COLOR = '#d4d4d8';
-const EMPTY_TRACK = '#e5e5e5';
-
 /**
  * Dashboard BRD §A2.2 — calories consumed vs Engine target, plus P/C/F
  * rings. kcal is derived here (4P+4C+9F), never stored — the Macros type
@@ -46,12 +43,14 @@ const EMPTY_TRACK = '#e5e5e5';
  * broken/NaN percentage when nothing's logged yet.
  */
 export function MacroRings({ target, consumed }: MacroRingsProps) {
+  const t = useTheme();
+  const ringColor = { protein: t.chart.protein, carb: t.chart.carb, fat: t.chart.fat };
   const empty = isEmptyConsumption(consumed);
   const targetKcal = kcalOf(target);
   const consumedKcal = kcalOf(consumed);
   const kcalPct = empty || targetKcal <= 0 ? 0 : consumedKcal / targetKcal;
 
-  const rings: { key: keyof typeof RING_COLOR; targetG: number; consumedG: number; radius: number }[] = [
+  const rings: { key: keyof typeof ringColor; targetG: number; consumedG: number; radius: number }[] = [
     { key: 'protein', targetG: target.proteinG, consumedG: consumed.proteinG, radius: 60 },
     { key: 'carb', targetG: target.carbG, consumedG: consumed.carbG, radius: 48 },
     { key: 'fat', targetG: target.fatG, consumedG: consumed.fatG, radius: 36 },
@@ -61,46 +60,48 @@ export function MacroRings({ target, consumed }: MacroRingsProps) {
     <View style={styles.container}>
       <View style={styles.ringWrap}>
         <Svg width={SIZE} height={SIZE}>
-          <Circle cx={CENTER} cy={CENTER} r={72} stroke={EMPTY_TRACK} strokeWidth={10} fill="none" />
-          <Ring pct={kcalPct} color={empty ? EMPTY_COLOR : '#111827'} radius={72} strokeWidth={10} />
+          <Circle cx={CENTER} cy={CENTER} r={72} stroke={t.chart.track} strokeWidth={10} fill="none" />
+          <Ring pct={kcalPct} color={empty ? t.chart.track : t.chart.trend} radius={72} strokeWidth={10} />
           {rings.map((r) => (
-            <Circle key={`${r.key}-track`} cx={CENTER} cy={CENTER} r={r.radius} stroke={EMPTY_TRACK} strokeWidth={8} fill="none" />
+            <Circle key={`${r.key}-track`} cx={CENTER} cy={CENTER} r={r.radius} stroke={t.chart.track} strokeWidth={8} fill="none" />
           ))}
           {rings.map((r) => (
             <Ring
               key={r.key}
               pct={empty || r.targetG <= 0 ? 0 : r.consumedG / r.targetG}
-              color={empty ? EMPTY_COLOR : RING_COLOR[r.key]}
+              color={empty ? t.chart.track : ringColor[r.key]}
               radius={r.radius}
               strokeWidth={8}
             />
           ))}
         </Svg>
         <View style={styles.center} pointerEvents="none">
-          <Text style={styles.kcalText}>{empty ? '—' : Math.round(consumedKcal)}</Text>
-          <Text style={styles.kcalTarget}>/ {Math.round(targetKcal)} kcal</Text>
+          <Text style={[styles.kcalText, { color: t.ink }]}>{empty ? '—' : Math.round(consumedKcal)}</Text>
+          <Text style={[styles.kcalTarget, { color: t.muted }]}>/ {Math.round(targetKcal)} kcal</Text>
         </View>
       </View>
       <View style={styles.legend}>
-        <Text style={[styles.legendItem, { color: RING_COLOR.protein }]}>
-          P {Math.round(consumed.proteinG)}/{Math.round(target.proteinG)}g
-        </Text>
-        <Text style={[styles.legendItem, { color: RING_COLOR.carb }]}>
-          C {Math.round(consumed.carbG)}/{Math.round(target.carbG)}g
-        </Text>
-        <Text style={[styles.legendItem, { color: RING_COLOR.fat }]}>
-          F {Math.round(consumed.fatG)}/{Math.round(target.fatG)}g
-        </Text>
-        <Text style={styles.legendItem}>
-          Fiber {Math.round(consumed.fiberG)}/{Math.round(target.fiberG)}g
-        </Text>
+        <LegendItem color={ringColor.protein} text={`P ${Math.round(consumed.proteinG)}/${Math.round(target.proteinG)}g`} t={t} />
+        <LegendItem color={ringColor.carb} text={`C ${Math.round(consumed.carbG)}/${Math.round(target.carbG)}g`} t={t} />
+        <LegendItem color={ringColor.fat} text={`F ${Math.round(consumed.fatG)}/${Math.round(target.fatG)}g`} t={t} />
+        <LegendItem color={t.muted} text={`Fiber ${Math.round(consumed.fiberG)}/${Math.round(target.fiberG)}g`} t={t} />
       </View>
     </View>
   );
 }
 
+/** Identity comes from the colored dot; the text stays in ink (dataviz rule). */
+function LegendItem({ color, text, t }: { color: string; text: string; t: Theme }) {
+  return (
+    <View style={styles.legendItem}>
+      <View style={[styles.legendDot, { backgroundColor: color }]} />
+      <Text style={[styles.legendText, { color: t.secondary }]}>{text}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: { alignItems: 'center', gap: 8 },
+  container: { alignItems: 'center', gap: 12 },
   ringWrap: { width: SIZE, height: SIZE, position: 'relative' },
   center: {
     position: 'absolute',
@@ -111,8 +112,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  kcalText: { fontSize: 22, fontWeight: '700' },
-  kcalTarget: { fontSize: 12, color: '#666' },
-  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, justifyContent: 'center' },
-  legendItem: { fontSize: 12, fontWeight: '600' },
+  kcalText: { fontSize: 24, fontWeight: '800' },
+  kcalTarget: { fontSize: 12 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', gap: 14, justifyContent: 'center' },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendText: { fontSize: 12, fontWeight: '600' },
 });

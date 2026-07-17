@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
+import { type as typeScale, useTheme } from '../../ui/theme';
 import { projectedFinishCopy } from '../copy';
 import type { WeightTrendChartProps } from './types';
 
@@ -16,13 +17,14 @@ const RANGE_LABEL: Record<WeightTrendChartProps['range'], string> = {
  * onto one x-axis via gifted-charts' data/data2 multi-series.
  */
 export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, range }: WeightTrendChartProps) {
+  const t = useTheme();
   const rawByDate = new Map(raw.map((p) => [p.date, p.value]));
   const trendData = trend.map((p) => ({ value: p.value, label: p.date, hideDataPoint: true }));
   const rawData = trend.map((p) => {
     const value = rawByDate.get(p.date);
     return value === undefined
       ? { value: undefined, hideDataPoint: true }
-      : { value, dataPointColor: '#94a3b8', dataPointRadius: 3, hideDataPoint: false };
+      : { value, dataPointColor: t.chart.dots, dataPointRadius: 3, hideDataPoint: false };
   });
 
   const values = trend.map((p) => p.value);
@@ -33,24 +35,35 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
       <LineChart
         data={trendData}
         data2={rawData}
-        color1="#111827"
+        color1={t.chart.trend}
         color2="transparent"
         thickness1={2}
         thickness2={0}
         hideDataPoints={false}
-        hideRules
+        rulesColor={t.chart.grid}
+        rulesType="solid"
         showReferenceLine1
         referenceLine1Position={goalWeight}
-        referenceLine1Config={{ color: '#047857', dashWidth: 4, dashGap: 4, labelText: `Goal ${goalWeight}kg` }}
+        referenceLine1Config={{
+          color: t.chart.goal,
+          dashWidth: 4,
+          dashGap: 4,
+          labelText: `Goal ${goalWeight}kg`,
+          labelTextStyle: { color: t.chart.goal, fontSize: 10, fontWeight: '600' },
+        }}
         maxValue={maxValue}
         height={180}
         adjustToWidth
-        xAxisLabelTextStyle={styles.axisLabel}
-        yAxisTextStyle={styles.axisLabel}
+        yAxisColor="transparent"
+        xAxisColor={t.chart.grid}
+        xAxisLabelTextStyle={[styles.axisLabel, { color: t.muted }]}
+        yAxisTextStyle={[styles.axisLabel, { color: t.muted }]}
       />
       <View style={styles.footer}>
-        <Text style={styles.rangeLabel}>{RANGE_LABEL[range]}</Text>
-        <Text style={styles.projected}>{projectedFinishCopy(projectedFinish)}</Text>
+        <Text style={[typeScale.caption, { color: t.muted }]}>{RANGE_LABEL[range]}</Text>
+        <Text style={[typeScale.caption, { color: t.ink, fontWeight: '600' }]}>
+          {projectedFinishCopy(projectedFinish)}
+        </Text>
       </View>
     </View>
   );
@@ -58,8 +71,6 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
 
 const styles = StyleSheet.create({
   container: { gap: 8 },
-  axisLabel: { fontSize: 10, color: '#666' },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap' },
-  rangeLabel: { fontSize: 12, color: '#666' },
-  projected: { fontSize: 12, fontWeight: '600' },
+  axisLabel: { fontSize: 10 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 },
 });

@@ -1,4 +1,5 @@
 import { Line, LineChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import { useTheme } from '../../ui/theme';
 import type { BodyFatTrendProps } from './types';
 
 /**
@@ -7,13 +8,14 @@ import type { BodyFatTrendProps } from './types';
  * native component's behavior.
  */
 export function BodyFatTrend({ series }: BodyFatTrendProps) {
+  const t = useTheme();
   if (series.length === 0) return null;
   return (
     <ResponsiveContainer width="100%" height={80}>
       <LineChart data={series}>
         <XAxis dataKey="date" tick={{ fontSize: 9 }} hide />
-        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9 }} width={30} />
-        <Line type="monotone" dataKey="value" stroke="#b45309" strokeWidth={2} dot={false} />
+        <YAxis domain={['auto', 'auto']} tick={{ fontSize: 9, fill: t.muted }} width={30} stroke="transparent" />
+        <Line type="monotone" dataKey="value" stroke={t.chart.bodyFat} strokeWidth={2} dot={false} />
       </LineChart>
     </ResponsiveContainer>
   );

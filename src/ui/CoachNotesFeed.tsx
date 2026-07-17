@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { listCoachNotes, type CoachNote } from '../coaching';
+import { Card, EmptyState, Row } from './kit';
+import { radius, space, type, useTheme } from './theme';
 
 /**
  * Coaching BRD §8 — read-only weekly feed, newest-first. No chatbot UI in
@@ -37,46 +39,51 @@ export function CoachNotesFeed() {
 
   return (
     <FlatList
-      style={styles.container}
+      contentContainerStyle={styles.list}
       data={notes ?? []}
       keyExtractor={(note) => note.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      renderItem={({ item }) => <CoachNoteRow note={item} />}
+      renderItem={({ item }) => <CoachNoteCard note={item} />}
       ListEmptyComponent={
-        <Text style={styles.empty}>
-          {error ?? 'No coach notes yet — check back after your next weekly recompute.'}
-        </Text>
+        <EmptyState
+          message={error ?? 'No coach notes yet — check back after your next weekly recompute.'}
+        />
       }
     />
   );
 }
 
-function CoachNoteRow({ note }: { note: CoachNote }) {
+function CoachNoteCard({ note }: { note: CoachNote }) {
+  const t = useTheme();
   return (
-    <View style={styles.row}>
-      <View style={styles.rowHeader}>
-        <Text style={styles.weekOf}>Week of {note.weekOf}</Text>
-        {note.source === 'fallback' && <Text style={styles.autoTag}>auto-generated</Text>}
+    <Card style={styles.card}>
+      <Row style={styles.header}>
+        <Text style={[type.overline, { color: t.muted }]}>Week of {note.weekOf}</Text>
+        {note.source === 'fallback' && (
+          <Text style={[styles.autoTag, { backgroundColor: t.wash, color: t.muted }]}>auto</Text>
+        )}
+      </Row>
+      <Text style={[type.heading, { color: t.ink }]}>{note.changeExplanation}</Text>
+      <View style={styles.body}>
+        <Text style={[type.body, { color: t.secondary }]}>{note.weeklyReview}</Text>
+        <Text style={[type.body, { color: t.secondary }]}>{note.stallRead}</Text>
+        <Text style={[type.body, { color: t.ink }]}>{note.suggestion}</Text>
       </View>
-      <Text style={styles.field}>{note.changeExplanation}</Text>
-      <Text style={styles.field}>{note.weeklyReview}</Text>
-      <Text style={styles.field}>{note.stallRead}</Text>
-      <Text style={styles.field}>{note.suggestion}</Text>
-    </View>
+    </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  row: {
-    padding: 16,
-    gap: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eee',
+  list: { padding: space.l, paddingTop: space.s, gap: space.m },
+  card: { gap: space.s },
+  header: { justifyContent: 'space-between' },
+  autoTag: {
+    fontSize: 11,
+    fontWeight: '600',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    overflow: 'hidden',
   },
-  rowHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  weekOf: { fontSize: 12, color: '#666' },
-  autoTag: { fontSize: 11, color: '#999', fontStyle: 'italic' },
-  field: { fontSize: 14 },
-  empty: { textAlign: 'center', color: '#999', padding: 24 },
+  body: { gap: 6 },
 });

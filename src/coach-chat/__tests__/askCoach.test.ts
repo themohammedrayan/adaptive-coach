@@ -1,31 +1,22 @@
 const mockAskCoach = jest.fn();
 jest.mock('../remote', () => ({ askCoach: (...args: unknown[]) => mockAskCoach(...args) }));
 
+import { createChallenge, MemoryStore as ChallengeMemoryStore } from '../../challenges';
 import { MemoryStore as DataSyncMemoryStore } from '../../data-sync';
 import type { BodyMetricRow } from '../../data-sync';
 import { MemoryStore as DashboardMemoryStore } from '../../dashboard/store.memory';
-import type { EngineResult, EngineState, Profile } from '../../engine';
+import type { PersonProfile } from '../../dashboard/types';
+import type { EngineResult } from '../../engine';
 import { addLogEntry, createFood, MemoryStore as FoodLogMemoryStore } from '../../food-log';
 import { askCoachQuestion } from '../askCoach';
 
 const TODAY = '2026-07-15';
 
-const PROFILE: Profile = {
+const PROFILE: PersonProfile = {
   sex: 'male',
   age: 30,
   heightCm: 180,
   activityFactor: 1.55,
-  goalWeightKg: 75,
-  horizonDays: 180,
-  startDate: '2026-06-01',
-  mode: 'lose',
-};
-
-const ENGINE_STATE: EngineState = {
-  prevTargetKcal: 2100,
-  mode: 'lose',
-  lastRecomputeDate: '2026-07-08',
-  startWeightKg: 90,
 };
 
 const ENGINE_RESULT: EngineResult = {
@@ -60,13 +51,21 @@ function weightRow(localDate: string, kg: number): BodyMetricRow {
   };
 }
 
-async function seedDeps(opts?: { skipEngineState?: boolean; skipResult?: boolean }) {
+async function seedDeps(opts?: { skipChallenge?: boolean; skipResult?: boolean }) {
   const dashboardStore = new DashboardMemoryStore();
   const foodLogStore = new FoodLogMemoryStore();
   const dataSyncStore = new DataSyncMemoryStore();
+  const challengeStore = new ChallengeMemoryStore();
 
   await dashboardStore.setProfile(PROFILE);
-  if (!opts?.skipEngineState) await dashboardStore.setEngineState(ENGINE_STATE);
+  if (!opts?.skipChallenge) {
+    await createChallenge(
+      challengeStore,
+      { domain: 'weight', goalWeightKg: 75, startWeightKg: 90, horizonDays: 180 },
+      '2026-06-01T00:00:00.000Z',
+      '2026-06-01',
+    );
+  }
   if (!opts?.skipResult) await dashboardStore.setLastResult(TODAY, ENGINE_RESULT);
 
   for (let i = 0; i < 5; i++) {
@@ -88,7 +87,7 @@ async function seedDeps(opts?: { skipEngineState?: boolean; skipResult?: boolean
     );
   }
 
-  return { dashboardStore, foodLogStore, dataSyncStore };
+  return { dashboardStore, foodLogStore, dataSyncStore, challengeStore };
 }
 
 beforeEach(() => {
@@ -103,15 +102,22 @@ describe('askCoachQuestion — v2 ad-hoc Q&A orchestrator', () => {
     expect(mockAskCoach).not.toHaveBeenCalled();
   });
 
-  it('returns no-data when no profile/engine state has been set up', async () => {
+  it('returns no-data when no profile/challenge has been set up', async () => {
     const dashboardStore = new DashboardMemoryStore();
     const foodLogStore = new FoodLogMemoryStore();
     const dataSyncStore = new DataSyncMemoryStore();
+    const challengeStore = new ChallengeMemoryStore();
     const result = await askCoachQuestion(
-      { dashboardStore, foodLogStore, dataSyncStore },
+      { dashboardStore, foodLogStore, dataSyncStore, challengeStore },
       'Why did my target drop?',
       TODAY,
     );
+    expect(result).toEqual({ status: 'no-data' });
+  });
+
+  it('returns no-data when there is no primary challenge', async () => {
+    const deps = await seedDeps({ skipChallenge: true });
+    const result = await askCoachQuestion(deps, 'Why did my target drop?', TODAY);
     expect(result).toEqual({ status: 'no-data' });
   });
 
@@ -136,12 +142,13 @@ describe('askCoachQuestion — v2 ad-hoc Q&A orchestrator', () => {
     expect(requestId.length).toBeGreaterThan(0);
     expect(question).toBe('Why did my target drop?');
     expect(payload.current.targetKcal).toBe(ENGINE_RESULT.targetKcal);
-    expect(payload.goal.startWeightKg).toBe(ENGINE_STATE.startWeightKg);
+    expect(payload.goal.startWeightKg).toBe(90);
     expect(history).toEqual([]);
 
-    // Cached engine state must be untouched — this never recomputes.
-    const stateAfter = await deps.dashboardStore.getEngineState();
-    expect(stateAfter).toEqual(ENGINE_STATE);
+    // Cached challenge bookkeeping must be untouched — this never recomputes.
+    const primaryAfter = await deps.challengeStore.getPrimary('weight');
+    expect(primaryAfter?.lastRecomputeDate).toBeNull();
+    expect(primaryAfter?.prevTargetKcal).toBeNull();
   });
 
   it('passes conversation history through to the remote call', async () => {

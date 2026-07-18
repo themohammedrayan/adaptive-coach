@@ -1,3 +1,5 @@
+import { toEngineProfile, toEngineState, withEngineState } from '../challenges';
+import type { ChallengeStore } from '../challenges';
 import { assembleCoachPayload, buildGoalSummary, gatherPayloadInputs, generateCoachNote } from '../coaching';
 import type { BodyMetricsStore } from '../data-sync';
 import { computeTrend, DEFAULT_CONFIG, nextEngineState, recompute, trendAt } from '../engine';
@@ -13,6 +15,7 @@ export interface RefreshDeps {
   dashboardStore: DashboardStore;
   foodLogStore: FoodLogStore;
   dataSyncStore: BodyMetricsStore;
+  challengeStore: ChallengeStore;
 }
 
 /**
@@ -22,6 +25,10 @@ export interface RefreshDeps {
  * Engine's recompute, persists the result when it advances, and falls
  * back to the cached previous result when the recompute gate hasn't
  * elapsed (recompute returns null — held display continuity).
+ *
+ * The engine's Profile/EngineState are built on the fly from the stored
+ * bio-only Profile plus the primary weight Challenge (src/challenges) —
+ * the engine module itself is untouched; this is the one adapter seam.
  *
  * Stores are injected (not fetched via getXRuntime() internally), matching
  * the dependency-injection convention `data-sync/sync.ts`'s syncOnOpen(deps,
@@ -34,23 +41,25 @@ export async function refreshDashboardSnapshot(
   today: IsoDate,
   opts?: { force?: boolean },
 ): Promise<DashboardSnapshot> {
-  const { dashboardStore: dashStore, foodLogStore: foodStore, dataSyncStore } = deps;
+  const { dashboardStore: dashStore, foodLogStore: foodStore, dataSyncStore, challengeStore } = deps;
   const profile = await dashStore.getProfile();
   if (profile === null) {
     return {
       profile: null,
-      engineState: null,
+      primaryChallenge: null,
       result: null,
       resultComputedAt: null,
       last14: [],
       liveTrendWeightKg: null,
     };
   }
-  const engineState = await dashStore.getEngineState();
-  if (engineState === null) {
+  const primary = await challengeStore.getPrimary('weight');
+  if (primary === null) {
+    // No active challenge to prescribe against (e.g. paused/deleted the only one) —
+    // same empty-result shape as the profile===null branch above.
     return {
       profile,
-      engineState: null,
+      primaryChallenge: null,
       result: null,
       resultComputedAt: null,
       last14: [],
@@ -58,9 +67,12 @@ export async function refreshDashboardSnapshot(
     };
   }
 
+  const engineProfile = toEngineProfile(profile, primary);
+  const engineState = toEngineState(primary);
+
   const { last14, measurements, trend } = await gatherPayloadInputs(
     { foodLogStore: foodStore, dataSyncStore },
-    profile,
+    engineProfile,
     today,
   );
 
@@ -70,30 +82,44 @@ export async function refreshDashboardSnapshot(
   const liveTrend = computeTrend(measurements, { end: today }, DEFAULT_CONFIG.ewmaHalfLifeDays);
   const liveTrendWeightKg = trendAt(liveTrend, today) ?? engineState.startWeightKg;
 
-  const result = recompute(engineState, profile, measurements, last14.map(toDayLog), today, undefined, {
+  const result = recompute(engineState, engineProfile, measurements, last14.map(toDayLog), today, undefined, {
     force: opts?.force,
   });
 
   if (result !== null) {
     const next = nextEngineState(engineState, result, today);
-    await dashStore.setEngineState(next);
+    const updatedChallenge = withEngineState(primary, next);
+    await challengeStore.upsert(updatedChallenge);
     await dashStore.setLastResult(today, result);
     // Recompute→coach note→reminder wiring (BRD §B2.3): fire-and-forget, never blocks the snapshot.
     // The Edge Function already resolves API failures to a fallback note server-side; this
     // .catch only guards transport-level failures (offline device, function unreachable).
     const adherenceSummary = buildAdherenceSummary(last14, result.targetKcal);
-    const goal = buildGoalSummary(profile, next, today);
+    const goal = buildGoalSummary(
+      updatedChallenge.startWeightKg,
+      updatedChallenge.goalWeightKg,
+      updatedChallenge.horizonDays,
+      updatedChallenge.startDate,
+      today,
+    );
     const payload = assembleCoachPayload(result, adherenceSummary, goal, today, trend);
     void generateCoachNote(payload)
       .then((note) => notifyCoachNoteReady(note))
       .catch((e) => console.warn('[coaching] note generation failed (will retry next recompute):', e));
-    return { profile, engineState: next, result, resultComputedAt: today, last14, liveTrendWeightKg };
+    return {
+      profile,
+      primaryChallenge: updatedChallenge,
+      result,
+      resultComputedAt: today,
+      last14,
+      liveTrendWeightKg,
+    };
   }
 
   const cached = await dashStore.getLastResult();
   return {
     profile,
-    engineState,
+    primaryChallenge: primary,
     result: cached?.result ?? null,
     resultComputedAt: cached?.computedAt ?? null,
     last14,

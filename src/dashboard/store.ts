@@ -1,18 +1,17 @@
-import type { EngineResult, EngineState, IsoDate, Profile } from '../engine';
-import type { ReminderConfig } from './types';
+import type { EngineResult, IsoDate } from '../engine';
+import type { PersonProfile, ReminderConfig } from './types';
 
 /**
- * Local persistence contract. One combined store for Profile, the Engine
- * snapshot (state + last result), and reminder config — all tiny
- * single-row settings, not growing collections. Implementations: SQLite
- * (device), in-memory (tests/web).
+ * Local persistence contract. One combined store for the person-level
+ * Profile, the cached EngineResult, and reminder config — all tiny
+ * single-row settings, not growing collections. Goal-related state
+ * (goalWeightKg/horizonDays/startWeightKg/prevTargetKcal/lastRecomputeDate)
+ * lives on Challenge rows now (src/challenges), not here. Implementations:
+ * SQLite (device), in-memory (tests/web).
  */
 export interface DashboardStore {
-  getProfile(): Promise<Profile | null>;
-  setProfile(profile: Profile): Promise<void>;
-
-  getEngineState(): Promise<EngineState | null>;
-  setEngineState(state: EngineState): Promise<void>;
+  getProfile(): Promise<PersonProfile | null>;
+  setProfile(profile: PersonProfile): Promise<void>;
 
   getLastResult(): Promise<{ computedAt: IsoDate; result: EngineResult } | null>;
   setLastResult(computedAt: IsoDate, result: EngineResult): Promise<void>;

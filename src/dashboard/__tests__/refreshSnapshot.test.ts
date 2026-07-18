@@ -24,30 +24,23 @@ jest.mock('../../coaching', () => ({
   generateCoachNote: jest.fn(() => Promise.resolve(mockNote)),
 }));
 
+import { createChallenge, MemoryStore as ChallengeMemoryStore } from '../../challenges';
 import { MemoryStore as DataSyncMemoryStore } from '../../data-sync';
 import type { BodyMetricRow } from '../../data-sync';
-import type { EngineState, Profile } from '../../engine';
 import { addLogEntry, createFood, MemoryStore as FoodLogMemoryStore } from '../../food-log';
 import { notifyCoachNoteReady } from '../reminders';
 import { refreshDashboardSnapshot } from '../refreshSnapshot';
 import { MemoryStore as DashboardMemoryStore } from '../store.memory';
+import type { PersonProfile } from '../types';
 
 const TODAY = '2026-07-15';
 
-const PROFILE: Profile = {
+const PROFILE: PersonProfile = {
   sex: 'male',
   age: 30,
   heightCm: 180,
   activityFactor: 1.55,
-  goalWeightKg: 75,
-  horizonDays: 180,
-  startDate: '2026-06-01',
-  mode: 'lose',
 };
-
-function freshState(): EngineState {
-  return { prevTargetKcal: null, mode: 'lose', lastRecomputeDate: null, startWeightKg: 90 };
-}
 
 function weightRow(localDate: string, kg: number): BodyMetricRow {
   return {
@@ -69,9 +62,15 @@ async function seedDeps() {
   const dashboardStore = new DashboardMemoryStore();
   const foodLogStore = new FoodLogMemoryStore();
   const dataSyncStore = new DataSyncMemoryStore();
+  const challengeStore = new ChallengeMemoryStore();
 
   await dashboardStore.setProfile(PROFILE);
-  await dashboardStore.setEngineState(freshState());
+  await createChallenge(
+    challengeStore,
+    { domain: 'weight', goalWeightKg: 75, startWeightKg: 90, horizonDays: 180 },
+    '2026-06-01T00:00:00.000Z',
+    '2026-06-01',
+  );
 
   // 10 weigh-ins across the trailing window (>= minWeighIns=8).
   for (let i = 0; i < 10; i++) {
@@ -94,7 +93,7 @@ async function seedDeps() {
     );
   }
 
-  return { dashboardStore, foodLogStore, dataSyncStore };
+  return { dashboardStore, foodLogStore, dataSyncStore, challengeStore };
 }
 
 describe('refreshDashboardSnapshot — Dashboard BRD §C AT7', () => {
@@ -102,15 +101,31 @@ describe('refreshDashboardSnapshot — Dashboard BRD §C AT7', () => {
     const dashboardStore = new DashboardMemoryStore();
     const foodLogStore = new FoodLogMemoryStore();
     const dataSyncStore = new DataSyncMemoryStore();
+    const challengeStore = new ChallengeMemoryStore();
     const snapshot = await refreshDashboardSnapshot(
-      { dashboardStore, foodLogStore, dataSyncStore },
+      { dashboardStore, foodLogStore, dataSyncStore, challengeStore },
       TODAY,
     );
     expect(snapshot.profile).toBeNull();
     expect(snapshot.result).toBeNull();
   });
 
-  it('a first recompute persists EngineState/EngineResult and fires notifyCoachNoteReady once with matching reasons', async () => {
+  it('returns an empty result (but a non-null profile) when there is no primary challenge', async () => {
+    const dashboardStore = new DashboardMemoryStore();
+    const foodLogStore = new FoodLogMemoryStore();
+    const dataSyncStore = new DataSyncMemoryStore();
+    const challengeStore = new ChallengeMemoryStore();
+    await dashboardStore.setProfile(PROFILE);
+    const snapshot = await refreshDashboardSnapshot(
+      { dashboardStore, foodLogStore, dataSyncStore, challengeStore },
+      TODAY,
+    );
+    expect(snapshot.profile).not.toBeNull();
+    expect(snapshot.primaryChallenge).toBeNull();
+    expect(snapshot.result).toBeNull();
+  });
+
+  it('a first recompute persists Challenge bookkeeping/EngineResult and fires notifyCoachNoteReady once with matching reasons', async () => {
     const deps = await seedDeps();
     const snapshot = await refreshDashboardSnapshot(deps, TODAY);
 
@@ -118,8 +133,8 @@ describe('refreshDashboardSnapshot — Dashboard BRD §C AT7', () => {
     expect(snapshot.resultComputedAt).toBe(TODAY);
     expect(snapshot.last14).toHaveLength(14);
 
-    const persistedState = await deps.dashboardStore.getEngineState();
-    expect(persistedState?.lastRecomputeDate).toBe(TODAY);
+    const primary = await deps.challengeStore.getPrimary('weight');
+    expect(primary?.lastRecomputeDate).toBe(TODAY);
     const persistedResult = await deps.dashboardStore.getLastResult();
     expect(persistedResult?.result.targetKcal).toBe(snapshot.result?.targetKcal);
 

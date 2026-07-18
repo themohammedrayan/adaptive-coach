@@ -1,5 +1,10 @@
-import type { EngineResult, EngineState, IsoDate, Profile } from '../engine';
+import type { Challenge } from '../challenges';
+import type { EngineResult, IsoDate, Profile } from '../engine';
 import type { DailyTotals } from '../food-log';
+
+/** Person-level fields only — goal fields (goalWeightKg/horizonDays/startDate/mode)
+ * live on the primary Challenge now, not on the stored Profile. */
+export type PersonProfile = Pick<Profile, 'sex' | 'age' | 'heightCm' | 'activityFactor'>;
 
 export interface Point {
   date: IsoDate;
@@ -33,11 +38,14 @@ export interface ReminderConfig {
  * `result`/`resultComputedAt` are the cached previous values when a
  * recompute holds (interval gate not yet elapsed); `last14` is the shared
  * trailing-14-day fetch reused for both the adherence strip and the
- * Engine's DayLog[] window.
+ * Engine's DayLog[] window. `primaryChallenge` replaces the old singleton
+ * EngineState — it's null when the person has no active weight challenge
+ * (e.g. paused their only one), in which case the dashboard shows an empty
+ * "no active challenge" state instead of a prescription.
  */
 export interface DashboardSnapshot {
-  profile: Profile | null;
-  engineState: EngineState | null;
+  profile: PersonProfile | null;
+  primaryChallenge: Challenge | null;
   result: EngineResult | null;
   resultComputedAt: IsoDate | null;
   last14: DailyTotals[];

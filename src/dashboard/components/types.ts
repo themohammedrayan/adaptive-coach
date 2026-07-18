@@ -5,7 +5,8 @@ import type { Point, Range } from '../types';
 export interface WeightTrendChartProps {
   raw: Point[];
   trend: Point[];
-  goalWeight: number;
+  /** null when there's no active weight challenge to show a goal line for. */
+  goalWeight: number | null;
   projectedFinish: IsoDate | null;
   range: Range;
 }

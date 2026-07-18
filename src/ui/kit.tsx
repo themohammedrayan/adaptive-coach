@@ -308,7 +308,7 @@ export function Dot({ color, size = 8 }: { color: string; size?: number }) {
 
 /* ---------------------------------------------------------------- tab icons */
 
-export type TabIconName = 'home' | 'food' | 'weight' | 'coach' | 'profile';
+export type TabIconName = 'home' | 'food' | 'weight' | 'challenges' | 'coach' | 'profile';
 
 /**
  * Hand-drawn 24px line icons — no icon font is installed (expo-symbols is
@@ -336,6 +336,12 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
         <>
           <Rect x={3.5} y={3.5} width={17} height={17} rx={4} {...p} />
           <Path d="M8 9.5a5.5 4.5 0 0 1 8 0l-2.4 2.4a2 2 0 0 0-3.2 0Z" {...p} />
+        </>
+      )}
+      {name === 'challenges' && (
+        <>
+          <Path d="M6 3.5v17" {...p} />
+          <Path d="M6 4.5h11l-2.5 3.5L17 11.5H6" {...p} />
         </>
       )}
       {name === 'coach' && (

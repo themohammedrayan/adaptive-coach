@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getDashboardRuntime } from '../dashboard/runtime';
+import { ChallengesScreen } from '../ui/ChallengesScreen';
 import { CoachNotesFeed } from '../ui/CoachNotesFeed';
 import { DashboardScreen } from '../ui/DashboardScreen';
 import { FoodLogScreen } from '../ui/FoodLogScreen';
@@ -13,12 +14,13 @@ import { space, type, useTheme } from '../ui/theme';
 import { useSession } from '../ui/useSession';
 import { WeightScreen } from '../ui/WeightScreen';
 
-export type Tab = 'home' | 'food' | 'weight' | 'coach' | 'profile';
+export type Tab = 'home' | 'food' | 'weight' | 'challenges' | 'coach' | 'profile';
 
 const TABS: { key: Tab; label: string; icon: TabIconName; title: string }[] = [
   { key: 'home', label: 'Home', icon: 'home', title: 'Today' },
   { key: 'food', label: 'Food', icon: 'food', title: 'Food log' },
   { key: 'weight', label: 'Weight', icon: 'weight', title: 'Weight' },
+  { key: 'challenges', label: 'Challenges', icon: 'challenges', title: 'Challenges' },
   { key: 'coach', label: 'Coach', icon: 'coach', title: 'Coach' },
   { key: 'profile', label: 'Profile', icon: 'profile', title: 'Profile' },
 ];
@@ -81,6 +83,7 @@ export default function Index() {
         {tab === 'home' && <DashboardScreen onNavigate={setTab} />}
         {tab === 'food' && <FoodLogScreen />}
         {tab === 'weight' && <WeightScreen />}
+        {tab === 'challenges' && <ChallengesScreen />}
         {tab === 'coach' && <CoachNotesFeed />}
         {tab === 'profile' && <ProfileScreen />}
       </View>

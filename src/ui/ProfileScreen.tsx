@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { getChallengeRuntime } from '../challenges/runtime';
+import { getDataSyncRuntime } from '../data-sync/runtime';
 import {
   ACTIVITY_LEVELS,
   configureNotificationHandler,
@@ -8,13 +10,11 @@ import {
   type DashboardSnapshot,
   type ReminderConfig,
 } from '../dashboard';
-import { projectedFinishCopy } from '../dashboard/copy';
 import { getDashboardRuntime } from '../dashboard/runtime';
-import { getDataSyncRuntime } from '../data-sync/runtime';
+import type { PersonProfile } from '../dashboard/types';
 import { getFoodLogRuntime } from '../food-log/runtime';
 import { supabase } from '../lib/supabase';
-import { AppButton, AppSwitch, Card, Overline, ProgressBar, Row } from './kit';
-import { ProfileSetupScreen } from './ProfileSetupScreen';
+import { AppButton, AppSwitch, Card, Chip, Field, Overline, ProgressBar, Row } from './kit';
 import { space, type, useTheme } from './theme';
 
 function fmtTime(hour: number, minute: number): string {
@@ -22,11 +22,10 @@ function fmtTime(hour: number, minute: number): string {
 }
 
 /**
- * Profile tab — read view over existing stores: goal progress (EngineState
- * start weight → latest weigh-in → goal), profile details, reminder
- * toggles, sign-out. Editing reuses ProfileSetupScreen prefilled; all
- * numbers come from engine state/snapshot, never computed here beyond
- * display math.
+ * Profile tab — read view over existing stores: primary-challenge progress,
+ * bio details, reminder toggles, sign-out. Goal management (create/pause/
+ * restart/delete) lives on the Challenges tab now; this screen only edits
+ * the person-level bio fields in place.
  */
 export function ProfileScreen() {
   const t = useTheme();
@@ -38,14 +37,20 @@ export function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    const [dashRt, foodRt, dataRt] = await Promise.all([
+    const [dashRt, foodRt, dataRt, challengeRt] = await Promise.all([
       getDashboardRuntime(),
       getFoodLogRuntime(),
       getDataSyncRuntime(),
+      getChallengeRuntime(),
     ]);
     const today = foodRt.toLocalDate(foodRt.nowUtc());
     const snap = await refreshDashboardSnapshot(
-      { dashboardStore: dashRt.store, foodLogStore: foodRt.store, dataSyncStore: dataRt.store },
+      {
+        dashboardStore: dashRt.store,
+        foodLogStore: foodRt.store,
+        dataSyncStore: dataRt.store,
+        challengeStore: challengeRt.store,
+      },
       today,
     );
     setSnapshot(snap);
@@ -86,7 +91,7 @@ export function ProfileScreen() {
 
   if (editing) {
     return (
-      <ProfileSetupScreen
+      <EditProfileForm
         initial={profile}
         onCancel={() => setEditing(false)}
         onDone={() => {
@@ -97,10 +102,10 @@ export function ProfileScreen() {
     );
   }
 
-  const startWeight = snapshot.engineState?.startWeightKg ?? null;
+  const primary = snapshot.primaryChallenge;
   const progressPct =
-    startWeight !== null && currentWeightKg !== null && startWeight > profile.goalWeightKg
-      ? (startWeight - currentWeightKg) / (startWeight - profile.goalWeightKg)
+    primary !== null && currentWeightKg !== null && primary.startWeightKg > primary.goalWeightKg
+      ? (primary.startWeightKg - currentWeightKg) / (primary.startWeightKg - primary.goalWeightKg)
       : 0;
   const activityLabel =
     ACTIVITY_LEVELS.find((l) => l.value === profile.activityFactor)?.label ??
@@ -111,19 +116,20 @@ export function ProfileScreen() {
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
     >
-      <Card style={styles.card}>
-        <Overline>Goal</Overline>
-        <Row style={styles.spaceBetween}>
-          <WeightStat label="Start" value={startWeight} t={t} />
-          <WeightStat label="Now" value={currentWeightKg} t={t} emphasize />
-          <WeightStat label="Goal" value={profile.goalWeightKg} t={t} />
-        </Row>
-        <ProgressBar pct={progressPct} />
-        <Text style={[type.caption, { color: t.secondary }]}>
-          {projectedFinishCopy(snapshot.result?.projectedFinishDate ?? null)}
-        </Text>
-        <AppButton title="Edit goal" onPress={() => setEditing(true)} variant="secondary" small />
-      </Card>
+      {primary !== null && (
+        <Card style={styles.card}>
+          <Overline>Primary challenge</Overline>
+          <Row style={styles.spaceBetween}>
+            <WeightStat label="Start" value={primary.startWeightKg} t={t} />
+            <WeightStat label="Now" value={currentWeightKg} t={t} emphasize />
+            <WeightStat label="Goal" value={primary.goalWeightKg} t={t} />
+          </Row>
+          <ProgressBar pct={progressPct} />
+          <Text style={[type.caption, { color: t.secondary }]}>
+            Manage this and other challenges from the Challenges tab.
+          </Text>
+        </Card>
+      )}
 
       <Card style={styles.card}>
         <Overline>Details</Overline>
@@ -131,8 +137,7 @@ export function ProfileScreen() {
         <DetailRow label="Age" value={String(profile.age)} t={t} />
         <DetailRow label="Height" value={`${profile.heightCm} cm`} t={t} />
         <DetailRow label="Activity" value={activityLabel} t={t} />
-        <DetailRow label="Started" value={profile.startDate} t={t} />
-        <DetailRow label="Horizon" value={`${profile.horizonDays} days`} t={t} />
+        <AppButton title="Edit profile" onPress={() => setEditing(true)} variant="secondary" small />
       </Card>
 
       {reminders !== null && (
@@ -172,6 +177,73 @@ export function ProfileScreen() {
       )}
 
       <AppButton title="Sign out" onPress={() => supabase.auth.signOut()} variant="danger" />
+    </ScrollView>
+  );
+}
+
+/** Small bio-only edit form — sex/age/height/activity. Goal fields live on Challenges now. */
+function EditProfileForm({
+  initial,
+  onDone,
+  onCancel,
+}: {
+  initial: PersonProfile;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const t = useTheme();
+  const [sex, setSex] = useState<PersonProfile['sex']>(initial.sex);
+  const [age, setAge] = useState(String(initial.age));
+  const [heightCm, setHeightCm] = useState(String(initial.heightCm));
+  const [activityFactor, setActivityFactor] = useState(initial.activityFactor);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const save = async () => {
+    setError(null);
+    const ageN = Number(age);
+    const heightN = Number(heightCm);
+    if (!Number.isFinite(ageN) || ageN < 10 || ageN > 100) return setError('Age must be 10–100.');
+    if (!Number.isFinite(heightN) || heightN < 100 || heightN > 250)
+      return setError('Height must be 100–250 cm.');
+
+    setBusy(true);
+    try {
+      const dashRt = await getDashboardRuntime();
+      await dashRt.store.setProfile({ sex, age: ageN, heightCm: heightN, activityFactor });
+      onDone();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Card style={styles.card}>
+        <Overline>Edit profile</Overline>
+        <Row>
+          <Chip label="Male" active={sex === 'male'} onPress={() => setSex('male')} />
+          <Chip label="Female" active={sex === 'female'} onPress={() => setSex('female')} />
+        </Row>
+        <Row gap={space.m}>
+          <Field label="Age" keyboardType="number-pad" value={age} onChangeText={setAge} style={styles.flex} />
+          <Field label="Height (cm)" keyboardType="decimal-pad" value={heightCm} onChangeText={setHeightCm} style={styles.flex} />
+        </Row>
+        <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Activity level</Text>
+        <Row style={styles.wrap}>
+          {ACTIVITY_LEVELS.map((level) => (
+            <Chip
+              key={level.label}
+              label={level.label}
+              active={activityFactor === level.value}
+              onPress={() => setActivityFactor(level.value)}
+            />
+          ))}
+        </Row>
+      </Card>
+      {error !== null && <Text style={[type.caption, { color: t.danger, textAlign: 'center' }]}>{error}</Text>}
+      <AppButton title="Save changes" onPress={save} busy={busy} />
+      <AppButton title="Cancel" onPress={onCancel} variant="ghost" disabled={busy} />
     </ScrollView>
   );
 }
@@ -238,8 +310,10 @@ function ToggleRow({
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   container: { padding: space.l, gap: space.l, paddingBottom: space.xl },
   card: { gap: space.m },
   spaceBetween: { justifyContent: 'space-between' },
   stat: { alignItems: 'center', gap: 2, flex: 1 },
+  wrap: { flexWrap: 'wrap' },
 });

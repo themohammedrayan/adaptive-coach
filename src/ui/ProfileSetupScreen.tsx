@@ -1,39 +1,32 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { createChallenge } from '../challenges';
+import { getChallengeRuntime } from '../challenges/runtime';
+import { getDataSyncRuntime } from '../data-sync/runtime';
 import { ACTIVITY_LEVELS, refreshDashboardSnapshot } from '../dashboard';
 import { getDashboardRuntime } from '../dashboard/runtime';
-import { getDataSyncRuntime } from '../data-sync/runtime';
-import type { Mode, Profile } from '../engine';
+import type { PersonProfile } from '../dashboard/types';
+import type { Mode } from '../engine';
 import { getFoodLogRuntime } from '../food-log/runtime';
 import { AppButton, Card, Chip, Field, Row } from './kit';
 import { space, type, useTheme } from './theme';
 
 /**
- * One-time Profile capture (Dashboard BRD's user-approved glue — see the
- * module plan's Context section) and, with `initial`, the edit-goal form.
- * EngineState.startWeightKg is seeded from a weigh-in: an existing one if
- * present, otherwise the inline "current weight" field captured here. On
- * save it also runs the first forced recompute so a real target appears
- * immediately.
+ * First-run onboarding only: captures the person-level Profile (sex/age/
+ * height/activity) and creates the first (primary) weight Challenge in one
+ * screen, so a first-time user gets a working dashboard immediately. Editing
+ * bio details afterward is a separate, smaller form (ProfileScreen); editing
+ * an existing challenge's goal isn't done in place — restart it (same goal,
+ * fresh clock) or delete and create a new one from the Challenges tab.
  */
-export function ProfileSetupScreen({
-  onDone,
-  initial,
-  onCancel,
-}: {
-  onDone: () => void;
-  initial?: Profile;
-  onCancel?: () => void;
-}) {
+export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
   const t = useTheme();
-  const [sex, setSex] = useState<Profile['sex']>(initial?.sex ?? 'male');
-  const [age, setAge] = useState(initial ? String(initial.age) : '');
-  const [heightCm, setHeightCm] = useState(initial ? String(initial.heightCm) : '');
-  const [goalWeightKg, setGoalWeightKg] = useState(initial ? String(initial.goalWeightKg) : '');
-  const [horizonDays, setHorizonDays] = useState(initial ? String(initial.horizonDays) : '180');
-  const [activityFactor, setActivityFactor] = useState(
-    initial?.activityFactor ?? ACTIVITY_LEVELS[2].value,
-  );
+  const [sex, setSex] = useState<PersonProfile['sex']>('male');
+  const [age, setAge] = useState('');
+  const [heightCm, setHeightCm] = useState('');
+  const [goalWeightKg, setGoalWeightKg] = useState('');
+  const [horizonDays, setHorizonDays] = useState('180');
+  const [activityFactor, setActivityFactor] = useState(ACTIVITY_LEVELS[2].value);
   const [weightInput, setWeightInput] = useState('');
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,41 +84,34 @@ export function ProfileSetupScreen({
 
     setBusy(true);
     try {
-      const [dashRt, foodRt, dataRt] = await Promise.all([
+      const [dashRt, foodRt, dataRt, challengeRt] = await Promise.all([
         getDashboardRuntime(),
         getFoodLogRuntime(),
         getDataSyncRuntime(),
+        getChallengeRuntime(),
       ]);
       if (currentWeightKg === null) {
         // First-run path: record the inline weigh-in before profile save.
         await dataRt.addWeightKg(effectiveWeight);
       }
       const today = foodRt.toLocalDate(foodRt.nowUtc());
+      const nowUtc = new Date().toISOString();
 
-      const profile: Profile = {
-        sex,
-        age: ageN,
-        heightCm: heightN,
-        activityFactor,
-        goalWeightKg: goalN,
-        horizonDays: horizonN,
-        startDate: initial?.startDate ?? today,
-        mode: mode ?? 'maintain',
-      };
+      const profile: PersonProfile = { sex, age: ageN, heightCm: heightN, activityFactor };
       await dashRt.store.setProfile(profile);
-      const existingState = await dashRt.store.getEngineState();
-      await dashRt.store.setEngineState(
-        existingState !== null
-          ? { ...existingState, mode: profile.mode }
-          : {
-              prevTargetKcal: null,
-              mode: profile.mode,
-              lastRecomputeDate: null,
-              startWeightKg: effectiveWeight,
-            },
+      await createChallenge(
+        challengeRt.store,
+        { domain: 'weight', goalWeightKg: goalN, startWeightKg: effectiveWeight, horizonDays: horizonN },
+        nowUtc,
+        today,
       );
       await refreshDashboardSnapshot(
-        { dashboardStore: dashRt.store, foodLogStore: foodRt.store, dataSyncStore: dataRt.store },
+        {
+          dashboardStore: dashRt.store,
+          foodLogStore: foodRt.store,
+          dataSyncStore: dataRt.store,
+          challengeStore: challengeRt.store,
+        },
         today,
         { force: true },
       );
@@ -135,19 +121,13 @@ export function ProfileSetupScreen({
     }
   };
 
-  const editing = initial !== undefined;
-
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.flex}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.intro}>
-          <Text style={[type.title, { color: t.ink }]}>
-            {editing ? 'Edit your goal' : 'Set up your goal'}
-          </Text>
+          <Text style={[type.title, { color: t.ink }]}>Set up your goal</Text>
           <Text style={[type.caption, { color: t.secondary }]}>
-            {editing
-              ? 'Your target recomputes right after you save.'
-              : 'A few details seed your first calorie and macro target — it self-corrects weekly from there.'}
+            A few details seed your first calorie and macro target — it self-corrects weekly from there.
           </Text>
         </View>
 
@@ -208,14 +188,11 @@ export function ProfileSetupScreen({
         )}
 
         <AppButton
-          title={editing ? 'Save changes' : 'Start coaching'}
+          title="Start coaching"
           onPress={save}
           busy={busy}
           disabled={effectiveWeight === null}
         />
-        {onCancel !== undefined && (
-          <AppButton title="Cancel" onPress={onCancel} variant="ghost" disabled={busy} />
-        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );

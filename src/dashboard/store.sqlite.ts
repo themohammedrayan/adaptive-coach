@@ -1,10 +1,33 @@
 import * as SQLite from 'expo-sqlite';
-import type { EngineResult, EngineState, IsoDate, Mode, Profile } from '../engine';
+import type { EngineResult, IsoDate, Mode } from '../engine';
 import { DEFAULT_REMINDER_CONFIG } from './constants';
 import type { DashboardStore } from './store';
-import type { ReminderConfig, ReminderKind } from './types';
+import type { PersonProfile, ReminderConfig, ReminderKind } from './types';
 
 interface ProfileRow {
+  sex: string;
+  age: number;
+  height_cm: number;
+  activity_factor: number;
+}
+
+function profileFromDb(r: ProfileRow): PersonProfile {
+  return {
+    sex: r.sex as PersonProfile['sex'],
+    age: r.age,
+    heightCm: r.height_cm,
+    activityFactor: r.activity_factor,
+  };
+}
+
+interface ReminderConfigRow {
+  kind: string;
+  enabled: number;
+  hour: number | null;
+  minute: number | null;
+}
+
+interface LegacyProfileRow {
   sex: string;
   age: number;
   height_cm: number;
@@ -15,40 +38,10 @@ interface ProfileRow {
   mode: string;
 }
 
-function profileFromDb(r: ProfileRow): Profile {
-  return {
-    sex: r.sex as Profile['sex'],
-    age: r.age,
-    heightCm: r.height_cm,
-    activityFactor: r.activity_factor,
-    goalWeightKg: r.goal_weight_kg,
-    horizonDays: r.horizon_days,
-    startDate: r.start_date,
-    mode: r.mode as Mode,
-  };
-}
-
-interface EngineStateRow {
+interface LegacyEngineStateRow {
   prev_target_kcal: number | null;
-  mode: string;
   last_recompute_date: string | null;
   start_weight_kg: number;
-}
-
-function engineStateFromDb(r: EngineStateRow): EngineState {
-  return {
-    prevTargetKcal: r.prev_target_kcal,
-    mode: r.mode as Mode,
-    lastRecomputeDate: r.last_recompute_date,
-    startWeightKg: r.start_weight_kg,
-  };
-}
-
-interface ReminderConfigRow {
-  kind: string;
-  enabled: number;
-  hour: number | null;
-  minute: number | null;
 }
 
 export class SQLiteStore implements DashboardStore {
@@ -64,19 +57,7 @@ export class SQLiteStore implements DashboardStore {
         sex text not null,
         age integer not null,
         height_cm real not null,
-        activity_factor real not null,
-        goal_weight_kg real not null,
-        horizon_days integer not null,
-        start_date text not null,
-        mode text not null
-      );
-
-      create table if not exists engine_state (
-        id integer primary key check (id = 1),
-        prev_target_kcal real,
-        mode text not null,
-        last_recompute_date text,
-        start_weight_kg real not null
+        activity_factor real not null
       );
 
       create table if not exists engine_result (
@@ -92,52 +73,84 @@ export class SQLiteStore implements DashboardStore {
         minute integer
       );
     `);
+    await SQLiteStore.migrateLegacyProfileIfNeeded(db, name);
     return new SQLiteStore(db);
   }
 
-  async getProfile(): Promise<Profile | null> {
+  /**
+   * One-time migration for installs from before the Challenge rework: the
+   * single-row `profile`/`engine_state` tables used to also carry goal data
+   * (goalWeightKg/horizonDays/startDate/mode/startWeightKg/prevTargetKcal/
+   * lastRecomputeDate). That goal data now lives on a primary Challenge row
+   * instead — this preserves an existing user's in-progress goal rather than
+   * silently dropping it, then rebuilds `profile` down to bio-only columns
+   * and drops the now-obsolete `engine_state` table.
+   */
+  private static async migrateLegacyProfileIfNeeded(db: SQLite.SQLiteDatabase, name: string): Promise<void> {
+    const cols = await db.getAllAsync<{ name: string }>('pragma table_info(profile)');
+    const hasLegacyGoalColumn = cols.some((c) => c.name === 'goal_weight_kg');
+    if (!hasLegacyGoalColumn) return; // fresh install, or already migrated
+
+    const legacyProfile = await db.getFirstAsync<LegacyProfileRow>('select * from profile where id = 1');
+
+    if (legacyProfile !== null) {
+      const legacyEngineState = await db.getFirstAsync<LegacyEngineStateRow>(
+        'select * from engine_state where id = 1',
+      );
+      // Same db file — reuses the canonical `challenges` table schema/creation
+      // from that module rather than duplicating its DDL here.
+      const { SQLiteStore: ChallengeSQLiteStore } = await import('../challenges/store.sqlite');
+      const challengeStore = await ChallengeSQLiteStore.open(name);
+      const nowUtc = new Date().toISOString();
+      await challengeStore.upsert({
+        id: `challenge-migrated-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        domain: 'weight',
+        status: 'active',
+        isPrimary: true,
+        startDate: legacyProfile.start_date,
+        goalWeightKg: legacyProfile.goal_weight_kg,
+        horizonDays: legacyProfile.horizon_days,
+        startWeightKg: legacyEngineState?.start_weight_kg ?? legacyProfile.goal_weight_kg,
+        mode: legacyProfile.mode as Mode,
+        prevTargetKcal: legacyEngineState?.prev_target_kcal ?? null,
+        lastRecomputeDate: legacyEngineState?.last_recompute_date ?? null,
+        createdAt: nowUtc,
+        updatedAt: nowUtc,
+      });
+    }
+
+    await db.execAsync(`
+      create table profile_new (
+        id integer primary key check (id = 1),
+        sex text not null,
+        age integer not null,
+        height_cm real not null,
+        activity_factor real not null
+      );
+      insert into profile_new (id, sex, age, height_cm, activity_factor)
+        select id, sex, age, height_cm, activity_factor from profile;
+      drop table profile;
+      alter table profile_new rename to profile;
+      drop table if exists engine_state;
+    `);
+  }
+
+  async getProfile(): Promise<PersonProfile | null> {
     const r = await this.db.getFirstAsync<ProfileRow>('select * from profile where id = 1');
     return r ? profileFromDb(r) : null;
   }
 
-  async setProfile(profile: Profile): Promise<void> {
+  async setProfile(profile: PersonProfile): Promise<void> {
     await this.db.runAsync(
-      `insert into profile
-         (id, sex, age, height_cm, activity_factor, goal_weight_kg, horizon_days, start_date, mode)
-       values (1, ?, ?, ?, ?, ?, ?, ?, ?)
+      `insert into profile (id, sex, age, height_cm, activity_factor)
+       values (1, ?, ?, ?, ?)
        on conflict (id) do update set
          sex = excluded.sex, age = excluded.age, height_cm = excluded.height_cm,
-         activity_factor = excluded.activity_factor, goal_weight_kg = excluded.goal_weight_kg,
-         horizon_days = excluded.horizon_days, start_date = excluded.start_date, mode = excluded.mode`,
+         activity_factor = excluded.activity_factor`,
       profile.sex,
       profile.age,
       profile.heightCm,
       profile.activityFactor,
-      profile.goalWeightKg,
-      profile.horizonDays,
-      profile.startDate,
-      profile.mode,
-    );
-  }
-
-  async getEngineState(): Promise<EngineState | null> {
-    const r = await this.db.getFirstAsync<EngineStateRow>(
-      'select * from engine_state where id = 1',
-    );
-    return r ? engineStateFromDb(r) : null;
-  }
-
-  async setEngineState(state: EngineState): Promise<void> {
-    await this.db.runAsync(
-      `insert into engine_state (id, prev_target_kcal, mode, last_recompute_date, start_weight_kg)
-       values (1, ?, ?, ?, ?)
-       on conflict (id) do update set
-         prev_target_kcal = excluded.prev_target_kcal, mode = excluded.mode,
-         last_recompute_date = excluded.last_recompute_date, start_weight_kg = excluded.start_weight_kg`,
-      state.prevTargetKcal,
-      state.mode,
-      state.lastRecomputeDate,
-      state.startWeightKg,
     );
   }
 

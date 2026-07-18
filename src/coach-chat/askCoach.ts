@@ -1,3 +1,5 @@
+import type { ChallengeStore } from '../challenges';
+import { toEngineProfile } from '../challenges';
 import { assembleCoachPayload } from '../coaching/assembleCoachPayload';
 import { gatherPayloadInputs, type PayloadInputDeps } from '../coaching/gatherPayloadInputs';
 import { buildGoalSummary } from '../coaching/goal';
@@ -9,6 +11,7 @@ import type { ChatHistoryTurn, CoachChatTurn } from './types';
 
 export interface AskCoachDeps extends PayloadInputDeps {
   dashboardStore: DashboardStore;
+  challengeStore: ChallengeStore;
 }
 
 export type AskCoachResult =
@@ -27,10 +30,11 @@ function generateRequestId(): string {
 
 /**
  * v2 — the ad-hoc chat orchestrator. Reads the dashboard's cached
- * EngineState/EngineResult (never calls recompute() — the engine is pure
- * and only advances on its own weekly gate) and builds a CoachPayload from
- * it via the same assembleCoachPayload() used for weekly notes, so a chat
- * answer is grounded in exactly the same state the user sees on screen.
+ * EngineResult and the primary weight Challenge (never calls recompute() —
+ * the engine is pure and only advances on its own weekly gate) and builds a
+ * CoachPayload from them via the same assembleCoachPayload() used for
+ * weekly notes, so a chat answer is grounded in exactly the same state the
+ * user sees on screen.
  */
 export async function askCoachQuestion(
   deps: AskCoachDeps,
@@ -39,15 +43,16 @@ export async function askCoachQuestion(
   history: ChatHistoryTurn[] = [],
 ): Promise<AskCoachResult> {
   const profile = await deps.dashboardStore.getProfile();
-  const engineState = await deps.dashboardStore.getEngineState();
+  const primary = await deps.challengeStore.getPrimary('weight');
   const cached = await deps.dashboardStore.getLastResult();
-  if (profile === null || engineState === null || cached === null) {
+  if (profile === null || primary === null || cached === null) {
     return { status: 'no-data' };
   }
 
-  const { last14, trend } = await gatherPayloadInputs(deps, profile, today);
+  const engineProfile = toEngineProfile(profile, primary);
+  const { last14, trend } = await gatherPayloadInputs(deps, engineProfile, today);
   const adherenceSummary = buildAdherenceSummary(last14, cached.result.targetKcal);
-  const goal = buildGoalSummary(profile, engineState, today);
+  const goal = buildGoalSummary(primary.startWeightKg, primary.goalWeightKg, primary.horizonDays, primary.startDate, today);
   const payload = assembleCoachPayload(cached.result, adherenceSummary, goal, cached.computedAt, trend);
 
   const turn = await invokeAskCoach(generateRequestId(), question, payload, history);

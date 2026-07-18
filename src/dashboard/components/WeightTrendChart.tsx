@@ -31,7 +31,7 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
   });
 
   const values = trend.map((p) => p.value);
-  const { min, max } = computeYAxisScale(values, [goalWeight], { minSpan: 2 });
+  const { min, max } = computeYAxisScale(values, goalWeight !== null ? [goalWeight] : [], { minSpan: 2 });
   const yAxisSpan = max - min;
 
   return (
@@ -46,8 +46,8 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
         hideDataPoints={false}
         rulesColor={t.chart.grid}
         rulesType="solid"
-        showReferenceLine1
-        referenceLine1Position={goalWeight}
+        showReferenceLine1={goalWeight !== null}
+        referenceLine1Position={goalWeight ?? undefined}
         referenceLine1Config={{
           color: t.chart.goal,
           dashWidth: 4,

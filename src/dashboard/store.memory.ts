@@ -1,29 +1,20 @@
-import type { EngineResult, EngineState, IsoDate, Profile } from '../engine';
+import type { EngineResult, IsoDate } from '../engine';
 import { DEFAULT_REMINDER_CONFIG } from './constants';
 import type { DashboardStore } from './store';
-import type { ReminderConfig } from './types';
+import type { PersonProfile, ReminderConfig } from './types';
 
 /** In-memory store for tests (and web runtime). Mirrors the SQLite implementation's semantics. */
 export class MemoryStore implements DashboardStore {
-  profile: Profile | null = null;
-  engineState: EngineState | null = null;
+  profile: PersonProfile | null = null;
   lastResult: { computedAt: IsoDate; result: EngineResult } | null = null;
   reminderConfig: ReminderConfig | null = null;
 
-  async getProfile(): Promise<Profile | null> {
+  async getProfile(): Promise<PersonProfile | null> {
     return this.profile;
   }
 
-  async setProfile(profile: Profile): Promise<void> {
+  async setProfile(profile: PersonProfile): Promise<void> {
     this.profile = profile;
-  }
-
-  async getEngineState(): Promise<EngineState | null> {
-    return this.engineState;
-  }
-
-  async setEngineState(state: EngineState): Promise<void> {
-    this.engineState = state;
   }
 
   async getLastResult(): Promise<{ computedAt: IsoDate; result: EngineResult } | null> {

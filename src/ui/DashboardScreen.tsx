@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { getChallengeRuntime } from '../challenges/runtime';
 import { buildMeasurementSeries, KV } from '../data-sync';
 import type { BodyMetricRow, MetricType } from '../data-sync';
 import { getDataSyncRuntime } from '../data-sync/runtime';
@@ -57,15 +58,21 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
   const [coachNote, setCoachNote] = useState<CoachNote | null>(null);
 
   const loadSnapshot = useCallback(async () => {
-    const [dashRt, foodRt, dataRt] = await Promise.all([
+    const [dashRt, foodRt, dataRt, challengeRt] = await Promise.all([
       getDashboardRuntime(),
       getFoodLogRuntime(),
       getDataSyncRuntime(),
+      getChallengeRuntime(),
     ]);
     const today = foodRt.toLocalDate(foodRt.nowUtc());
     setToday(today);
     const snap = await refreshDashboardSnapshot(
-      { dashboardStore: dashRt.store, foodLogStore: foodRt.store, dataSyncStore: dataRt.store },
+      {
+        dashboardStore: dashRt.store,
+        foodLogStore: foodRt.store,
+        dataSyncStore: dataRt.store,
+        challengeStore: challengeRt.store,
+      },
       today,
     );
     setSnapshot(snap);
@@ -131,7 +138,7 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
   const load = useCallback(async () => {
     const { snap, today } = await loadSnapshot();
     if (snap.profile !== null) {
-      await loadCharts(snap.profile.startDate, today, range);
+      await loadCharts(snap.primaryChallenge?.startDate ?? today, today, range);
     }
   }, [loadSnapshot, loadCharts, range]);
 
@@ -143,7 +150,11 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
   useEffect(() => {
     if (snapshot?.profile === null || snapshot === null) return;
     const foodRt = getFoodLogRuntime();
-    void foodRt.then((rt) => loadCharts(snapshot.profile!.startDate, rt.toLocalDate(rt.nowUtc()), range));
+    const anchor = snapshot.primaryChallenge?.startDate;
+    void foodRt.then((rt) => {
+      const today = rt.toLocalDate(rt.nowUtc());
+      return loadCharts(anchor ?? today, today, range);
+    });
   }, [range, snapshot, loadCharts]);
 
   const onRefresh = async () => {
@@ -161,11 +172,14 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
   const todayTotals = snapshot.last14[snapshot.last14.length - 1] ?? null;
   const consumed = todayTotals ? toMacros(todayTotals) : { proteinG: 0, carbG: 0, fatG: 0, fiberG: 0 };
   const adherence = buildAdherenceSummary(snapshot.last14, snapshot.result?.targetKcal ?? null);
+  const primary = snapshot.primaryChallenge;
   const challenge =
-    snapshot.result !== null && snapshot.engineState !== null && today !== null
+    snapshot.result !== null && primary !== null && today !== null
       ? buildChallengeProgress(
-          snapshot.profile,
-          snapshot.engineState.startWeightKg,
+          primary.goalWeightKg,
+          primary.startDate,
+          primary.horizonDays,
+          primary.startWeightKg,
           snapshot.liveTrendWeightKg ?? snapshot.result.trendWeightKg,
           snapshot.result.projectedFinishDate,
           today,
@@ -186,6 +200,15 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
         </Row>
         {snapshot.result !== null ? (
           <MacroRings target={snapshot.result.macros} consumed={consumed} />
+        ) : primary === null ? (
+          <View style={styles.noChallenge}>
+            <Text style={[type.caption, { color: t.muted, textAlign: 'center' }]}>
+              No active weight challenge — create one to get a daily target.
+            </Text>
+            {onNavigate !== undefined && (
+              <AppButton title="Create a challenge" onPress={() => onNavigate('challenges')} variant="secondary" small />
+            )}
+          </View>
         ) : (
           <Text style={[type.caption, { color: t.muted, textAlign: 'center' }]}>
             Building your target — check back after logging a few days.
@@ -199,7 +222,7 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
         <WeightTrendChart
           raw={weightSeries.raw}
           trend={weightSeries.trend}
-          goalWeight={snapshot.profile.goalWeightKg}
+          goalWeight={primary?.goalWeightKg ?? null}
           projectedFinish={snapshot.result?.projectedFinishDate ?? null}
           range={range}
         />
@@ -254,4 +277,5 @@ const styles = StyleSheet.create({
   container: { padding: space.l, paddingTop: space.s, gap: space.m, paddingBottom: space.xl },
   card: { gap: space.m },
   cardHeader: { justifyContent: 'space-between' },
+  noChallenge: { alignItems: 'center', gap: space.s },
 });

@@ -33,7 +33,7 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
     raw: rawByDate.get(p.date) ?? null,
   }));
   const values = trend.map((p) => p.value);
-  const { min, max } = computeYAxisScale(values, [goalWeight], { minSpan: 2 });
+  const { min, max } = computeYAxisScale(values, goalWeight !== null ? [goalWeight] : [], { minSpan: 2 });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -42,12 +42,14 @@ export function WeightTrendChart({ raw, trend, goalWeight, projectedFinish, rang
           <CartesianGrid stroke={t.chart.grid} vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: t.muted }} stroke={t.chart.grid} />
           <YAxis domain={[min, max]} tick={{ fontSize: 10, fill: t.muted }} stroke="transparent" />
-          <ReferenceLine
-            y={goalWeight}
-            stroke={t.chart.goal}
-            strokeDasharray="4 4"
-            label={{ value: `Goal ${goalWeight}kg`, fontSize: 10, fill: t.chart.goal }}
-          />
+          {goalWeight !== null && (
+            <ReferenceLine
+              y={goalWeight}
+              stroke={t.chart.goal}
+              strokeDasharray="4 4"
+              label={{ value: `Goal ${goalWeight}kg`, fontSize: 10, fill: t.chart.goal }}
+            />
+          )}
           <Line type="monotone" dataKey="trend" stroke={t.chart.trend} strokeWidth={2} dot={false} />
           <Scatter dataKey="raw" fill={t.chart.dots} />
         </ComposedChart>

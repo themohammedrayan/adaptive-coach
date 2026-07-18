@@ -1,13 +1,24 @@
 import { diffDays } from '../engine';
-import type { EngineState, IsoDate, Profile } from '../engine';
+import type { IsoDate } from '../engine';
 import type { GoalSummary } from './types';
 
-/** Coaching BRD §4 — the `goal` block of the payload. */
-export function buildGoalSummary(profile: Profile, engineState: EngineState, today: IsoDate): GoalSummary {
+/**
+ * Coaching BRD §4 — the `goal` block of the payload. Takes the primary
+ * challenge's goal fields as explicit scalars (rather than a Profile/
+ * EngineState object) so it works the same regardless of where those fields
+ * are stored — today that's a Challenge row, not a singleton Profile.
+ */
+export function buildGoalSummary(
+  startWeightKg: number,
+  goalWeightKg: number,
+  horizonDays: number,
+  challengeStartDate: IsoDate,
+  today: IsoDate,
+): GoalSummary {
   return {
-    startWeightKg: engineState.startWeightKg,
-    goalWeightKg: profile.goalWeightKg,
-    horizonDays: profile.horizonDays,
-    daysElapsed: diffDays(today, profile.startDate),
+    startWeightKg,
+    goalWeightKg,
+    horizonDays,
+    daysElapsed: diffDays(today, challengeStartDate),
   };
 }

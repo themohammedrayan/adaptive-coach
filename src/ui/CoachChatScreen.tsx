@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { getChallengeRuntime } from '../challenges/runtime';
 import { askCoachQuestion, listCoachChatTurns, type ChatHistoryTurn, type CoachChatTurn } from '../coach-chat';
 import { deviceLocalDate } from '../data-sync';
 import { getDataSyncRuntime } from '../data-sync/runtime';
@@ -46,10 +47,11 @@ export function CoachChatScreen() {
     setBusy(true);
     setError(null);
     try {
-      const [dashboardRt, foodLogRt, dataSyncRt] = await Promise.all([
+      const [dashboardRt, foodLogRt, dataSyncRt, challengeRt] = await Promise.all([
         getDashboardRuntime(),
         getFoodLogRuntime(),
         getDataSyncRuntime(),
+        getChallengeRuntime(),
       ]);
       const today = deviceLocalDate(new Date().toISOString());
       const history: ChatHistoryTurn[] = (turns ?? []).map((tn) => ({
@@ -61,6 +63,7 @@ export function CoachChatScreen() {
           dashboardStore: dashboardRt.store,
           foodLogStore: foodLogRt.store,
           dataSyncStore: dataSyncRt.store,
+          challengeStore: challengeRt.store,
         },
         trimmed,
         today,

@@ -1,5 +1,5 @@
-import { allNumbersAllowed, collectAllowedNumbers } from './numberGuard';
-import type { CoachNoteContent, CoachPayload, Reason } from './types';
+import { allNumbersAllowed, collectAllowedNumbers } from './numberGuard.ts';
+import type { CoachNoteContent, CoachPayload, Reason } from './types.ts';
 
 function findReason<C extends Reason['code']>(
   reasons: Reason[],

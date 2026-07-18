@@ -1,5 +1,5 @@
-import { allNumbersAllowed, collectAllowedNumbers } from './numberGuard';
-import type { ChatAnswerContent, CoachPayload } from './types';
+import { allNumbersAllowed, collectAllowedNumbers } from './numberGuard.ts';
+import type { ChatAnswerContent, CoachPayload } from './types.ts';
 
 const MAX_ANSWER_CHARS = 800;
 

@@ -50,6 +50,40 @@ export async function addLogEntry(
   return entry;
 }
 
+export interface EditLogEntryInput {
+  quantity: number;
+  unitId: string;
+}
+
+/**
+ * Food-Log BRD §5 — an entry's macros are a snapshot; editing quantity/unit
+ * rescales that snapshot by the grams ratio rather than re-reading the Food,
+ * so a food edited after logging still never rewrites what was logged.
+ */
+export async function editLogEntry(
+  store: FoodLogStore,
+  entry: LogEntry,
+  input: EditLogEntryInput,
+): Promise<LogEntry> {
+  const grams = await resolveGrams(store, entry.foodId, input.unitId, input.quantity);
+  const ratio = grams / entry.grams;
+
+  const updated: LogEntry = {
+    ...entry,
+    quantity: input.quantity,
+    unitId: input.unitId,
+    grams,
+    kcal: entry.kcal * ratio,
+    protein: entry.protein === null ? null : entry.protein * ratio,
+    carb: entry.carb === null ? null : entry.carb * ratio,
+    fat: entry.fat === null ? null : entry.fat * ratio,
+    fiber: entry.fiber === null ? null : entry.fiber * ratio,
+  };
+  await store.deleteEntry(entry.id);
+  await store.insertEntry(updated);
+  return updated;
+}
+
 export async function deleteLogEntry(store: FoodLogStore, entryId: string): Promise<boolean> {
   return store.deleteEntry(entryId);
 }

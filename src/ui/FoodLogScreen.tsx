@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   KeyboardAvoidingView,
   Modal,
   Pressable,
@@ -16,9 +17,11 @@ import {
   addLogEntry,
   copyDay,
   createFood,
+  editLogEntry,
   listFavorites,
   removeFavorite,
   searchFoods,
+  setFoodUnitOverride,
   sumEntryMacros,
   type Favorite,
   type Food,
@@ -45,6 +48,7 @@ export function FoodLogScreen() {
   const [foodNames, setFoodNames] = useState<Map<string, string>>(new Map());
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [activeMeal, setActiveMeal] = useState<Meal | null>(null);
+  const [actionEntry, setActionEntry] = useState<LogEntry | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -88,12 +92,6 @@ export function FoodLogScreen() {
     } finally {
       setBusy(false);
     }
-  };
-
-  const deleteEntry = async (id: string) => {
-    const rt = await getFoodLogRuntime();
-    await rt.store.deleteEntry(id);
-    await refresh();
   };
 
   const toggleFavorite = async (foodId: string) => {
@@ -153,7 +151,10 @@ export function FoodLogScreen() {
           </Row>
         )}
         renderItem={({ item }) => (
-          <View style={[styles.entryRow, { backgroundColor: t.card, borderColor: t.hairline }]}>
+          <TouchableOpacity
+            style={[styles.entryRow, { backgroundColor: t.card, borderColor: t.hairline }]}
+            onPress={() => setActionEntry(item)}
+          >
             <View style={styles.flex}>
               <Text style={[type.body, { color: t.ink, fontWeight: '500' }]} numberOfLines={1}>
                 {foodNames.get(item.foodId) ?? 'Food'}
@@ -162,13 +163,8 @@ export function FoodLogScreen() {
                 {item.quantity} × {unitNames.get(item.unitId) ?? item.unitId} · {Math.round(item.grams)}g
               </Text>
             </View>
-            <Text style={[type.body, { color: t.secondary, marginRight: space.m }]}>
-              {Math.round(item.kcal)} kcal
-            </Text>
-            <TouchableOpacity onPress={() => deleteEntry(item.id)} hitSlop={8}>
-              <Text style={{ color: t.muted, fontSize: 16 }}>✕</Text>
-            </TouchableOpacity>
-          </View>
+            <Text style={[type.body, { color: t.secondary }]}>{Math.round(item.kcal)} kcal</Text>
+          </TouchableOpacity>
         )}
         ListEmptyComponent={<EmptyState message="Nothing logged today yet." />}
       />
@@ -181,6 +177,17 @@ export function FoodLogScreen() {
           onToggleFavorite={toggleFavorite}
           onClose={() => setActiveMeal(null)}
           onLogged={refresh}
+        />
+      )}
+
+      {actionEntry !== null && (
+        <EntryActionSheet
+          entry={actionEntry}
+          foodName={foodNames.get(actionEntry.foodId) ?? 'Food'}
+          unitName={unitNames.get(actionEntry.unitId) ?? actionEntry.unitId}
+          units={units}
+          onClose={() => setActionEntry(null)}
+          onChanged={refresh}
         />
       )}
     </View>
@@ -216,8 +223,6 @@ function AddSheet({
   const [results, setResults] = useState<Food[]>([]);
   const [favorites, setFavorites] = useState<Food[]>([]);
   const [selected, setSelected] = useState<Food | null>(null);
-  const [quantity, setQuantity] = useState('1');
-  const [unitId, setUnitId] = useState('');
   const [showCreate, setShowCreate] = useState(false);
 
   const loadFavorites = useCallback(async () => {
@@ -235,20 +240,14 @@ function AddSheet({
     setResults(q.trim() === '' ? [] : await searchFoods(rt.store, q));
   }, []);
 
-  const pickFood = (food: Food) => {
-    setSelected(food);
-    setUnitId(food.defaultUnitId);
-    setQuantity('1');
-  };
+  const pickFood = (food: Food) => setSelected(food);
 
-  const logSelected = async () => {
+  const logSelected = async (quantity: number, unitId: string) => {
     if (selected === null) return;
-    const qty = Number(quantity);
-    if (!Number.isFinite(qty) || qty <= 0) return;
     const rt = await getFoodLogRuntime();
     await addLogEntry(
       rt.store,
-      { foodId: selected.id, meal, quantity: qty, unitId, loggedAt: rt.nowUtc() },
+      { foodId: selected.id, meal, quantity, unitId, loggedAt: rt.nowUtc() },
       rt.toLocalDate,
     );
     setSelected(null);
@@ -271,25 +270,16 @@ function AddSheet({
               <Text style={[type.caption, { color: t.muted }]}>
                 {Math.round(selected.kcalPer100g)} kcal / 100g · adding to {mealLabel}
               </Text>
-              <Row gap={space.m}>
-                <Field
-                  label="Quantity"
-                  keyboardType="decimal-pad"
-                  value={quantity}
-                  onChangeText={setQuantity}
-                  style={styles.qty}
-                />
-                <View style={[styles.flex, { gap: 6 }]}>
-                  <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Unit</Text>
-                  <Row style={styles.wrap} gap={6}>
-                    {units.map((u) => (
-                      <Chip key={u.id} label={u.name} active={unitId === u.id} onPress={() => setUnitId(u.id)} />
-                    ))}
-                  </Row>
-                </View>
-              </Row>
-              <AppButton title={`Log to ${mealLabel}`} onPress={logSelected} />
-              <AppButton title="Back" onPress={() => setSelected(null)} variant="ghost" />
+              <PortionForm
+                foodId={selected.id}
+                units={units}
+                initialQuantity="1"
+                initialUnitId={selected.defaultUnitId}
+                submitTitle={`Log to ${mealLabel}`}
+                cancelTitle="Back"
+                onSubmit={logSelected}
+                onCancel={() => setSelected(null)}
+              />
             </View>
           ) : showCreate ? (
             <CreateFoodForm
@@ -339,6 +329,177 @@ function AddSheet({
               <AppButton title="Close" onPress={onClose} variant="ghost" />
             </View>
           )}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+/**
+ * Quantity + unit + editable grams-per-unit. A changed g/unit is saved as a
+ * per-food unit override (Food-Log BRD §3) before submit, so the entry resolves
+ * with it and it sticks for next time. Hidden for the gram unit (1g is 1g).
+ */
+function PortionForm({
+  foodId,
+  units,
+  initialQuantity,
+  initialUnitId,
+  submitTitle,
+  cancelTitle,
+  onSubmit,
+  onCancel,
+}: {
+  foodId: string;
+  units: Unit[];
+  initialQuantity: string;
+  initialUnitId: string;
+  submitTitle: string;
+  cancelTitle: string;
+  onSubmit: (quantity: number, unitId: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const t = useTheme();
+  const [quantity, setQuantity] = useState(initialQuantity);
+  const [unitId, setUnitId] = useState(initialUnitId);
+  const [perUnitGrams, setPerUnitGrams] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      const rt = await getFoodLogRuntime();
+      const override = await rt.store.getOverride(foodId, unitId);
+      const unit = await rt.store.getUnit(unitId);
+      if (alive) setPerUnitGrams(String(override?.grams ?? unit?.defaultGrams ?? ''));
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [foodId, unitId]);
+
+  const submit = async () => {
+    const qty = Number(quantity);
+    if (!Number.isFinite(qty) || qty <= 0) return;
+    if (unitId !== 'gram') {
+      const per = Number(perUnitGrams);
+      if (Number.isFinite(per) && per > 0) {
+        const rt = await getFoodLogRuntime();
+        const override = await rt.store.getOverride(foodId, unitId);
+        const unit = await rt.store.getUnit(unitId);
+        if (per !== (override?.grams ?? unit?.defaultGrams)) {
+          await setFoodUnitOverride(rt.store, foodId, unitId, per);
+        }
+      }
+    }
+    await onSubmit(qty, unitId);
+  };
+
+  return (
+    <>
+      <Row gap={space.m}>
+        <Field
+          label="Quantity"
+          keyboardType="decimal-pad"
+          value={quantity}
+          onChangeText={setQuantity}
+          style={styles.qty}
+        />
+        {unitId !== 'gram' && (
+          <Field
+            label={`g per ${units.find((u) => u.id === unitId)?.name ?? 'unit'}`}
+            keyboardType="decimal-pad"
+            value={perUnitGrams}
+            onChangeText={setPerUnitGrams}
+            style={styles.qty}
+          />
+        )}
+      </Row>
+      <View style={{ gap: 6 }}>
+        <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Unit</Text>
+        <Row style={styles.wrap} gap={6}>
+          {units.map((u) => (
+            <Chip key={u.id} label={u.name} active={unitId === u.id} onPress={() => setUnitId(u.id)} />
+          ))}
+        </Row>
+      </View>
+      <AppButton title={submitTitle} onPress={submit} />
+      <AppButton title={cancelTitle} onPress={onCancel} variant="ghost" />
+    </>
+  );
+}
+
+/** Deliberate per-entry actions — replaces the old instant-delete ✕ (accidental-touch hazard). */
+function EntryActionSheet({
+  entry,
+  foodName,
+  unitName,
+  units,
+  onClose,
+  onChanged,
+}: {
+  entry: LogEntry;
+  foodName: string;
+  unitName: string;
+  units: Unit[];
+  onClose: () => void;
+  onChanged: () => void;
+}) {
+  const t = useTheme();
+  const [editing, setEditing] = useState(false);
+
+  const confirmDelete = () => {
+    Alert.alert('Delete entry?', `${foodName} · ${Math.round(entry.kcal)} kcal`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            const rt = await getFoodLogRuntime();
+            await rt.store.deleteEntry(entry.id);
+            onClose();
+            onChanged();
+          })();
+        },
+      },
+    ]);
+  };
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <Pressable style={styles.backdrop} onPress={onClose} />
+        <View style={[styles.sheet, { backgroundColor: t.card, borderColor: t.hairline }]}>
+          <View style={[styles.handle, { backgroundColor: t.wash }]} />
+          <View style={styles.sheetBody}>
+            <Text style={[type.title, { color: t.ink }]}>{foodName}</Text>
+            <Text style={[type.caption, { color: t.muted }]}>
+              {entry.quantity} × {unitName} · {Math.round(entry.grams)}g · {Math.round(entry.kcal)} kcal
+            </Text>
+            {editing ? (
+              <PortionForm
+                foodId={entry.foodId}
+                units={units}
+                initialQuantity={String(entry.quantity)}
+                initialUnitId={entry.unitId}
+                submitTitle="Save changes"
+                cancelTitle="Back"
+                onSubmit={async (quantity, unitId) => {
+                  const rt = await getFoodLogRuntime();
+                  await editLogEntry(rt.store, entry, { quantity, unitId });
+                  onClose();
+                  onChanged();
+                }}
+                onCancel={() => setEditing(false)}
+              />
+            ) : (
+              <>
+                <AppButton title="Edit" onPress={() => setEditing(true)} />
+                <AppButton title="Delete" onPress={confirmDelete} variant="danger" />
+                <AppButton title="Cancel" onPress={onClose} variant="ghost" />
+              </>
+            )}
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>

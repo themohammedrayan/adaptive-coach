@@ -8,7 +8,14 @@ export type { FoodLogStore } from './store';
 export { MemoryStore } from './store.memory';
 export { createFood, archiveFood, searchFoods, type CreateFoodInput } from './foods';
 export { resolveGrams, setFoodUnitOverride } from './units';
-export { addLogEntry, deleteLogEntry, listLogEntries, type AddLogEntryInput } from './entries';
+export {
+  addLogEntry,
+  deleteLogEntry,
+  editLogEntry,
+  listLogEntries,
+  type AddLogEntryInput,
+  type EditLogEntryInput,
+} from './entries';
 export { mealSubtotal, dailyTotals, setMarkedComplete } from './totals';
 export { addFavorite, removeFavorite, listFavorites, listRecents } from './favorites';
 export { copyDay, copyMeal } from './copy';

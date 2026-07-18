@@ -13,6 +13,12 @@ const mockNote = {
 
 jest.mock('../reminders', () => ({ notifyCoachNoteReady: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../coaching', () => ({
+  // gatherPayloadInputs stays real (requireActual straight from its
+  // submodule, not the barrel — the barrel also re-exports remote.ts,
+  // which needs live Supabase env vars this test suite doesn't set up).
+  // It's shared with coach-chat's askCoach.ts and exercised here as a
+  // regression check.
+  gatherPayloadInputs: jest.requireActual('../../coaching/gatherPayloadInputs').gatherPayloadInputs,
   buildGoalSummary: jest.fn().mockReturnValue({ startWeightKg: 90, goalWeightKg: 75, horizonDays: 180, daysElapsed: 44 }),
   assembleCoachPayload: jest.fn().mockReturnValue({}),
   generateCoachNote: jest.fn(() => Promise.resolve(mockNote)),

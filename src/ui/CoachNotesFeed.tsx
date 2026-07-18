@@ -1,14 +1,17 @@
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { listCoachNotes, type CoachNote } from '../coaching';
-import { Card, EmptyState, Row } from './kit';
+import { AppButton, Card, EmptyState, Row } from './kit';
 import { radius, space, type, useTheme } from './theme';
 
 /**
- * Coaching BRD §8 — read-only weekly feed, newest-first. No chatbot UI in
- * v1: this only renders what the Coaching module already generated.
+ * Coaching BRD §8 — read-only weekly feed, newest-first. v2 adds a link
+ * into the ad-hoc chat screen; the feed itself still only renders what the
+ * weekly recompute already generated.
  */
 export function CoachNotesFeed() {
+  const router = useRouter();
   const [notes, setNotes] = useState<CoachNote[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +46,16 @@ export function CoachNotesFeed() {
       data={notes ?? []}
       keyExtractor={(note) => note.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      ListHeaderComponent={
+        <Row style={styles.askRow}>
+          <AppButton
+            title="Ask the coach a question →"
+            onPress={() => router.push('/coach-chat')}
+            variant="secondary"
+            small
+          />
+        </Row>
+      }
       renderItem={({ item }) => <CoachNoteCard note={item} />}
       ListEmptyComponent={
         <EmptyState
@@ -75,6 +88,7 @@ function CoachNoteCard({ note }: { note: CoachNote }) {
 
 const styles = StyleSheet.create({
   list: { padding: space.l, paddingTop: space.s, gap: space.m },
+  askRow: { justifyContent: 'flex-end', marginBottom: space.s },
   card: { gap: space.s },
   header: { justifyContent: 'space-between' },
   autoTag: {

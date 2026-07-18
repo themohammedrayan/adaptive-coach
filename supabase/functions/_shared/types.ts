@@ -57,3 +57,43 @@ export interface CoachNote extends CoachNoteContent {
   generatedAt: string;
   payloadHash: string;
 }
+
+export interface ChatAnswerContent {
+  answer: string;
+}
+
+/** v2 — ad-hoc coach Q&A storage shape (one row per turn). */
+export interface CoachChatTurn extends ChatAnswerContent {
+  id: string;
+  question: string;
+  source: 'model' | 'fallback';
+  model: string | null;
+  generatedAt: string;
+  payloadHash: string;
+}
+
+/** v2 — the raw shape the model is asked to produce (before server-side kcal derivation). */
+export interface RawMealEstimate {
+  name: string;
+  proteinPer100g: number | null;
+  carbPer100g: number | null;
+  fatPer100g: number | null;
+  fiberPer100g: number | null;
+  estimatedGrams: number | null;
+  confidence: 'low' | 'medium' | 'high';
+}
+
+/** v2 — AI meal estimation response. Ephemeral, never persisted server-side. */
+export interface MealEstimate extends RawMealEstimate {
+  /**
+   * Server-derived as 4*protein + 4*carb + 9*fat — never trusted from the
+   * model. Null when protein/carb/fat aren't all known (nothing to derive
+   * from — the model is never asked for kcal directly), mirroring Food's
+   * own kcal-only shape: the review form asks the user to type calories,
+   * exactly like manual "kcal only" entry already does.
+   */
+  kcalPer100g: number | null;
+  macrosComplete: boolean;
+  source: 'model';
+  model: string;
+}

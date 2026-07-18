@@ -1,3 +1,4 @@
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -15,7 +16,6 @@ import {
   addFavorite,
   addLogEntry,
   copyDay,
-  createFood,
   listFavorites,
   removeFavorite,
   searchFoods,
@@ -27,6 +27,7 @@ import {
   type Unit,
 } from '../food-log';
 import { getFoodLogRuntime } from '../food-log/runtime';
+import { CreateFoodForm } from './CreateFoodForm';
 import { AppButton, Card, Chip, Dot, EmptyState, Field, Row } from './kit';
 import { radius, space, type, useTheme, type Theme } from './theme';
 
@@ -212,6 +213,7 @@ function AddSheet({
   onLogged: () => void;
 }) {
   const t = useTheme();
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Food[]>([]);
   const [favorites, setFavorites] = useState<Food[]>([]);
@@ -228,6 +230,14 @@ function AddSheet({
   useEffect(() => {
     void loadFavorites();
   }, [loadFavorites]);
+
+  // Refresh on return from /estimate-meal (v2) — a food created there is
+  // favorited so it shows up here without the user having to re-search.
+  useFocusEffect(
+    useCallback(() => {
+      void loadFavorites();
+    }, [loadFavorites]),
+  );
 
   const runSearch = useCallback(async (q: string) => {
     setQuery(q);
@@ -295,7 +305,7 @@ function AddSheet({
             <CreateFoodForm
               defaultUnitId={units[0]?.id ?? ''}
               units={units}
-              initialName={query}
+              initialValues={{ name: query }}
               onDone={(food) => {
                 setShowCreate(false);
                 pickFood(food);
@@ -336,6 +346,12 @@ function AddSheet({
                   </>
                 )}
               </ScrollView>
+              <AppButton
+                title="Estimate from photo/text →"
+                onPress={() => router.push({ pathname: '/estimate-meal', params: { meal } })}
+                variant="secondary"
+                small
+              />
               <AppButton title="Close" onPress={onClose} variant="ghost" />
             </View>
           )}
@@ -370,91 +386,6 @@ function FoodRow({
         </Text>
       </TouchableOpacity>
     </Row>
-  );
-}
-
-function CreateFoodForm({
-  defaultUnitId,
-  units,
-  initialName,
-  onDone,
-  onCancel,
-}: {
-  defaultUnitId: string;
-  units: Unit[];
-  initialName: string;
-  onDone: (food: Food) => void;
-  onCancel: () => void;
-}) {
-  const t = useTheme();
-  const [name, setName] = useState(initialName);
-  const [kcalOnly, setKcalOnly] = useState(false);
-  const [protein, setProtein] = useState('');
-  const [carb, setCarb] = useState('');
-  const [fat, setFat] = useState('');
-  const [fiber, setFiber] = useState('');
-  const [kcal, setKcal] = useState('');
-
-  const save = async () => {
-    if (name.trim() === '') return;
-    const rt = await getFoodLogRuntime();
-    const food = await createFood(
-      rt.store,
-      kcalOnly
-        ? {
-            name,
-            proteinPer100g: null,
-            carbPer100g: null,
-            fatPer100g: null,
-            fiberPer100g: fiber === '' ? null : Number(fiber),
-            kcalPer100g: Number(kcal),
-            defaultUnitId,
-          }
-        : {
-            name,
-            proteinPer100g: Number(protein) || 0,
-            carbPer100g: Number(carb) || 0,
-            fatPer100g: Number(fat) || 0,
-            fiberPer100g: fiber === '' ? null : Number(fiber),
-            defaultUnitId,
-          },
-      rt.nowUtc(),
-    );
-    onDone(food);
-  };
-
-  return (
-    <View style={styles.sheetBody}>
-      <Text style={[type.heading, { color: t.ink }]}>New food (per 100g)</Text>
-      <Field label="Name" placeholder="Chicken curry" value={name} onChangeText={setName} />
-      <Row>
-        <Chip label="Full macros" active={!kcalOnly} onPress={() => setKcalOnly(false)} />
-        <Chip label="kcal only" active={kcalOnly} onPress={() => setKcalOnly(true)} />
-      </Row>
-      {kcalOnly ? (
-        <Field
-          label="Calories per 100g"
-          placeholder="240"
-          keyboardType="decimal-pad"
-          value={kcal}
-          onChangeText={setKcal}
-        />
-      ) : (
-        <Row gap={space.m}>
-          <Field label="Protein g" placeholder="0" keyboardType="decimal-pad" value={protein} onChangeText={setProtein} style={styles.flex} />
-          <Field label="Carb g" placeholder="0" keyboardType="decimal-pad" value={carb} onChangeText={setCarb} style={styles.flex} />
-          <Field label="Fat g" placeholder="0" keyboardType="decimal-pad" value={fat} onChangeText={setFat} style={styles.flex} />
-        </Row>
-      )}
-      <Field label="Fiber g (optional)" placeholder="0" keyboardType="decimal-pad" value={fiber} onChangeText={setFiber} />
-      {units.length > 0 && (
-        <Text style={[type.caption, { color: t.muted }]}>
-          Default unit: {units.find((u) => u.id === defaultUnitId)?.name}
-        </Text>
-      )}
-      <AppButton title="Save food" onPress={save} />
-      <AppButton title="Cancel" onPress={onCancel} variant="ghost" />
-    </View>
   );
 }
 

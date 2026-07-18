@@ -1,3 +1,4 @@
+import { allNumbersAllowed, collectAllowedNumbers } from './numberGuard';
 import type { CoachNoteContent, CoachPayload, Reason } from './types';
 
 function findReason<C extends Reason['code']>(
@@ -62,66 +63,14 @@ export function fallbackNote(payload: CoachPayload): CoachNoteContent {
 
 const MAX_FIELD_CHARS = 500;
 
-function collectAllowedNumbers(payload: CoachPayload): number[] {
-  const nums: (number | null | undefined)[] = [
-    payload.current.targetKcal,
-    payload.current.prevTargetKcal,
-    payload.current.deltaKcal,
-    payload.current.tdeeEst,
-    payload.current.effectiveDeficit,
-    payload.current.weeklyRateKg,
-    payload.current.macros.proteinG,
-    payload.current.macros.fatG,
-    payload.current.macros.carbG,
-    payload.current.macros.fiberG,
-    payload.goal.startWeightKg,
-    payload.goal.goalWeightKg,
-    payload.goal.horizonDays,
-    payload.goal.daysElapsed,
-    payload.adherence.loggedDays,
-    payload.adherence.windowDays,
-    payload.adherence.avgIntake,
-    payload.adherence.avgTarget,
-  ];
-  for (const r of payload.reasons) {
-    switch (r.code) {
-      case 'TARGET_CHANGED':
-        nums.push(r.from, r.to, r.deltaKcal);
-        break;
-      case 'TREND_STALLED':
-        nums.push(r.windowRateKg);
-        break;
-      case 'INSUFFICIENT_DATA':
-        nums.push(r.loggedDays, r.weighIns);
-        break;
-      case 'COLD_START':
-        nums.push(r.seedShare);
-        break;
-      case 'BOUND_HIT':
-      case 'MACRO_RECONCILED':
-        break;
-    }
-  }
-  return nums.filter((n): n is number => typeof n === 'number');
-}
-
-function isAllowed(n: number, allowed: number[]): boolean {
-  return allowed.some(
-    (a) =>
-      n === a ||
-      Math.round(n) === Math.round(a) ||
-      Math.abs(n - a) <= 0.05 ||
-      Math.round(n) === Math.round(a * 100), // fraction expressed as a percent (e.g. seedShare)
-  );
-}
-
 /**
  * Coaching BRD §6 — reject fabricated figures. Every number-like substring
  * in the note's text must trace back to a number that actually appears in
- * `payload`. Known limitation: a narrated date (e.g. "2026-12-30") splits
- * into digit groups that won't match any allowed number and would be
- * rejected — an accepted false-positive per the BRD's own priority
- * (wrongly falling back is safe; showing an invented figure is not).
+ * `payload` (see numberGuard.ts). Known limitation: a narrated date (e.g.
+ * "2026-12-30") splits into digit groups that won't match any allowed
+ * number and would be rejected — an accepted false-positive per the BRD's
+ * own priority (wrongly falling back is safe; showing an invented figure
+ * is not).
  */
 export function validateNote(note: CoachNoteContent, payload: CoachPayload): boolean {
   const fields = [note.changeExplanation, note.weeklyReview, note.stallRead, note.suggestion];
@@ -129,11 +78,5 @@ export function validateNote(note: CoachNoteContent, payload: CoachPayload): boo
   if (fields.some((f) => f.length > MAX_FIELD_CHARS)) return false;
 
   const allowed = collectAllowedNumbers(payload);
-  for (const field of fields) {
-    const matches = field.match(/-?\d+(?:\.\d+)?/g) ?? [];
-    for (const match of matches) {
-      if (!isAllowed(parseFloat(match), allowed)) return false;
-    }
-  }
-  return true;
+  return fields.every((field) => allNumbersAllowed(field, allowed));
 }

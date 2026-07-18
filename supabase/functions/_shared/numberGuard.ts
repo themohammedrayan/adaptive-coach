@@ -4,7 +4,7 @@
 // out of coachNoteLogic.ts so coach-note and coach-chat share one
 // implementation instead of two independently-maintained copies.
 
-import type { CoachPayload } from './types';
+import type { CoachPayload } from './types.ts';
 
 export function collectAllowedNumbers(payload: CoachPayload): number[] {
   const nums: (number | null | undefined)[] = [

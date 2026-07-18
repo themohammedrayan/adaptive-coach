@@ -1,4 +1,4 @@
-import type { MealEstimate, RawMealEstimate } from './types';
+import type { MealEstimate, RawMealEstimate } from './types.ts';
 
 const MAX_NAME_CHARS = 100;
 /** ≈ pure fat's ~884 kcal/100g, a generous ceiling covering oils/nuts. */

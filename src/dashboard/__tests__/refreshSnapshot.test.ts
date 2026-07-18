@@ -142,4 +142,21 @@ describe('refreshDashboardSnapshot — Dashboard BRD §C AT7', () => {
     expect(nextDaySnapshot.resultComputedAt).toBe(TODAY); // still the cached computedAt
     expect(notifyCoachNoteReady).not.toHaveBeenCalled();
   });
+
+  it('liveTrendWeightKg reflects a new weigh-in even while the weekly recompute gate holds the cached result', async () => {
+    const deps = await seedDeps();
+    await refreshDashboardSnapshot(deps, TODAY); // first recompute, sets lastRecomputeDate
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // A big overnight drop logged the next day — the gate holds `result` steady,
+    // but the challenge card's live trend should still move toward it.
+    await deps.dataSyncStore.upsert(weightRow('2026-07-16', 80));
+
+    const nextDaySnapshot = await refreshDashboardSnapshot(deps, '2026-07-16');
+    expect(nextDaySnapshot.resultComputedAt).toBe(TODAY); // result still held
+    expect(nextDaySnapshot.liveTrendWeightKg).not.toBeNull();
+    expect(nextDaySnapshot.liveTrendWeightKg).not.toBe(nextDaySnapshot.result?.trendWeightKg);
+    expect(nextDaySnapshot.liveTrendWeightKg!).toBeLessThan(nextDaySnapshot.result!.trendWeightKg);
+  });
 });

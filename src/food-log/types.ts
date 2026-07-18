@@ -20,6 +20,10 @@ export interface Food {
   isCustom: true;
   createdAt: string;
   archivedAt: string | null;
+  /** Last local write; used for the Supabase pull's last-write-wins merge. */
+  updatedAt: string;
+  /** Outbox flag: row not yet upserted to Supabase. */
+  pendingPush: boolean;
 }
 
 /** Global unit library with default gram weights. Food-Log BRD §3. */
@@ -56,12 +60,24 @@ export interface LogEntry extends EntryMacros {
   grams: number;
   loggedAt: string;
   localDate: IsoDate;
+  /** Soft delete — deleted rows stay for sync (mirrors data-sync's BodyMetricRow). */
+  deletedAt: string | null;
+  /** Last local write; used for the Supabase pull's last-write-wins merge. */
+  updatedAt: string;
+  /** Outbox flag: row not yet upserted to Supabase. */
+  pendingPush: boolean;
 }
 
 export interface Favorite {
   foodId: string;
   mealHint: Meal | null;
   addedAt: string;
+  /** Soft delete — deleted rows stay for sync. */
+  deletedAt: string | null;
+  /** Last local write; used for the Supabase pull's last-write-wins merge. */
+  updatedAt: string;
+  /** Outbox flag: row not yet upserted to Supabase. */
+  pendingPush: boolean;
 }
 
 /**

@@ -15,6 +15,8 @@ function food(overrides: Partial<Food> = {}): Food {
     isCustom: true,
     createdAt: '2026-07-01T00:00:00.000Z',
     archivedAt: null,
+    updatedAt: '2026-07-01T00:00:00.000Z',
+    pendingPush: false,
     ...overrides,
   };
 }

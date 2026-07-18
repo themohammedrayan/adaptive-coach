@@ -9,13 +9,17 @@ export async function addFavorite(
   mealHint: Meal | null,
   nowUtc: string,
 ): Promise<Favorite> {
-  const fav: Favorite = { foodId, mealHint, addedAt: nowUtc };
+  const fav: Favorite = { foodId, mealHint, addedAt: nowUtc, deletedAt: null, updatedAt: nowUtc, pendingPush: true };
   await store.upsertFavorite(fav);
   return fav;
 }
 
-export async function removeFavorite(store: FoodLogStore, foodId: string): Promise<void> {
-  await store.removeFavorite(foodId);
+export async function removeFavorite(
+  store: FoodLogStore,
+  foodId: string,
+  nowUtc: string = new Date().toISOString(),
+): Promise<void> {
+  await store.removeFavorite(foodId, nowUtc);
 }
 
 /** Resolves favorites to Food records (a stale favorite pointing at a deleted food is skipped). */

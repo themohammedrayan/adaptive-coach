@@ -1,5 +1,5 @@
 import { addDays, DEFAULT_CONFIG, diffDays } from '../engine';
-import type { EngineResult, IsoDate, Profile } from '../engine';
+import type { IsoDate, Profile } from '../engine';
 
 export interface ChallengeProgress {
   /** (startWeightKg - goalWeightKg) * kcalPerKg — the whole-challenge budget. */
@@ -29,21 +29,27 @@ export interface ChallengeProgress {
  * EngineState + today, not a new engine capability). onPace reuses the
  * engine's already-null-safe projectedFinishDate rather than re-deriving a
  * second pace comparison with its own sign-convention risk.
+ *
+ * `trendWeightKg` and `projectedFinishDate` are passed explicitly (rather
+ * than read off a cached EngineResult) so the caller can supply a
+ * live/uncached trend value that isn't held back by the engine's weekly
+ * recompute gate.
  */
 export function buildChallengeProgress(
   profile: Profile,
   startWeightKg: number,
-  result: EngineResult,
+  trendWeightKg: number,
+  projectedFinishDate: IsoDate | null,
   today: IsoDate,
   kcalPerKg: number = DEFAULT_CONFIG.kcalPerKg,
 ): ChallengeProgress {
   const totalBudgetKcal = (startWeightKg - profile.goalWeightKg) * kcalPerKg;
-  const bankedKcal = (startWeightKg - result.trendWeightKg) * kcalPerKg;
+  const bankedKcal = (startWeightKg - trendWeightKg) * kcalPerKg;
   const daysElapsed = Math.max(0, diffDays(today, profile.startDate));
   const daysRemaining = Math.max(0, profile.horizonDays - daysElapsed);
   const deadlineDate = addDays(profile.startDate, profile.horizonDays);
   const requiredWeeklyRateKg =
-    ((profile.goalWeightKg - result.trendWeightKg) / Math.max(1, daysRemaining)) * 7;
+    ((profile.goalWeightKg - trendWeightKg) / Math.max(1, daysRemaining)) * 7;
 
   return {
     totalBudgetKcal,
@@ -55,6 +61,6 @@ export function buildChallengeProgress(
     horizonDays: profile.horizonDays,
     deadlineDate,
     requiredWeeklyRateKg,
-    onPace: result.projectedFinishDate !== null ? result.projectedFinishDate <= deadlineDate : null,
+    onPace: projectedFinishDate !== null ? projectedFinishDate <= deadlineDate : null,
   };
 }

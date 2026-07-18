@@ -51,7 +51,10 @@ async function copyEntries(
     id: genId(),
     loggedAt: nowUtc,
     localDate: toDate,
+    deletedAt: null,
+    updatedAt: nowUtc,
+    pendingPush: true,
   }));
-  for (const entry of copies) await store.insertEntry(entry);
+  for (const entry of copies) await store.upsertEntry(entry);
   return copies;
 }

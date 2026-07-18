@@ -45,8 +45,11 @@ export async function addLogEntry(
     loggedAt: input.loggedAt,
     localDate: toLocalDate(input.loggedAt),
     ...macros,
+    deletedAt: null,
+    updatedAt: input.loggedAt,
+    pendingPush: true,
   };
-  await store.insertEntry(entry);
+  await store.upsertEntry(entry);
   return entry;
 }
 
@@ -64,6 +67,7 @@ export async function editLogEntry(
   store: FoodLogStore,
   entry: LogEntry,
   input: EditLogEntryInput,
+  nowUtc: string = new Date().toISOString(),
 ): Promise<LogEntry> {
   const grams = await resolveGrams(store, entry.foodId, input.unitId, input.quantity);
   const ratio = grams / entry.grams;
@@ -78,14 +82,21 @@ export async function editLogEntry(
     carb: entry.carb === null ? null : entry.carb * ratio,
     fat: entry.fat === null ? null : entry.fat * ratio,
     fiber: entry.fiber === null ? null : entry.fiber * ratio,
+    updatedAt: nowUtc,
+    pendingPush: true,
   };
-  await store.deleteEntry(entry.id);
-  await store.insertEntry(updated);
+  // Same id, different values — an upsert-by-id, not delete+insert (the row must never
+  // pass through a soft-deleted state, or a concurrent sync could push it as deleted).
+  await store.upsertEntry(updated);
   return updated;
 }
 
-export async function deleteLogEntry(store: FoodLogStore, entryId: string): Promise<boolean> {
-  return store.deleteEntry(entryId);
+export async function deleteLogEntry(
+  store: FoodLogStore,
+  entryId: string,
+  nowUtc: string = new Date().toISOString(),
+): Promise<boolean> {
+  return store.deleteEntry(entryId, nowUtc);
 }
 
 export async function listLogEntries(

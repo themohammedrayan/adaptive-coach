@@ -69,6 +69,14 @@ export function FoodLogScreen() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    void (async () => {
+      const rt = await getFoodLogRuntime();
+      await rt.sync(false); // sync-on-open, mirrors data-sync's WeightScreen convention
+      await refresh();
+    })();
+  }, [refresh]);
+
   const unitNames = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
 
   const sections = useMemo(
@@ -90,6 +98,7 @@ export function FoodLogScreen() {
       const rt = await getFoodLogRuntime();
       await copyDay(rt.store, addDays(today, -1), today, rt.nowUtc());
       await refresh();
+      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
     } finally {
       setBusy(false);
     }
@@ -98,11 +107,12 @@ export function FoodLogScreen() {
   const toggleFavorite = async (foodId: string) => {
     const rt = await getFoodLogRuntime();
     if (favoriteIds.has(foodId)) {
-      await removeFavorite(rt.store, foodId);
+      await removeFavorite(rt.store, foodId, rt.nowUtc());
     } else {
       await addFavorite(rt.store, foodId, activeMeal, rt.nowUtc());
     }
     await refresh();
+    void rt.sync(true); // opportunistic push; offline is fine, outbox retries
   };
 
   return (
@@ -263,6 +273,7 @@ function AddSheet({
     setSelected(null);
     onClose();
     onLogged();
+    void rt.sync(true); // opportunistic push; offline is fine, outbox retries
   };
 
   const mealLabel = MEALS.find((m) => m.key === meal)?.label ?? meal;
@@ -472,9 +483,10 @@ function EntryActionSheet({
         onPress: () => {
           void (async () => {
             const rt = await getFoodLogRuntime();
-            await rt.store.deleteEntry(entry.id);
+            await rt.store.deleteEntry(entry.id, rt.nowUtc());
             onClose();
             onChanged();
+            void rt.sync(true); // opportunistic push; propagates the soft-delete
           })();
         },
       },
@@ -502,9 +514,10 @@ function EntryActionSheet({
                 cancelTitle="Back"
                 onSubmit={async (quantity, unitId) => {
                   const rt = await getFoodLogRuntime();
-                  await editLogEntry(rt.store, entry, { quantity, unitId });
+                  await editLogEntry(rt.store, entry, { quantity, unitId }, rt.nowUtc());
                   onClose();
                   onChanged();
+                  void rt.sync(true); // opportunistic push; offline is fine, outbox retries
                 }}
                 onCancel={() => setEditing(false)}
               />

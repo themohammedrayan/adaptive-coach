@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { addDays } from '../engine';
 import { createHealthConnectAdapter } from './hc/adapter';
-import { addManualMetric } from './manual';
+import { addManualMetric, deleteManualMetric } from './manual';
 import { deviceLocalDate } from './normalize';
 import { SupabaseRemote } from './remote';
 import type { BodyMetricsStore } from './store';
@@ -19,6 +19,8 @@ export interface DataSyncRuntime {
   sync(force?: boolean): Promise<SyncResult>;
   addWeightKg(weightKg: number): Promise<BodyMetricRow>;
   listRecentWeights(days?: number): Promise<BodyMetricRow[]>;
+  /** Soft-deletes a manual weight entry by externalId; propagates on next sync. */
+  deleteWeight(externalId: string): Promise<boolean>;
 }
 
 let instance: Promise<DataSyncRuntime> | null = null;
@@ -54,6 +56,7 @@ async function create(): Promise<DataSyncRuntime> {
       const rows = await store.listByType('weight', { start: addDays(end, -days), end });
       return rows.reverse(); // newest first for display
     },
+    deleteWeight: (externalId) => deleteManualMetric(store, externalId, new Date().toISOString()),
   };
 }
 

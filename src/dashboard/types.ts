@@ -41,4 +41,8 @@ export interface DashboardSnapshot {
   result: EngineResult | null;
   resultComputedAt: IsoDate | null;
   last14: DailyTotals[];
+  /** EWMA trend weight computed fresh from measurements, independent of the engine's weekly
+   * recompute gate — use this (not result.trendWeightKg) for anything that should move the
+   * day a new weigh-in lands, e.g. the Challenge card's kcal-banked figure. */
+  liveTrendWeightKg: number | null;
 }

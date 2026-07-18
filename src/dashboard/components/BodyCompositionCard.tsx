@@ -20,8 +20,17 @@ export function BodyCompositionCard({ entries }: BodyCompositionCardProps) {
       {entries.map((e) => (
         <View key={e.metricType} style={styles.row}>
           <Text style={[typeScale.caption, styles.label, { color: t.secondary }]}>{e.label}</Text>
-          <Text style={[styles.value, { color: t.ink }]}>
-            {e.latestValue !== null ? `${e.latestValue.toFixed(1)}${e.unit}` : '—'}
+          <Text
+            style={[
+              e.latestValue !== null ? styles.value : typeScale.caption,
+              { color: e.latestValue !== null ? t.ink : t.muted },
+            ]}
+          >
+            {e.latestValue !== null
+              ? `${e.latestValue.toFixed(1)}${e.unit}`
+              : e.permissionGranted === false
+                ? 'permission not granted'
+                : 'no connected source'}
           </Text>
           {e.deltaSincePrevious !== null && (
             <Text

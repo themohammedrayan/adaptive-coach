@@ -1,9 +1,8 @@
-import { assembleCoachPayload, buildGoalSummary, generateCoachNote } from '../coaching';
-import { buildMeasurementSeries } from '../data-sync';
+import { assembleCoachPayload, buildGoalSummary, gatherPayloadInputs, generateCoachNote } from '../coaching';
 import type { BodyMetricsStore } from '../data-sync';
-import { addDays, computeTrend, dateRange, DEFAULT_CONFIG, nextEngineState, recompute } from '../engine';
+import { nextEngineState, recompute } from '../engine';
 import type { IsoDate } from '../engine';
-import { dailyTotals, toDayLog } from '../food-log';
+import { toDayLog } from '../food-log';
 import type { FoodLogStore } from '../food-log';
 import { buildAdherenceSummary } from './adherence';
 import { notifyCoachNoteReady } from './reminders';
@@ -45,13 +44,11 @@ export async function refreshDashboardSnapshot(
     return { profile, engineState: null, result: null, resultComputedAt: null, last14: [] };
   }
 
-  const last14 = await Promise.all(
-    dateRange(addDays(today, -13), today).map((date) => dailyTotals(foodStore, date)),
+  const { last14, measurements, trend } = await gatherPayloadInputs(
+    { foodLogStore: foodStore, dataSyncStore },
+    profile,
+    today,
   );
-
-  const range = { start: profile.startDate, end: today };
-  const weightRows = await dataSyncStore.listByType('weight', range);
-  const measurements = buildMeasurementSeries(weightRows, range, 'earliest');
 
   const result = recompute(engineState, profile, measurements, last14.map(toDayLog), today, undefined, {
     force: opts?.force,
@@ -64,7 +61,6 @@ export async function refreshDashboardSnapshot(
     // Recompute→coach note→reminder wiring (BRD §B2.3): fire-and-forget, never blocks the snapshot.
     // The Edge Function already resolves API failures to a fallback note server-side; this
     // .catch only guards transport-level failures (offline device, function unreachable).
-    const trend = computeTrend(measurements, { start: addDays(today, -13), end: today }, DEFAULT_CONFIG.ewmaHalfLifeDays);
     const adherenceSummary = buildAdherenceSummary(last14, result.targetKcal);
     const goal = buildGoalSummary(profile, next, today);
     const payload = assembleCoachPayload(result, adherenceSummary, goal, today, trend);

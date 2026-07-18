@@ -45,6 +45,13 @@
       "expo-health-connect",
       "expo-notifications",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow access to your photos to estimate a meal from a picture.",
+          "cameraPermission": "Allow camera access to photograph a meal for estimation."
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {

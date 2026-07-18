@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { listCoachNotes, type CoachNote } from '../coaching';
-import { AppButton, Card, EmptyState, Row } from './kit';
+import { Card, EmptyState, FAB, Row } from './kit';
 import { radius, space, type, useTheme } from './theme';
 
 /**
@@ -41,28 +41,21 @@ export function CoachNotesFeed() {
   if (notes === null && error === null) return null;
 
   return (
-    <FlatList
-      contentContainerStyle={styles.list}
-      data={notes ?? []}
-      keyExtractor={(note) => note.id}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      ListHeaderComponent={
-        <Row style={styles.askRow}>
-          <AppButton
-            title="Ask the coach a question →"
-            onPress={() => router.push('/coach-chat')}
-            variant="secondary"
-            small
+    <View style={styles.flex}>
+      <FlatList
+        contentContainerStyle={styles.list}
+        data={notes ?? []}
+        keyExtractor={(note) => note.id}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        renderItem={({ item }) => <CoachNoteCard note={item} />}
+        ListEmptyComponent={
+          <EmptyState
+            message={error ?? 'No coach notes yet — check back after your next weekly recompute.'}
           />
-        </Row>
-      }
-      renderItem={({ item }) => <CoachNoteCard note={item} />}
-      ListEmptyComponent={
-        <EmptyState
-          message={error ?? 'No coach notes yet — check back after your next weekly recompute.'}
-        />
-      }
-    />
+        }
+      />
+      <FAB icon="chat" accessibilityLabel="Ask the coach" onPress={() => router.push('/coach-chat')} />
+    </View>
   );
 }
 
@@ -87,8 +80,8 @@ function CoachNoteCard({ note }: { note: CoachNote }) {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   list: { padding: space.l, paddingTop: space.s, gap: space.m },
-  askRow: { justifyContent: 'flex-end', marginBottom: space.s },
   card: { gap: space.s },
   header: { justifyContent: 'space-between' },
   autoTag: {

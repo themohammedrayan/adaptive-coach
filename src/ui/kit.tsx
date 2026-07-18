@@ -95,6 +95,60 @@ export function AppButton({
   );
 }
 
+/**
+ * Circular bottom-right action button (e.g. "add weight", "ask coach") — the
+ * app's one floating-action-button pattern, drawn with the same react-native-svg
+ * approach as TabIcon since no icon font is installed.
+ */
+export function FAB({
+  icon,
+  onPress,
+  accessibilityLabel,
+}: {
+  icon: 'plus' | 'chat';
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
+  const t = useTheme();
+  const p = { stroke: t.onAccent, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, fill: 'none' as const };
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={({ pressed }) => ({
+        position: 'absolute',
+        right: space.l,
+        bottom: space.l,
+        width: 56,
+        height: 56,
+        borderRadius: radius.pill,
+        backgroundColor: t.accent,
+        alignItems: 'center',
+        justifyContent: 'center',
+        opacity: pressed ? 0.85 : 1,
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOpacity: 0.2,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+      })}
+    >
+      <Svg width={24} height={24} viewBox="0 0 24 24">
+        {icon === 'plus' && (
+          <>
+            <Path d="M12 5v14" {...p} />
+            <Path d="M5 12h14" {...p} />
+          </>
+        )}
+        {icon === 'chat' && (
+          <Path d="M20 11.5a7.5 6.5 0 0 1-7.5 6.5c-1 0-2-.15-2.9-.45L5 19l1.2-3.2A6.4 6.4 0 0 1 4.5 11.5 7.5 6.5 0 0 1 12.5 5 7.5 6.5 0 0 1 20 11.5Z" {...p} />
+        )}
+      </Svg>
+    </Pressable>
+  );
+}
+
 /* ------------------------------------------------------------------ inputs */
 
 export function Field({

@@ -1,6 +1,6 @@
 import { assembleCoachPayload, buildGoalSummary, gatherPayloadInputs, generateCoachNote } from '../coaching';
 import type { BodyMetricsStore } from '../data-sync';
-import { nextEngineState, recompute } from '../engine';
+import { computeTrend, DEFAULT_CONFIG, nextEngineState, recompute, trendAt } from '../engine';
 import type { IsoDate } from '../engine';
 import { toDayLog } from '../food-log';
 import type { FoodLogStore } from '../food-log';
@@ -37,11 +37,25 @@ export async function refreshDashboardSnapshot(
   const { dashboardStore: dashStore, foodLogStore: foodStore, dataSyncStore } = deps;
   const profile = await dashStore.getProfile();
   if (profile === null) {
-    return { profile: null, engineState: null, result: null, resultComputedAt: null, last14: [] };
+    return {
+      profile: null,
+      engineState: null,
+      result: null,
+      resultComputedAt: null,
+      last14: [],
+      liveTrendWeightKg: null,
+    };
   }
   const engineState = await dashStore.getEngineState();
   if (engineState === null) {
-    return { profile, engineState: null, result: null, resultComputedAt: null, last14: [] };
+    return {
+      profile,
+      engineState: null,
+      result: null,
+      resultComputedAt: null,
+      last14: [],
+      liveTrendWeightKg: null,
+    };
   }
 
   const { last14, measurements, trend } = await gatherPayloadInputs(
@@ -49,6 +63,12 @@ export async function refreshDashboardSnapshot(
     profile,
     today,
   );
+
+  // Independent of the weekly recompute gate below — the Challenge card's kcal-banked
+  // figure should move the day a new weigh-in lands, even on weeks the engine holds the
+  // cached target/macros steady (BRD-intended noise damping we don't want to touch).
+  const liveTrend = computeTrend(measurements, { end: today }, DEFAULT_CONFIG.ewmaHalfLifeDays);
+  const liveTrendWeightKg = trendAt(liveTrend, today) ?? engineState.startWeightKg;
 
   const result = recompute(engineState, profile, measurements, last14.map(toDayLog), today, undefined, {
     force: opts?.force,
@@ -67,7 +87,7 @@ export async function refreshDashboardSnapshot(
     void generateCoachNote(payload)
       .then((note) => notifyCoachNoteReady(note))
       .catch((e) => console.warn('[coaching] note generation failed (will retry next recompute):', e));
-    return { profile, engineState: next, result, resultComputedAt: today, last14 };
+    return { profile, engineState: next, result, resultComputedAt: today, last14, liveTrendWeightKg };
   }
 
   const cached = await dashStore.getLastResult();
@@ -77,5 +97,6 @@ export async function refreshDashboardSnapshot(
     result: cached?.result ?? null,
     resultComputedAt: cached?.computedAt ?? null,
     last14,
+    liveTrendWeightKg,
   };
 }

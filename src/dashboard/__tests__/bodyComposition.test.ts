@@ -57,4 +57,19 @@ describe('buildBodyCompositionSummary', () => {
     const summary = buildBodyCompositionSummary({}, range);
     expect(summary.find((e) => e.metricType === 'lean_mass')?.label).toBe('Lean mass');
   });
+
+  it('permissionGranted is null when grantedTypes is not supplied (unknown state)', () => {
+    const summary = buildBodyCompositionSummary({}, range);
+    for (const entry of summary) {
+      expect(entry.permissionGranted).toBeNull();
+    }
+  });
+
+  it('permissionGranted reflects whether each metric is in the granted-types list', () => {
+    const summary = buildBodyCompositionSummary({}, range, ['weight', 'lean_mass']);
+    expect(summary.find((e) => e.metricType === 'weight')?.permissionGranted).toBe(true);
+    expect(summary.find((e) => e.metricType === 'lean_mass')?.permissionGranted).toBe(true);
+    expect(summary.find((e) => e.metricType === 'bone_mass')?.permissionGranted).toBe(false);
+    expect(summary.find((e) => e.metricType === 'body_water')?.permissionGranted).toBe(false);
+  });
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { buildMeasurementSeries } from '../data-sync';
-import type { BodyMetricRow } from '../data-sync';
+import { buildMeasurementSeries, KV } from '../data-sync';
+import type { BodyMetricRow, MetricType } from '../data-sync';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import {
   buildAdherenceSummary,
@@ -102,11 +102,18 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
     const bodyFatRows: BodyMetricRow[] = await dataRt.store.listByType('body_fat', dateRangeSpec);
     setBodyFatSeries(buildBodyFatSeries(bodyFatRows, dateRangeSpec));
 
-    const [leanMassRows, boneMassRows, bodyWaterRows]: BodyMetricRow[][] = await Promise.all([
+    const [leanMassRows, boneMassRows, bodyWaterRows, grantedTypesRaw]: [
+      BodyMetricRow[],
+      BodyMetricRow[],
+      BodyMetricRow[],
+      string | null,
+    ] = await Promise.all([
       dataRt.store.listByType('lean_mass', dateRangeSpec),
       dataRt.store.listByType('bone_mass', dateRangeSpec),
       dataRt.store.listByType('body_water', dateRangeSpec),
+      dataRt.store.getKV(KV.grantedTypes),
     ]);
+    const grantedTypes: MetricType[] | null = grantedTypesRaw !== null ? JSON.parse(grantedTypesRaw) : null;
     setBodyComposition(
       buildBodyCompositionSummary(
         {
@@ -116,6 +123,7 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
           body_water: bodyWaterRows,
         },
         dateRangeSpec,
+        grantedTypes,
       ),
     );
   }, []);
@@ -155,7 +163,13 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
   const adherence = buildAdherenceSummary(snapshot.last14, snapshot.result?.targetKcal ?? null);
   const challenge =
     snapshot.result !== null && snapshot.engineState !== null && today !== null
-      ? buildChallengeProgress(snapshot.profile, snapshot.engineState.startWeightKg, snapshot.result, today)
+      ? buildChallengeProgress(
+          snapshot.profile,
+          snapshot.engineState.startWeightKg,
+          snapshot.liveTrendWeightKg ?? snapshot.result.trendWeightKg,
+          snapshot.result.projectedFinishDate,
+          today,
+        )
       : null;
 
   return (

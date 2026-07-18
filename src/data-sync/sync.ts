@@ -71,6 +71,7 @@ export async function syncOnOpen(
     hcOutcome = status;
   } else {
     const granted = await hc.ensurePermissions(READ_TYPES);
+    await store.setKV(KV.grantedTypes, JSON.stringify(granted));
     if (!granted.includes('weight')) {
       // Weight is the only must-have (BRD §4); partial grants are valid.
       hcOutcome = 'permission_denied';

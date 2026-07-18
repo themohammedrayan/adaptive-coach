@@ -76,6 +76,7 @@ export function CreateFoodForm({
       rt.nowUtc(),
     );
     onDone(food);
+    void rt.sync(true); // opportunistic push; offline is fine, outbox retries
   };
 
   return (

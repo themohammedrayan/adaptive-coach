@@ -12,6 +12,10 @@ export interface BodyCompositionEntry {
   latestDate: IsoDate | null;
   /** latestValue minus the prior daily-averaged reading in range; null with fewer than 2 readings. */
   deltaSincePrevious: number | null;
+  /** Health Connect permission state for this metric as of the last sync — null
+   * when unknown (e.g. never synced, or on web where there's no Health Connect).
+   * Lets the empty state say "permission not granted" vs "no connected source". */
+  permissionGranted: boolean | null;
 }
 
 const METRICS: { metricType: BodyCompositionMetric; label: string }[] = [
@@ -32,6 +36,7 @@ const METRICS: { metricType: BodyCompositionMetric; label: string }[] = [
 export function buildBodyCompositionSummary(
   rowsByMetric: Partial<Record<BodyCompositionMetric, BodyMetricRow[]>>,
   range: { start: IsoDate; end: IsoDate },
+  grantedTypes: MetricType[] | null = null,
 ): BodyCompositionEntry[] {
   return METRICS.map(({ metricType, label }) => {
     const series = buildMetricSeries(rowsByMetric[metricType] ?? [], metricType as MetricType, range);
@@ -44,6 +49,7 @@ export function buildBodyCompositionSummary(
       latestValue: last?.value ?? null,
       latestDate: last?.date ?? null,
       deltaSincePrevious: last && prev ? last.value - prev.value : null,
+      permissionGranted: grantedTypes === null ? null : grantedTypes.includes(metricType as MetricType),
     };
   });
 }

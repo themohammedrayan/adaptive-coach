@@ -50,6 +50,8 @@ export async function createFood(
     isCustom: true,
     createdAt: nowUtc,
     archivedAt: null,
+    updatedAt: nowUtc,
+    pendingPush: true,
   };
   await store.upsertFood(food);
   return food;
@@ -63,7 +65,7 @@ export async function archiveFood(
 ): Promise<void> {
   const food = await store.getFood(foodId);
   if (food === null) return;
-  await store.upsertFood({ ...food, archivedAt: nowUtc });
+  await store.upsertFood({ ...food, archivedAt: nowUtc, updatedAt: nowUtc, pendingPush: true });
 }
 
 /** Food-Log BRD §6/§9 — local search over the user's own (non-archived) foods. */

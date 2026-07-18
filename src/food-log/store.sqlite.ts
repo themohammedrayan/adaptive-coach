@@ -1,7 +1,7 @@
 import * as SQLite from 'expo-sqlite';
 import type { IsoDate } from '../engine';
 import { DEFAULT_UNITS } from './constants';
-import type { FoodLogStore } from './store';
+import type { FoodLogStore, PendingPush } from './store';
 import type { Favorite, Food, FoodUnitOverride, LogEntry, Meal, Unit } from './types';
 
 interface FoodRow {
@@ -17,6 +17,8 @@ interface FoodRow {
   is_custom: number;
   created_at: string;
   archived_at: string | null;
+  updated_at: string;
+  pending_push: number;
 }
 
 function foodFromDb(r: FoodRow): Food {
@@ -33,6 +35,8 @@ function foodFromDb(r: FoodRow): Food {
     isCustom: true,
     createdAt: r.created_at,
     archivedAt: r.archived_at,
+    updatedAt: r.updated_at,
+    pendingPush: r.pending_push === 1,
   };
 }
 
@@ -50,6 +54,9 @@ interface EntryRow {
   carb: number | null;
   fat: number | null;
   fiber: number | null;
+  deleted_at: string | null;
+  updated_at: string;
+  pending_push: number;
 }
 
 function entryFromDb(r: EntryRow): LogEntry {
@@ -67,7 +74,40 @@ function entryFromDb(r: EntryRow): LogEntry {
     carb: r.carb,
     fat: r.fat,
     fiber: r.fiber,
+    deletedAt: r.deleted_at,
+    updatedAt: r.updated_at,
+    pendingPush: r.pending_push === 1,
   };
+}
+
+interface FavoriteRow {
+  food_id: string;
+  meal_hint: string | null;
+  added_at: string;
+  deleted_at: string | null;
+  updated_at: string;
+  pending_push: number;
+}
+
+function favoriteFromDb(r: FavoriteRow): Favorite {
+  return {
+    foodId: r.food_id,
+    mealHint: r.meal_hint as Meal | null,
+    addedAt: r.added_at,
+    deletedAt: r.deleted_at,
+    updatedAt: r.updated_at,
+    pendingPush: r.pending_push === 1,
+  };
+}
+
+/** Best-effort column add for installs from before sync support — expo-sqlite has no
+ * `alter table ... add column if not exists`, so duplicate-column errors are swallowed. */
+async function addColumnIfMissing(db: SQLite.SQLiteDatabase, table: string, ddl: string): Promise<void> {
+  try {
+    await db.execAsync(`alter table ${table} add column ${ddl}`);
+  } catch {
+    // column already exists
+  }
 }
 
 export class SQLiteStore implements FoodLogStore {
@@ -96,7 +136,9 @@ export class SQLiteStore implements FoodLogStore {
         macros_complete integer not null default 1,
         is_custom integer not null default 1,
         created_at text not null,
-        archived_at text
+        archived_at text,
+        updated_at text not null default '1970-01-01T00:00:00.000Z',
+        pending_push integer not null default 1
       );
       create index if not exists foods_name_idx on foods (name);
 
@@ -120,7 +162,10 @@ export class SQLiteStore implements FoodLogStore {
         protein real,
         carb real,
         fat real,
-        fiber real
+        fiber real,
+        deleted_at text,
+        updated_at text not null default '1970-01-01T00:00:00.000Z',
+        pending_push integer not null default 1
       );
       create index if not exists log_entries_date_meal_idx on log_entries (local_date, meal);
       create index if not exists log_entries_food_idx on log_entries (food_id, logged_at desc);
@@ -128,14 +173,29 @@ export class SQLiteStore implements FoodLogStore {
       create table if not exists favorites (
         food_id text primary key references foods(id),
         meal_hint text,
-        added_at text not null
+        added_at text not null,
+        deleted_at text,
+        updated_at text not null default '1970-01-01T00:00:00.000Z',
+        pending_push integer not null default 1
       );
 
       create table if not exists daily_flags (
         local_date text primary key,
         marked_complete integer not null default 0
       );
+
+      create table if not exists kv (key text primary key, value text not null);
     `);
+    // Installs from before sync support won't have these columns from create-table-if-not-exists.
+    await addColumnIfMissing(db, 'foods', "updated_at text not null default '1970-01-01T00:00:00.000Z'");
+    await addColumnIfMissing(db, 'foods', 'pending_push integer not null default 1');
+    await addColumnIfMissing(db, 'log_entries', 'deleted_at text');
+    await addColumnIfMissing(db, 'log_entries', "updated_at text not null default '1970-01-01T00:00:00.000Z'");
+    await addColumnIfMissing(db, 'log_entries', 'pending_push integer not null default 1');
+    await addColumnIfMissing(db, 'favorites', 'deleted_at text');
+    await addColumnIfMissing(db, 'favorites', "updated_at text not null default '1970-01-01T00:00:00.000Z'");
+    await addColumnIfMissing(db, 'favorites', 'pending_push integer not null default 1');
+
     const store = new SQLiteStore(db);
     await store.seedUnits();
     return store;
@@ -156,8 +216,9 @@ export class SQLiteStore implements FoodLogStore {
     await this.db.runAsync(
       `insert into foods
          (id, name, protein_per_100g, carb_per_100g, fat_per_100g, fiber_per_100g,
-          kcal_per_100g, default_unit_id, macros_complete, is_custom, created_at, archived_at)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          kcal_per_100g, default_unit_id, macros_complete, is_custom, created_at, archived_at,
+          updated_at, pending_push)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict (id) do update set
          name = excluded.name,
          protein_per_100g = excluded.protein_per_100g,
@@ -167,7 +228,9 @@ export class SQLiteStore implements FoodLogStore {
          kcal_per_100g = excluded.kcal_per_100g,
          default_unit_id = excluded.default_unit_id,
          macros_complete = excluded.macros_complete,
-         archived_at = excluded.archived_at`,
+         archived_at = excluded.archived_at,
+         updated_at = excluded.updated_at,
+         pending_push = excluded.pending_push`,
       food.id,
       food.name,
       food.proteinPer100g,
@@ -180,6 +243,8 @@ export class SQLiteStore implements FoodLogStore {
       food.isCustom ? 1 : 0,
       food.createdAt,
       food.archivedAt,
+      food.updatedAt,
+      food.pendingPush ? 1 : 0,
     );
   }
 
@@ -231,11 +296,28 @@ export class SQLiteStore implements FoodLogStore {
     return r ? { foodId: r.food_id, unitId: r.unit_id, grams: r.grams } : null;
   }
 
-  async insertEntry(entry: LogEntry): Promise<void> {
+  async upsertEntry(entry: LogEntry): Promise<void> {
     await this.db.runAsync(
       `insert into log_entries
-         (id, food_id, meal, quantity, unit_id, grams, logged_at, local_date, kcal, protein, carb, fat, fiber)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (id, food_id, meal, quantity, unit_id, grams, logged_at, local_date, kcal, protein, carb, fat, fiber,
+          deleted_at, updated_at, pending_push)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       on conflict (id) do update set
+         food_id = excluded.food_id,
+         meal = excluded.meal,
+         quantity = excluded.quantity,
+         unit_id = excluded.unit_id,
+         grams = excluded.grams,
+         logged_at = excluded.logged_at,
+         local_date = excluded.local_date,
+         kcal = excluded.kcal,
+         protein = excluded.protein,
+         carb = excluded.carb,
+         fat = excluded.fat,
+         fiber = excluded.fiber,
+         deleted_at = excluded.deleted_at,
+         updated_at = excluded.updated_at,
+         pending_push = excluded.pending_push`,
       entry.id,
       entry.foodId,
       entry.meal,
@@ -249,17 +331,30 @@ export class SQLiteStore implements FoodLogStore {
       entry.carb,
       entry.fat,
       entry.fiber,
+      entry.deletedAt,
+      entry.updatedAt,
+      entry.pendingPush ? 1 : 0,
     );
   }
 
-  async deleteEntry(id: string): Promise<boolean> {
-    const res = await this.db.runAsync('delete from log_entries where id = ?', id);
+  async getEntry(id: string): Promise<LogEntry | null> {
+    const r = await this.db.getFirstAsync<EntryRow>('select * from log_entries where id = ?', id);
+    return r ? entryFromDb(r) : null;
+  }
+
+  async deleteEntry(id: string, deletedAtUtc: string): Promise<boolean> {
+    const res = await this.db.runAsync(
+      'update log_entries set deleted_at = ?, updated_at = ?, pending_push = 1 where id = ? and deleted_at is null',
+      deletedAtUtc,
+      deletedAtUtc,
+      id,
+    );
     return res.changes > 0;
   }
 
   async listEntriesByDate(localDate: IsoDate): Promise<LogEntry[]> {
     const rows = await this.db.getAllAsync<EntryRow>(
-      'select * from log_entries where local_date = ? order by logged_at asc',
+      'select * from log_entries where local_date = ? and deleted_at is null order by logged_at asc',
       localDate,
     );
     return rows.map(entryFromDb);
@@ -267,7 +362,7 @@ export class SQLiteStore implements FoodLogStore {
 
   async listEntriesByDateMeal(localDate: IsoDate, meal: Meal): Promise<LogEntry[]> {
     const rows = await this.db.getAllAsync<EntryRow>(
-      'select * from log_entries where local_date = ? and meal = ? order by logged_at asc',
+      'select * from log_entries where local_date = ? and meal = ? and deleted_at is null order by logged_at asc',
       localDate,
       meal,
     );
@@ -278,6 +373,7 @@ export class SQLiteStore implements FoodLogStore {
     const rows = await this.db.getAllAsync<{ food_id: string }>(
       `select food_id, max(logged_at) as latest
        from log_entries
+       where deleted_at is null
        group by food_id
        order by latest desc
        limit ?`,
@@ -288,29 +384,42 @@ export class SQLiteStore implements FoodLogStore {
 
   async upsertFavorite(fav: Favorite): Promise<void> {
     await this.db.runAsync(
-      `insert into favorites (food_id, meal_hint, added_at) values (?, ?, ?)
-       on conflict (food_id) do update set meal_hint = excluded.meal_hint`,
+      `insert into favorites (food_id, meal_hint, added_at, deleted_at, updated_at, pending_push)
+       values (?, ?, ?, ?, ?, ?)
+       on conflict (food_id) do update set
+         meal_hint = excluded.meal_hint,
+         added_at = excluded.added_at,
+         deleted_at = excluded.deleted_at,
+         updated_at = excluded.updated_at,
+         pending_push = excluded.pending_push`,
       fav.foodId,
       fav.mealHint,
       fav.addedAt,
+      fav.deletedAt,
+      fav.updatedAt,
+      fav.pendingPush ? 1 : 0,
     );
   }
 
-  async removeFavorite(foodId: string): Promise<void> {
-    await this.db.runAsync('delete from favorites where food_id = ?', foodId);
+  async getFavorite(foodId: string): Promise<Favorite | null> {
+    const r = await this.db.getFirstAsync<FavoriteRow>('select * from favorites where food_id = ?', foodId);
+    return r ? favoriteFromDb(r) : null;
+  }
+
+  async removeFavorite(foodId: string, deletedAtUtc: string): Promise<void> {
+    await this.db.runAsync(
+      'update favorites set deleted_at = ?, updated_at = ?, pending_push = 1 where food_id = ? and deleted_at is null',
+      deletedAtUtc,
+      deletedAtUtc,
+      foodId,
+    );
   }
 
   async listFavorites(): Promise<Favorite[]> {
-    const rows = await this.db.getAllAsync<{
-      food_id: string;
-      meal_hint: string | null;
-      added_at: string;
-    }>('select * from favorites order by added_at asc');
-    return rows.map((r) => ({
-      foodId: r.food_id,
-      mealHint: r.meal_hint as Meal | null,
-      addedAt: r.added_at,
-    }));
+    const rows = await this.db.getAllAsync<FavoriteRow>(
+      'select * from favorites where deleted_at is null order by added_at asc',
+    );
+    return rows.map(favoriteFromDb);
   }
 
   async getMarkedComplete(localDate: IsoDate): Promise<boolean> {
@@ -327,6 +436,40 @@ export class SQLiteStore implements FoodLogStore {
        on conflict (local_date) do update set marked_complete = excluded.marked_complete`,
       localDate,
       value ? 1 : 0,
+    );
+  }
+
+  async listPendingPush(): Promise<PendingPush> {
+    const [foods, entries, favorites] = await Promise.all([
+      this.db.getAllAsync<FoodRow>('select * from foods where pending_push = 1'),
+      this.db.getAllAsync<EntryRow>('select * from log_entries where pending_push = 1'),
+      this.db.getAllAsync<FavoriteRow>('select * from favorites where pending_push = 1'),
+    ]);
+    return {
+      foods: foods.map(foodFromDb),
+      entries: entries.map(entryFromDb),
+      favorites: favorites.map(favoriteFromDb),
+    };
+  }
+
+  async markPushed(kind: 'foods' | 'entries' | 'favorites', ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    const placeholders = ids.map(() => '?').join(',');
+    const table = kind === 'foods' ? 'foods' : kind === 'entries' ? 'log_entries' : 'favorites';
+    const idCol = kind === 'favorites' ? 'food_id' : 'id';
+    await this.db.runAsync(`update ${table} set pending_push = 0 where ${idCol} in (${placeholders})`, ...ids);
+  }
+
+  async getKV(key: string): Promise<string | null> {
+    const r = await this.db.getFirstAsync<{ value: string }>('select value from kv where key = ?', key);
+    return r?.value ?? null;
+  }
+
+  async setKV(key: string, value: string): Promise<void> {
+    await this.db.runAsync(
+      'insert into kv (key, value) values (?, ?) on conflict (key) do update set value = excluded.value',
+      key,
+      value,
     );
   }
 }

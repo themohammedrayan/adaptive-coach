@@ -4,8 +4,15 @@ export { deviceLocalDate, offsetLocalDate, type InstantToLocalDate } from './dat
 export { computeGrams } from './grams';
 export { computeEntryMacros, deriveKcalPer100g, sumEntryMacros } from './macros';
 export { toDayLog } from './dayLog';
-export type { FoodLogStore } from './store';
+export { KV } from './store';
+export type { FoodLogStore, PendingPush } from './store';
 export { MemoryStore } from './store.memory';
+export {
+  foodLogSyncOnOpen,
+  FOOD_LOG_SYNC_THROTTLE_MINUTES,
+  type FoodLogSyncDeps,
+  type FoodLogSyncResult,
+} from './sync';
 export { createFood, archiveFood, searchFoods, type CreateFoodInput } from './foods';
 export { resolveGrams, setFoodUnitOverride } from './units';
 export {

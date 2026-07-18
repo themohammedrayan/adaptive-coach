@@ -6,6 +6,9 @@ export const KV = {
   lastSyncAt: 'lastSyncAt',
   hcChangesToken: 'hcChangesToken',
   lastPulledAt: 'lastPulledAt',
+  /** JSON array of MetricType — the Health Connect permissions actually granted
+   * as of the last sync, so the dashboard can tell "denied" apart from "no data". */
+  grantedTypes: 'grantedTypes',
 } as const;
 
 /**

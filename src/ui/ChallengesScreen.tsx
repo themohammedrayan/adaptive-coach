@@ -16,7 +16,7 @@ import { getDataSyncRuntime } from '../data-sync/runtime';
 import { buildChallengeProgress, type ChallengeProgress } from '../dashboard';
 import { ChallengeCard } from '../dashboard/components/ChallengeCard';
 import { getDashboardRuntime } from '../dashboard/runtime';
-import { addDays, computeTrend, DEFAULT_CONFIG, trendAt } from '../engine';
+import { computeTrend, DEFAULT_CONFIG, diffDays, trendAt } from '../engine';
 import { AppButton, Card, Chip, EmptyState, FAB, Overline, Row } from './kit';
 import { radius, space, type, useTheme } from './theme';
 
@@ -53,17 +53,21 @@ export function ChallengesScreen() {
       listChallenges(challengeRt.store, 'weight', ['paused']),
     ]);
 
-    // The shared weight trend every challenge's kcal-banked figure is measured
-    // against — same EWMA the engine uses, computed independently of any one
-    // challenge's own startDate so it reads the same for all of them.
-    const range = { start: addDays(today, -365), end: today };
-    const weightRows = await dataRt.store.listByType('weight', range);
-    const measurements = buildMeasurementSeries(weightRows, range, 'earliest');
-    const trendPoints = computeTrend(measurements, { end: today }, DEFAULT_CONFIG.ewmaHalfLifeDays);
+    // Each challenge's kcal-banked figure is measured against the same EWMA the
+    // engine uses, but scoped to that challenge's own startDate — otherwise a
+    // brand-new "Day 0" challenge inherits trend momentum from weigh-ins that
+    // predate it (e.g. a since-superseded scale reading) and shows banked kcal
+    // before any real progress has happened.
+    const all = [...active, ...paused];
+    const earliestStart = all.reduce((min, c) => (diffDays(c.startDate, min) < 0 ? c.startDate : min), today);
+    const weightRows = await dataRt.store.listByType('weight', { start: earliestStart, end: today });
     const cachedResult = await dashRt.store.getLastResult();
 
     const next = new Map<string, ChallengeProgress>();
-    for (const c of [...active, ...paused]) {
+    for (const c of all) {
+      const range = { start: c.startDate, end: today };
+      const measurements = buildMeasurementSeries(weightRows, range, 'earliest');
+      const trendPoints = computeTrend(measurements, { end: today }, DEFAULT_CONFIG.ewmaHalfLifeDays);
       const trendWeightKg = trendAt(trendPoints, today) ?? c.startWeightKg;
       const projectedFinishDate = c.isPrimary ? cachedResult?.result.projectedFinishDate ?? null : null;
       next.set(

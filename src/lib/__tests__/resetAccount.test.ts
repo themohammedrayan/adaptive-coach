@@ -42,13 +42,15 @@ describe('resetUserDataCore', () => {
     const remote = new FakeRemote();
     const s = stores();
     const cancelAllReminders = jest.fn(async () => {});
+    const clearLocalCaches = jest.fn(async () => {});
 
-    await expect(resetUserDataCore(auth, remote, s, cancelAllReminders)).rejects.toThrow(
-      'no signed-in user',
-    );
+    await expect(
+      resetUserDataCore(auth, remote, s, cancelAllReminders, clearLocalCaches),
+    ).rejects.toThrow('no signed-in user');
 
     expect(remote.deleted).toHaveLength(0);
     expect(cancelAllReminders).not.toHaveBeenCalled();
+    expect(clearLocalCaches).not.toHaveBeenCalled();
     expect(auth.signedOut).toBe(false);
   });
 
@@ -102,8 +104,9 @@ describe('resetUserDataCore', () => {
       updatedAt: '2026-07-01T00:00:00.000Z',
     });
     const cancelAllReminders = jest.fn(async () => {});
+    const clearLocalCaches = jest.fn(async () => {});
 
-    await resetUserDataCore(auth, remote, s, cancelAllReminders);
+    await resetUserDataCore(auth, remote, s, cancelAllReminders, clearLocalCaches);
 
     expect(remote.deleted.map((d) => d.table).sort()).toEqual([...RESET_REMOTE_TABLES].sort());
     expect(remote.deleted.every((d) => d.userId === USER_ID)).toBe(true);
@@ -114,6 +117,7 @@ describe('resetUserDataCore', () => {
     expect(await s.challenge.list('weight')).toEqual([]);
 
     expect(cancelAllReminders).toHaveBeenCalledTimes(1);
+    expect(clearLocalCaches).toHaveBeenCalledTimes(1);
     expect(auth.signedOut).toBe(true);
   });
 
@@ -127,11 +131,15 @@ describe('resetUserDataCore', () => {
     const s = stores();
     await s.dashboard.setProfile({ sex: 'female', age: 25, heightCm: 165, activityFactor: 1.2 });
     const cancelAllReminders = jest.fn(async () => {});
+    const clearLocalCaches = jest.fn(async () => {});
 
-    await expect(resetUserDataCore(auth, remote, s, cancelAllReminders)).rejects.toThrow('network down');
+    await expect(
+      resetUserDataCore(auth, remote, s, cancelAllReminders, clearLocalCaches),
+    ).rejects.toThrow('network down');
 
     expect(await s.dashboard.getProfile()).not.toBeNull();
     expect(cancelAllReminders).not.toHaveBeenCalled();
+    expect(clearLocalCaches).not.toHaveBeenCalled();
     expect(auth.signedOut).toBe(false);
   });
 });

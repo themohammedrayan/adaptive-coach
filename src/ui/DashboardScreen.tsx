@@ -32,7 +32,7 @@ import { addDays } from '../engine';
 import type { IsoDate } from '../engine';
 import { getLatestCoachNote, type CoachNote } from '../coaching';
 import { getFoodLogRuntime } from '../food-log/runtime';
-import type { Tab } from '../app/index';
+import type { Tab } from './health/HealthApp';
 import { AppButton, Card, Overline, Row, SegmentedControl } from './kit';
 import { space, type, useTheme } from './theme';
 

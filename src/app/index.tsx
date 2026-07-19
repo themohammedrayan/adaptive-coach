@@ -1,34 +1,20 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getDashboardRuntime } from '../dashboard/runtime';
-import { ChallengesScreen } from '../ui/ChallengesScreen';
-import { CoachNotesFeed } from '../ui/CoachNotesFeed';
-import { DashboardScreen } from '../ui/DashboardScreen';
-import { FoodLogScreen } from '../ui/FoodLogScreen';
-import { TabIcon, type TabIconName } from '../ui/kit';
-import { ProfileScreen } from '../ui/ProfileScreen';
+import { useAppMode } from '../lib/appMode';
+import { FinanceApp } from '../ui/finance/FinanceApp';
+import { HealthApp } from '../ui/health/HealthApp';
+import { ModeSwitcher } from '../ui/kit';
 import { ProfileSetupScreen } from '../ui/ProfileSetupScreen';
 import { SignIn } from '../ui/SignIn';
-import { space, type, useTheme } from '../ui/theme';
+import { useTheme } from '../ui/theme';
 import { useSession } from '../ui/useSession';
-import { WeightScreen } from '../ui/WeightScreen';
-
-export type Tab = 'home' | 'food' | 'weight' | 'challenges' | 'coach' | 'profile';
-
-const TABS: { key: Tab; label: string; icon: TabIconName; title: string }[] = [
-  { key: 'home', label: 'Home', icon: 'home', title: 'Today' },
-  { key: 'food', label: 'Food', icon: 'food', title: 'Food log' },
-  { key: 'weight', label: 'Weight', icon: 'weight', title: 'Weight' },
-  { key: 'challenges', label: 'Challenges', icon: 'challenges', title: 'Challenges' },
-  { key: 'coach', label: 'Coach', icon: 'coach', title: 'Coach' },
-  { key: 'profile', label: 'Profile', icon: 'profile', title: 'Profile' },
-];
 
 export default function Index() {
   const t = useTheme();
   const { session, loading } = useSession();
-  const [tab, setTab] = useState<Tab>('home');
+  const { mode, setMode } = useAppMode();
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
   const checkProfile = useCallback(async () => {
@@ -41,16 +27,25 @@ export default function Index() {
       void checkProfile();
     } else {
       setHasProfile(null);
-      setTab('home');
     }
   }, [session, checkProfile]);
 
-  if (loading) return null;
+  if (loading || mode === null) return null;
 
   if (!session) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
         <SignIn />
+      </SafeAreaView>
+    );
+  }
+
+  const modeSwitcher = <ModeSwitcher mode={mode} onChange={setMode} />;
+
+  if (mode === 'finance') {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
+        <FinanceApp modeSwitcher={modeSwitcher} />
       </SafeAreaView>
     );
   }
@@ -65,71 +60,13 @@ export default function Index() {
     );
   }
 
-  const active = TABS.find((x) => x.key === tab)!;
-  const today = new Date().toLocaleDateString(undefined, {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
-
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
-      <View style={styles.header}>
-        <Text style={[type.title, { color: t.ink }]}>{active.title}</Text>
-        {tab === 'home' && <Text style={[type.caption, { color: t.muted }]}>{today}</Text>}
-      </View>
-
-      <View style={styles.content}>
-        {tab === 'home' && <DashboardScreen onNavigate={setTab} />}
-        {tab === 'food' && <FoodLogScreen />}
-        {tab === 'weight' && <WeightScreen />}
-        {tab === 'challenges' && <ChallengesScreen />}
-        {tab === 'coach' && <CoachNotesFeed />}
-        {tab === 'profile' && <ProfileScreen />}
-      </View>
-
-      <View
-        style={[
-          styles.tabBar,
-          { backgroundColor: t.card, borderTopColor: t.hairline },
-        ]}
-      >
-        {TABS.map(({ key, label, icon }) => {
-          const isActive = key === tab;
-          const color = isActive ? t.accent : t.muted;
-          return (
-            <Pressable
-              key={key}
-              onPress={() => setTab(key)}
-              style={({ pressed }) => [styles.tabItem, { opacity: pressed ? 0.6 : 1 }]}
-            >
-              <TabIcon name={icon} color={color} />
-              <Text style={[styles.tabLabel, { color, fontWeight: isActive ? '600' : '400' }]}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+      <HealthApp modeSwitcher={modeSwitcher} />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
-  header: {
-    paddingHorizontal: space.l,
-    paddingTop: space.m,
-    paddingBottom: space.s,
-    gap: 2,
-  },
-  content: { flex: 1 },
-  tabBar: {
-    flexDirection: 'row',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    paddingTop: 6,
-    paddingBottom: 8,
-  },
-  tabItem: { flex: 1, alignItems: 'center', gap: 3 },
-  tabLabel: { fontSize: 11 },
 });

@@ -12,6 +12,11 @@ export const RESET_REMOTE_TABLES = [
   'body_metrics',
   'coach_chat_turns',
   'coach_notes',
+  'finance_accounts',
+  'finance_categories',
+  'finance_transactions',
+  'finance_valuations',
+  'finance_recurring_transactions',
 ] as const;
 
 export interface ResetAuth {
@@ -42,6 +47,7 @@ export async function resetUserDataCore(
   remote: ResetRemote,
   stores: ResetStores,
   cancelAllReminders: () => Promise<void>,
+  clearLocalCaches: () => Promise<void>,
 ): Promise<void> {
   const userId = await auth.getUserId();
   if (userId === null) throw new Error('resetUserData: no signed-in user');
@@ -57,6 +63,10 @@ export async function resetUserDataCore(
     stores.challenge.clearAll(),
   ]);
 
+  // Finance has no full local store (decision: lightweight bolt-on), just a
+  // cache + outbox — those AsyncStorage keys aren't caught by anything above.
+  await clearLocalCaches();
+
   await cancelAllReminders();
   await auth.signOut();
 }
@@ -70,6 +80,8 @@ export async function resetUserData(): Promise<void> {
   const { getFoodLogRuntime } = await import('../food-log/runtime');
   const { cancelReminder } = await import('../dashboard/reminders');
   const { REMINDER_IDS } = await import('../dashboard/reminderSchedule');
+  const { clearFinanceCache } = await import('../finance/cache');
+  const { clearOutbox } = await import('../finance/outbox');
 
   const auth: ResetAuth = {
     getUserId: async () => {
@@ -108,5 +120,7 @@ export async function resetUserData(): Promise<void> {
       (Object.keys(REMINDER_IDS) as ReminderKind[]).map((kind) => cancelReminder(kind)),
     ).then(() => undefined);
 
-  await resetUserDataCore(auth, remote, stores, cancelAllReminders);
+  const clearLocalCaches = () => Promise.all([clearFinanceCache(), clearOutbox()]).then(() => undefined);
+
+  await resetUserDataCore(auth, remote, stores, cancelAllReminders, clearLocalCaches);
 }

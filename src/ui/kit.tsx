@@ -308,7 +308,17 @@ export function Dot({ color, size = 8 }: { color: string; size?: number }) {
 
 /* ---------------------------------------------------------------- tab icons */
 
-export type TabIconName = 'home' | 'food' | 'weight' | 'challenges' | 'coach' | 'profile';
+export type TabIconName =
+  | 'home'
+  | 'food'
+  | 'weight'
+  | 'challenges'
+  | 'coach'
+  | 'profile'
+  | 'overview'
+  | 'transactions'
+  | 'accounts'
+  | 'reports';
 
 /**
  * Hand-drawn 24px line icons — no icon font is installed (expo-symbols is
@@ -353,7 +363,95 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
           <Path d="M4.8 20a7.5 7.5 0 0 1 14.4 0" {...p} />
         </>
       )}
+      {name === 'overview' && <Polyline points="4,16 9,11 12,14 20,5" {...p} />}
+      {name === 'transactions' && (
+        <>
+          <Path d="M5 7h14" {...p} />
+          <Path d="M5 12h14" {...p} />
+          <Path d="M5 17h9" {...p} />
+        </>
+      )}
+      {name === 'accounts' && (
+        <>
+          <Path d="M3.5 7V6a2 2 0 0 1 2-2h9" {...p} />
+          <Rect x={3.5} y={7} width={17} height={11} rx={2} {...p} />
+          <Rect x={14.5} y={11} width={5} height={4} rx={1} {...p} />
+        </>
+      )}
+      {name === 'reports' && (
+        <>
+          <Rect x={5} y={13} width={3.5} height={7} rx={0.8} {...p} />
+          <Rect x={10.5} y={9} width={3.5} height={11} rx={0.8} {...p} />
+          <Rect x={16} y={5} width={3.5} height={15} rx={0.8} {...p} />
+        </>
+      )}
     </Svg>
+  );
+}
+
+/* --------------------------------------------------------------- tab bar */
+
+/** Shared bottom tab bar shape — Health and Finance each supply their own tab list. */
+export function BottomTabBar<T extends string>({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: { key: T; label: string; icon: TabIconName }[];
+  active: T;
+  onChange: (key: T) => void;
+}) {
+  const t = useTheme();
+  return (
+    <View style={[tabBarStyles.bar, { backgroundColor: t.card, borderTopColor: t.hairline }]}>
+      {tabs.map(({ key, label, icon }) => {
+        const isActive = key === active;
+        const color = isActive ? t.accent : t.muted;
+        return (
+          <Pressable
+            key={key}
+            onPress={() => onChange(key)}
+            style={({ pressed }) => [tabBarStyles.item, { opacity: pressed ? 0.6 : 1 }]}
+          >
+            <TabIcon name={icon} color={color} />
+            <Text style={[tabBarStyles.label, { color, fontWeight: isActive ? '600' : '400' }]}>{label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const tabBarStyles = StyleSheet.create({
+  bar: {
+    flexDirection: 'row',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingTop: 6,
+    paddingBottom: 8,
+  },
+  item: { flex: 1, alignItems: 'center', gap: 3 },
+  label: { fontSize: 11 },
+});
+
+/** Top-right Health/Finance app-mode toggle, shared by both trees' headers. */
+export function ModeSwitcher({
+  mode,
+  onChange,
+}: {
+  mode: 'health' | 'finance';
+  onChange: (mode: 'health' | 'finance') => void;
+}) {
+  return (
+    <View style={{ width: 168 }}>
+      <SegmentedControl
+        options={[
+          { value: 'health' as const, label: 'Health' },
+          { value: 'finance' as const, label: 'Finance' },
+        ]}
+        value={mode}
+        onChange={onChange}
+      />
+    </View>
   );
 }
 

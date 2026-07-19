@@ -217,4 +217,12 @@ export class SQLiteStore implements DashboardStore {
       );
     }
   }
+
+  async clearAll(): Promise<void> {
+    await this.db.execAsync(`
+      delete from profile;
+      delete from engine_result;
+      delete from reminder_config;
+    `);
+  }
 }

@@ -53,4 +53,7 @@ export interface FoodLogStore {
   markPushed(kind: 'foods' | 'entries' | 'favorites', ids: string[]): Promise<void>;
   getKV(key: string): Promise<string | null>;
   setKV(key: string, value: string): Promise<void>;
+
+  /** Wipes foods, entries, favorites, overrides, daily flags, and sync KV — used by account reset. */
+  clearAll(): Promise<void>;
 }

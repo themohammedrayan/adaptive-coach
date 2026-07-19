@@ -19,4 +19,7 @@ export interface DashboardStore {
   /** Returns DEFAULT_REMINDER_CONFIG when unset. */
   getReminderConfig(): Promise<ReminderConfig>;
   setReminderConfig(config: ReminderConfig): Promise<void>;
+
+  /** Wipes profile, cached engine result, and reminder config — used by account reset. */
+  clearAll(): Promise<void>;
 }

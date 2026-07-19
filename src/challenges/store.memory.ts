@@ -26,4 +26,8 @@ export class MemoryStore implements ChallengeStore {
     }
     return null;
   }
+
+  async clearAll(): Promise<void> {
+    this.challenges.clear();
+  }
 }

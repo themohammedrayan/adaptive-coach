@@ -32,4 +32,10 @@ export class MemoryStore implements DashboardStore {
   async setReminderConfig(config: ReminderConfig): Promise<void> {
     this.reminderConfig = config;
   }
+
+  async clearAll(): Promise<void> {
+    this.profile = null;
+    this.lastResult = null;
+    this.reminderConfig = null;
+  }
 }

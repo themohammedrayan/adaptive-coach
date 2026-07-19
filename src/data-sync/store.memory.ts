@@ -67,4 +67,9 @@ export class MemoryStore implements BodyMetricsStore {
   async setKV(key: string, value: string): Promise<void> {
     this.kv.set(key, value);
   }
+
+  async clearAll(): Promise<void> {
+    this.rows.clear();
+    this.kv.clear();
+  }
 }

@@ -158,4 +158,11 @@ export class SQLiteStore implements BodyMetricsStore {
       value,
     );
   }
+
+  async clearAll(): Promise<void> {
+    await this.db.execAsync(`
+      delete from body_metrics;
+      delete from kv;
+    `);
+  }
 }

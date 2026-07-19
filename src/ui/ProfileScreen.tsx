@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getChallengeRuntime } from '../challenges/runtime';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import {
@@ -13,6 +13,7 @@ import {
 import { getDashboardRuntime } from '../dashboard/runtime';
 import type { PersonProfile } from '../dashboard/types';
 import { getFoodLogRuntime } from '../food-log/runtime';
+import { resetUserData } from '../lib/resetAccount';
 import { supabase } from '../lib/supabase';
 import { AppButton, AppSwitch, Card, Chip, Field, Overline, ProgressBar, Row } from './kit';
 import { space, type, useTheme } from './theme';
@@ -35,6 +36,7 @@ export function ProfileScreen() {
   const [reminderError, setReminderError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const load = useCallback(async () => {
     const [dashRt, foodRt, dataRt, challengeRt] = await Promise.all([
@@ -84,6 +86,31 @@ export function ProfileScreen() {
       // Permission denial must be visible, not silent (Dashboard BRD §B2).
       setReminderError(e instanceof Error ? e.message : String(e));
     }
+  };
+
+  const confirmReset = () => {
+    Alert.alert(
+      'Reset all data?',
+      'This permanently deletes your profile, weights, food log, and coach history from this device and the server, then signs you out. This can’t be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete everything',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setResetting(true);
+              try {
+                await resetUserData();
+              } catch (e) {
+                setResetting(false);
+                Alert.alert('Reset failed', e instanceof Error ? e.message : String(e));
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   if (snapshot === null || snapshot.profile === null) return null;
@@ -176,7 +203,18 @@ export function ProfileScreen() {
         </Card>
       )}
 
-      <AppButton title="Sign out" onPress={() => supabase.auth.signOut()} variant="danger" />
+      <AppButton
+        title="Sign out"
+        onPress={() => supabase.auth.signOut()}
+        variant="danger"
+        disabled={resetting}
+      />
+      <AppButton
+        title="Reset all data"
+        onPress={confirmReset}
+        variant="danger"
+        busy={resetting}
+      />
     </ScrollView>
   );
 }

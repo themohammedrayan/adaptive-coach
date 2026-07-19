@@ -14,4 +14,7 @@ export interface ChallengeStore {
   list(domain: ChallengeDomain, statuses?: ChallengeStatus[]): Promise<Challenge[]>;
   /** The single active+primary challenge for a domain, or null if none. */
   getPrimary(domain: ChallengeDomain): Promise<Challenge | null>;
+
+  /** Wipes all challenges — used by account reset. */
+  clearAll(): Promise<void>;
 }

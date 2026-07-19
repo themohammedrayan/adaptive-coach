@@ -139,4 +139,13 @@ export class MemoryStore implements FoodLogStore {
   async setKV(key: string, value: string): Promise<void> {
     this.kv.set(key, value);
   }
+
+  async clearAll(): Promise<void> {
+    this.foods.clear();
+    this.overrides.clear();
+    this.entries.clear();
+    this.favorites.clear();
+    this.dailyFlags.clear();
+    this.kv.clear();
+  }
 }

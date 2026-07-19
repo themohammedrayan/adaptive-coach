@@ -128,4 +128,8 @@ export class SQLiteStore implements ChallengeStore {
     );
     return r ? fromDb(r) : null;
   }
+
+  async clearAll(): Promise<void> {
+    await this.db.execAsync('delete from challenges;');
+  }
 }

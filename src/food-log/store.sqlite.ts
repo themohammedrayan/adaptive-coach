@@ -472,4 +472,15 @@ export class SQLiteStore implements FoodLogStore {
       value,
     );
   }
+
+  async clearAll(): Promise<void> {
+    await this.db.execAsync(`
+      delete from log_entries;
+      delete from favorites;
+      delete from food_unit_overrides;
+      delete from foods;
+      delete from daily_flags;
+      delete from kv;
+    `);
+  }
 }

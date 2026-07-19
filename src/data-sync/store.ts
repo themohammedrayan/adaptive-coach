@@ -34,4 +34,7 @@ export interface BodyMetricsStore {
   markPushed(ids: string[]): Promise<void>;
   getKV(key: string): Promise<string | null>;
   setKV(key: string, value: string): Promise<void>;
+
+  /** Wipes all body metrics and sync KV — used by account reset. */
+  clearAll(): Promise<void>;
 }

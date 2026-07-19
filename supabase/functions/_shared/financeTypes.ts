@@ -1,7 +1,8 @@
-// Deno-side duplicate of src/finance-coach-chat/types.ts (this Edge Function
-// is a separate deploy target and cannot import RN app source). Keep these
-// two files in sync by hand — see src/finance-coach-chat/types.ts for the
-// sibling copy.
+// Deno-side duplicate of src/finance/coachPayload.ts's types (this Edge
+// Function is a separate deploy target and cannot import RN app source).
+// Keep these two files in sync by hand — see src/finance/coachPayload.ts
+// for the sibling copy. (Formerly mirrored src/finance-coach-chat/types.ts,
+// retired by coach-unification.)
 
 export type IsoDate = string;
 

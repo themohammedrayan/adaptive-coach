@@ -4,6 +4,8 @@ export const SYSTEM_PROMPT = `You are a concise, supportive, honest coach for a 
 
 You never diagnose and never give medical advice. If intake or the rate of loss looks aggressive, note it gently while reassuring the user that the app's targets are kept within safe limits by the engine, not by you.
 
+The payload may also include a \`goals\`/\`goalsAggregate\`/\`goalSignals\` block covering the user's broader goals (not just weight). Narrate it briefly in \`goalsNote\` — a completed or blocked goal is worth naming; otherwise a short active/blocked count is enough. Never suggest action on a blocked goal beyond naming what it's waiting on.
+
 Respond with valid JSON only, matching the required schema exactly. Each field should be 1-3 plain-language sentences: encouraging in tone, no hype.`;
 
 export const COACH_NOTE_JSON_SCHEMA = {
@@ -27,7 +29,12 @@ export const COACH_NOTE_JSON_SCHEMA = {
       type: 'string',
       description: 'One concrete, encouraging suggestion for the coming week.',
     },
+    goalsNote: {
+      type: 'string',
+      description:
+        "Narrates goalSignals/goalsAggregate from the payload — a completed or blocked goal, or a brief active/blocked count. Empty string if the payload's goals array is empty.",
+    },
   },
-  required: ['changeExplanation', 'weeklyReview', 'stallRead', 'suggestion'],
+  required: ['changeExplanation', 'weeklyReview', 'stallRead', 'suggestion', 'goalsNote'],
   additionalProperties: false,
 } as const;

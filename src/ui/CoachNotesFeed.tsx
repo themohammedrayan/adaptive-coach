@@ -74,6 +74,7 @@ function CoachNoteCard({ note }: { note: CoachNote }) {
         <Text style={[type.body, { color: t.secondary }]}>{note.weeklyReview}</Text>
         <Text style={[type.body, { color: t.secondary }]}>{note.stallRead}</Text>
         <Text style={[type.body, { color: t.ink }]}>{note.suggestion}</Text>
+        {note.goalsNote !== '' && <Text style={[type.body, { color: t.secondary }]}>{note.goalsNote}</Text>}
       </View>
     </Card>
   );

@@ -19,6 +19,9 @@ function basePayload(overrides: Partial<CoachPayload> = {}): CoachPayload {
     trend: [],
     adherence: { loggedDays: 11, windowDays: 14, avgIntake: 2010, avgTarget: 2050 },
     reasons: [],
+    goals: [],
+    goalsAggregate: { activeCount: 0, blockedCount: 0, completedThisWeekCount: 0 },
+    goalSignals: [],
     ...overrides,
   };
 }
@@ -89,5 +92,41 @@ describe('fallbackNote — weekly review numbers', () => {
     expect(note.weeklyReview).toContain('11 of 14');
     expect(note.weeklyReview).toContain('2010');
     expect(note.weeklyReview).toContain('2050');
+  });
+});
+
+describe('fallbackNote — Goals BRD §H.4 (goalsNote)', () => {
+  it('is empty when there are no active goals', () => {
+    const note = fallbackNote(basePayload());
+    expect(note.goalsNote).toBe('');
+  });
+
+  it('names a completed goal over a generic summary', () => {
+    const note = fallbackNote(
+      basePayload({
+        goalsAggregate: { activeCount: 3, blockedCount: 1, completedThisWeekCount: 1 },
+        goalSignals: [{ code: 'GOAL_COMPLETED', goalExternalId: 'g1', title: 'Read 12 books' }],
+      }),
+    );
+    expect(note.goalsNote).toContain('Read 12 books');
+  });
+
+  it('names what a blocked goal is waiting on', () => {
+    const note = fallbackNote(
+      basePayload({
+        goalsAggregate: { activeCount: 2, blockedCount: 1, completedThisWeekCount: 0 },
+        goalSignals: [
+          { code: 'GOAL_BLOCKED', goalExternalId: 'g2', title: 'Buy the bike', blockedByTitle: 'Clear credit card debt' },
+        ],
+      }),
+    );
+    expect(note.goalsNote).toContain('Buy the bike');
+    expect(note.goalsNote).toContain('Clear credit card debt');
+  });
+
+  it('falls back to a generic active/blocked count with no signals', () => {
+    const note = fallbackNote(basePayload({ goalsAggregate: { activeCount: 4, blockedCount: 2, completedThisWeekCount: 0 } }));
+    expect(note.goalsNote).toContain('4 goals active');
+    expect(note.goalsNote).toContain('2 blocked');
   });
 });

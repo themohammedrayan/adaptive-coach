@@ -70,9 +70,9 @@ export function OverviewScreen() {
         </Card>
       )}
 
-      <Pressable onPress={() => router.push('/finance-coach-chat')}>
+      <Pressable onPress={() => router.push('/coach-chat')}>
         <Card style={{ gap: 2 }}>
-          <Text style={[type.body, { color: t.ink, fontWeight: '600' }]}>Ask your finance coach</Text>
+          <Text style={[type.body, { color: t.ink, fontWeight: '600' }]}>Ask the coach</Text>
           <Text style={[type.caption, { color: t.muted }]}>
             Get tips and a read on your spending, budget, and goal pace.
           </Text>

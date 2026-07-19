@@ -8,7 +8,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import { canonicalize, sha256Hex } from '../_shared/hash.ts';
 import { CHAT_ANSWER_JSON_SCHEMA, CHAT_SYSTEM_PROMPT } from '../_shared/chatPrompt.ts';
 import { fallbackAnswer, validateChatAnswer } from '../_shared/chatLogic.ts';
-import type { ChatAnswerContent, CoachChatTurn, CoachPayload } from '../_shared/types.ts';
+import type { ChatAnswerContent, CoachChatTurn, UnifiedCoachPayload } from '../_shared/types.ts';
 
 const MODEL_ID = 'gpt-5-mini';
 const MODEL_TIMEOUT_MS = 20_000;
@@ -72,7 +72,7 @@ interface ChatHistoryTurn {
 
 async function callModel(
   question: string,
-  payload: CoachPayload,
+  payload: UnifiedCoachPayload,
   history: ChatHistoryTurn[],
 ): Promise<ChatAnswerContent | null> {
   const controller = new AbortController();
@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
 
   let requestId: string;
   let question: string;
-  let payload: CoachPayload;
+  let payload: UnifiedCoachPayload;
   let history: ChatHistoryTurn[];
   try {
     const body = await req.json();
@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
     history = Array.isArray(body.history) ? body.history : [];
     if (typeof requestId !== 'string' || requestId.length === 0) throw new Error('bad requestId');
     if (typeof question !== 'string' || question.trim().length === 0) throw new Error('bad question');
-    if (!payload || typeof payload.weekOf !== 'string') throw new Error('bad payload');
+    if (!payload || typeof payload.today !== 'string') throw new Error('bad payload');
   } catch {
     return json({ error: 'invalid payload' }, 400);
   }

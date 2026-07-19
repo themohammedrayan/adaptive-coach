@@ -8,6 +8,7 @@ interface CoachNoteRow {
   weekly_review: string;
   stall_read: string;
   suggestion: string;
+  goals_note: string;
   source: 'model' | 'fallback';
   model: string | null;
   generated_at: string;
@@ -22,6 +23,7 @@ function fromServerRow(r: CoachNoteRow): CoachNote {
     weeklyReview: r.weekly_review,
     stallRead: r.stall_read,
     suggestion: r.suggestion,
+    goalsNote: r.goals_note,
     source: r.source,
     model: r.model,
     generatedAt: r.generated_at,
@@ -49,7 +51,7 @@ export async function listCoachNotes(limit = 52): Promise<CoachNote[]> {
   const { data, error } = await supabase
     .from('coach_notes')
     .select(
-      'id, week_of, change_explanation, weekly_review, stall_read, suggestion, source, model, generated_at, payload_hash',
+      'id, week_of, change_explanation, weekly_review, stall_read, suggestion, goals_note, source, model, generated_at, payload_hash',
     )
     .order('week_of', { ascending: false })
     .limit(limit);

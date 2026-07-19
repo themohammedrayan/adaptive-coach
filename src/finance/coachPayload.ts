@@ -1,15 +1,59 @@
 import type { IsoDate } from '../engine';
-import { budgetProgress } from '../finance/budget';
-import { categoryBreakdown, incomeVsExpense } from '../finance/categoryTotals';
-import { financeGoalProgress } from '../finance/goals';
-import { assessFinancialHealth, computeFinancialHealthInputs } from '../finance/health';
-import { accountBalanceAsOf, netWorthAsOf, netWorthSeries } from '../finance/netWorth';
-import { lastNMonthPrefixes, monthEndDatesForPrefixes } from '../finance/periods';
-import { projectNetWorth } from '../finance/projection';
-import type { Account, AccountValuation, Budget, Category, FinanceGoal, Transaction } from '../finance/types';
-import type { FinanceCoachPayload } from './types';
+import { budgetProgress } from './budget';
+import { categoryBreakdown, incomeVsExpense } from './categoryTotals';
+import { financeGoalProgress } from './goals';
+import { assessFinancialHealth, computeFinancialHealthInputs, type FinancialHealthStatus } from './health';
+import { accountBalanceAsOf, netWorthAsOf, netWorthSeries } from './netWorth';
+import { lastNMonthPrefixes, monthEndDatesForPrefixes } from './periods';
+import { projectNetWorth } from './projection';
+import type { Account, AccountValuation, Budget, Category, FinanceGoal, Transaction } from './types';
 
 const DEFAULT_CURRENCY = 'INR';
+
+export interface FinanceAccountSummary {
+  name: string;
+  type: string;
+  balanceMinor: number;
+  isLiability: boolean;
+}
+
+export interface FinanceGoalSummary {
+  name: string;
+  targetAmountMinor: number;
+  savedMinor: number;
+  targetDate: IsoDate | null;
+}
+
+export interface FinanceBudgetSummary {
+  /** Null = the overall monthly budget. */
+  categoryName: string | null;
+  budgetedMinor: number;
+  spentMinor: number;
+}
+
+export interface FinanceHealthReadSummary {
+  status: FinancialHealthStatus;
+  reasons: string[];
+}
+
+export interface FinanceProjectionPoint {
+  monthsAhead: number;
+  projectedNetWorthMinor: number;
+}
+
+/** Aggregates only, no raw transaction list — same "narrates, never computes" grounding contract as the health coach's CoachPayload. */
+export interface FinanceCoachPayload {
+  today: IsoDate;
+  currency: string;
+  netWorthMinor: number;
+  month: { incomeMinor: number; expenseMinor: number };
+  topExpenseCategories: { categoryName: string; totalMinor: number }[];
+  accounts: FinanceAccountSummary[];
+  goals: FinanceGoalSummary[];
+  budgets: FinanceBudgetSummary[];
+  healthRead: FinanceHealthReadSummary;
+  projection: FinanceProjectionPoint[];
+}
 
 /** Pure aggregation only, mirroring assembleCoachPayload's contract for the health coach — never invents a number. */
 export function assembleFinanceCoachPayload(

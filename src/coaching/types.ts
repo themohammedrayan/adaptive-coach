@@ -31,6 +31,33 @@ export interface CoachPayloadCurrent {
   boundHit: BoundHit;
 }
 
+/** Goals BRD §H.2 — a capped, narration-ready summary of one resolved goal. */
+export interface CoachGoalSummary {
+  externalId: string;
+  type: 'metric' | 'fund' | 'habit' | 'milestone';
+  title: string;
+  pct: number | null;
+  status: 'on_track' | 'behind' | 'ahead' | 'blocked' | 'no_data' | 'completed';
+  daysUntilTargetDate: number | null;
+  blocked: boolean;
+}
+
+export interface CoachGoalsAggregate {
+  activeCount: number;
+  blockedCount: number;
+  completedThisWeekCount: number;
+}
+
+/**
+ * Goals BRD §H.3 — coaching-owned signal union, carried parallel to (never
+ * merged into) Engine's `Reason` union, which stays engine-internal only
+ * (§B.3). The coach narrates these; it never recomputes anything from them.
+ */
+export type GoalSignal =
+  | { code: 'GOAL_COMPLETED'; goalExternalId: string; title: string }
+  | { code: 'GOAL_BLOCKED'; goalExternalId: string; title: string; blockedByTitle: string }
+  | { code: 'GOAL_DEADLINE_NEAR'; goalExternalId: string; title: string; daysLeft: number };
+
 /** Coaching BRD §4 — the grounding payload contract. Aggregates only, no raw entries/PII. */
 export interface CoachPayload {
   weekOf: IsoDate;
@@ -39,6 +66,10 @@ export interface CoachPayload {
   trend: { date: IsoDate; trendKg: number }[];
   adherence: { loggedDays: number; windowDays: number; avgIntake: number; avgTarget: number };
   reasons: Reason[];
+  /** Goals BRD §H.2 — capped, e.g. top 10 by priority ascending, then updatedAt descending. */
+  goals: CoachGoalSummary[];
+  goalsAggregate: CoachGoalsAggregate;
+  goalSignals: GoalSignal[];
 }
 
 export interface CoachNoteContent {
@@ -46,6 +77,8 @@ export interface CoachNoteContent {
   weeklyReview: string;
   stallRead: string;
   suggestion: string;
+  /** Goals BRD §H.4 — narrates goalSignals/goalsAggregate; empty string when there are no active goals to report on. */
+  goalsNote: string;
 }
 
 /** Coaching BRD §8 — storage shape. */

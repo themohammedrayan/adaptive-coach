@@ -1,5 +1,5 @@
 import { allNumbersAllowed, collectAllowedNumbers } from './numberGuard.ts';
-import type { CoachNoteContent, CoachPayload, Reason } from './types.ts';
+import type { CoachNoteContent, CoachPayload, GoalSignal, Reason } from './types.ts';
 
 function findReason<C extends Reason['code']>(
   reasons: Reason[],
@@ -8,8 +8,27 @@ function findReason<C extends Reason['code']>(
   return reasons.find((r): r is Extract<Reason, { code: C }> => r.code === code);
 }
 
+function findGoalSignal<C extends GoalSignal['code']>(
+  signals: GoalSignal[],
+  code: C,
+): Extract<GoalSignal, { code: C }> | undefined {
+  return signals.find((s): s is Extract<GoalSignal, { code: C }> => s.code === code);
+}
+
 function formatSigned(n: number): string {
   return n > 0 ? `+${n}` : `${n}`;
+}
+
+/** Goals BRD §H.4 — same reason-keyed-branch pattern as the weight fields, just keyed on goalSignals/goalsAggregate instead. */
+function fallbackGoalsNote(payload: CoachPayload): string {
+  const completed = findGoalSignal(payload.goalSignals, 'GOAL_COMPLETED');
+  if (completed) return `You finished "${completed.title}" this week.`;
+
+  const blocked = findGoalSignal(payload.goalSignals, 'GOAL_BLOCKED');
+  if (blocked) return `"${blocked.title}" is on hold until "${blocked.blockedByTitle}" is done.`;
+
+  if (payload.goalsAggregate.activeCount === 0) return '';
+  return `${payload.goalsAggregate.activeCount} goals active, ${payload.goalsAggregate.blockedCount} blocked.`;
 }
 
 /**
@@ -29,6 +48,7 @@ export function fallbackNote(payload: CoachPayload): CoachNoteContent {
       weeklyReview: note,
       stallRead: "Not enough data yet to read a trend — that'll improve once more days are logged.",
       suggestion: 'Log a couple more days and I can fine-tune it.',
+      goalsNote: fallbackGoalsNote(payload),
     };
   }
 
@@ -58,7 +78,7 @@ export function fallbackNote(payload: CoachPayload): CoachNoteContent {
     ? 'We adjust gradually to keep things smooth, so expect small weekly nudges.'
     : 'Keep logging consistently — that keeps the trend and your target accurate.';
 
-  return { changeExplanation, weeklyReview, stallRead, suggestion };
+  return { changeExplanation, weeklyReview, stallRead, suggestion, goalsNote: fallbackGoalsNote(payload) };
 }
 
 const MAX_FIELD_CHARS = 500;
@@ -73,10 +93,14 @@ const MAX_FIELD_CHARS = 500;
  * is not).
  */
 export function validateNote(note: CoachNoteContent, payload: CoachPayload): boolean {
-  const fields = [note.changeExplanation, note.weeklyReview, note.stallRead, note.suggestion];
-  if (fields.some((f) => typeof f !== 'string' || f.trim().length === 0)) return false;
-  if (fields.some((f) => f.length > MAX_FIELD_CHARS)) return false;
+  const requiredFields = [note.changeExplanation, note.weeklyReview, note.stallRead, note.suggestion];
+  if (requiredFields.some((f) => typeof f !== 'string' || f.trim().length === 0)) return false;
+  // goalsNote may legitimately be empty (no active goals to report on) — Goals BRD §H.4.
+  if (typeof note.goalsNote !== 'string') return false;
+
+  const allFields = [...requiredFields, note.goalsNote];
+  if (allFields.some((f) => f.length > MAX_FIELD_CHARS)) return false;
 
   const allowed = collectAllowedNumbers(payload);
-  return fields.every((field) => allNumbersAllowed(field, allowed));
+  return allFields.every((field) => allNumbersAllowed(field, allowed));
 }

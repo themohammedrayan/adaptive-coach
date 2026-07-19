@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { createChallenge } from '../challenges';
 import { getChallengeRuntime } from '../challenges/runtime';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import { ACTIVITY_LEVELS, refreshDashboardSnapshot } from '../dashboard';
@@ -8,6 +7,8 @@ import { getDashboardRuntime } from '../dashboard/runtime';
 import type { PersonProfile } from '../dashboard/types';
 import type { Mode } from '../engine';
 import { getFoodLogRuntime } from '../food-log/runtime';
+import { upsertGoal } from '../goals/api';
+import { createMetricGoal } from '../goals/crud';
 import { AppButton, Card, Chip, Field, Row } from './kit';
 import { space, type, useTheme } from './theme';
 
@@ -99,12 +100,20 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
 
       const profile: PersonProfile = { sex, age: ageN, heightCm: heightN, activityFactor };
       await dashRt.store.setProfile(profile);
-      await createChallenge(
+      // Goals architecture decision — onboarding creates the goal directly
+      // (Challenge + its wrapping `goals` row together) rather than a bare
+      // Challenge, so nothing is ever left unwrapped.
+      const { goal } = await createMetricGoal(
         challengeRt.store,
-        { domain: 'weight', goalWeightKg: goalN, startWeightKg: effectiveWeight, horizonDays: horizonN },
+        { title: `${goalN}kg goal`, goalWeightKg: goalN, startWeightKg: effectiveWeight, horizonDays: horizonN },
         nowUtc,
         today,
       );
+      try {
+        await upsertGoal(goal);
+      } catch {
+        // offline — GoalsDataContext's backfill pass attaches a wrapping goal on the next successful load
+      }
       await refreshDashboardSnapshot(
         {
           dashboardStore: dashRt.store,

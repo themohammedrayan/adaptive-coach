@@ -10,7 +10,7 @@ import { AppButton, Card, Chip, EmptyState, FAB, Field, Overline, ProgressBar, R
 import { space, type, useTheme } from '../theme';
 import { useFinanceData } from './FinanceDataContext';
 
-export function GoalsScreen() {
+export function FundGoalsScreen() {
   const t = useTheme();
   const { accounts, transactions, valuations, goals, today, saveGoal, archiveGoal } = useFinanceData();
   const [addOpen, setAddOpen] = useState(false);

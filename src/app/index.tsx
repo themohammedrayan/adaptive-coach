@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getDashboardRuntime } from '../dashboard/runtime';
 import { useAppMode } from '../lib/appMode';
 import { FinanceApp } from '../ui/finance/FinanceApp';
+import { GoalsApp } from '../ui/goals/GoalsApp';
 import { HealthApp } from '../ui/health/HealthApp';
 import { ModeSwitcher } from '../ui/kit';
 import { ProfileSetupScreen } from '../ui/ProfileSetupScreen';
@@ -50,6 +51,9 @@ export default function Index() {
     );
   }
 
+  // Goals and Health both need the bio Profile/first weight goal set up
+  // first; Finance doesn't depend on it (unchanged from before Goals became
+  // the landing surface).
   if (hasProfile === null) return <View style={[styles.safe, { backgroundColor: t.page }]} />;
 
   if (!hasProfile) {
@@ -60,9 +64,17 @@ export default function Index() {
     );
   }
 
+  if (mode === 'health') {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
+        <HealthApp modeSwitcher={modeSwitcher} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
-      <HealthApp modeSwitcher={modeSwitcher} />
+      <GoalsApp modeSwitcher={modeSwitcher} />
     </SafeAreaView>
   );
 }

@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { addFavorite, type Food, type Meal, type Unit } from '../food-log';
 import { getFoodLogRuntime } from '../food-log/runtime';
@@ -84,18 +84,20 @@ export function EstimateMealScreen({ meal }: { meal: Meal | null }) {
   if (estimate !== null) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={[type.caption, { color: t.muted }]}>
-            Estimated with {estimate.confidence} confidence — review and edit before saving.
-          </Text>
-          <CreateFoodForm
-            defaultUnitId={defaultUnitId}
-            units={units}
-            initialValues={mealEstimateToCreateFoodInput(estimate, defaultUnitId)}
-            onDone={onFoodCreated}
-            onCancel={reset}
-          />
-        </ScrollView>
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView contentContainerStyle={styles.scroll}>
+            <Text style={[type.caption, { color: t.muted }]}>
+              Estimated with {estimate.confidence} confidence — review and edit before saving.
+            </Text>
+            <CreateFoodForm
+              defaultUnitId={defaultUnitId}
+              units={units}
+              initialValues={mealEstimateToCreateFoodInput(estimate, defaultUnitId)}
+              onDone={onFoodCreated}
+              onCancel={reset}
+            />
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -103,18 +105,20 @@ export function EstimateMealScreen({ meal }: { meal: Meal | null }) {
   if (unavailable) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll}>
-          <Text style={[type.caption, { color: t.warning }]}>
-            Couldn't produce a confident estimate — enter the food manually instead.
-          </Text>
-          <CreateFoodForm
-            defaultUnitId={defaultUnitId}
-            units={units}
-            initialValues={{ name: description.trim() }}
-            onDone={onFoodCreated}
-            onCancel={reset}
-          />
-        </ScrollView>
+        <KeyboardAvoidingView style={styles.flex} behavior="padding">
+          <ScrollView contentContainerStyle={styles.scroll}>
+            <Text style={[type.caption, { color: t.warning }]}>
+              Couldn't produce a confident estimate — enter the food manually instead.
+            </Text>
+            <CreateFoodForm
+              defaultUnitId={defaultUnitId}
+              units={units}
+              initialValues={{ name: description.trim() }}
+              onDone={onFoodCreated}
+              onCancel={reset}
+            />
+          </ScrollView>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     );
   }
@@ -126,36 +130,39 @@ export function EstimateMealScreen({ meal }: { meal: Meal | null }) {
         <Text style={[type.heading, { color: t.ink }]}>Estimate a meal</Text>
         <View style={styles.headerSpacer} />
       </View>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Card style={styles.card}>
-          <Field
-            label="Describe the meal"
-            placeholder="Two rotis with dal and a katori of rice"
-            value={description}
-            onChangeText={setDescription}
-            multiline
-          />
-          <Row gap={space.m}>
-            <AppButton title="Take photo" onPress={() => void pickImage('camera')} variant="secondary" small />
-            <AppButton title="Choose from library" onPress={() => void pickImage('library')} variant="secondary" small />
-          </Row>
-          {imageUri !== null && <Image source={{ uri: imageUri }} style={styles.preview} />}
-          {error !== null && <Text style={[type.caption, { color: t.danger }]}>{error}</Text>}
-          <AppButton
-            title="Estimate"
-            onPress={runEstimate}
-            busy={busy}
-            disabled={description.trim() === '' && !imageBase64}
-          />
-        </Card>
-        {units.length === 0 && <EmptyState message="Loading your units…" />}
-      </ScrollView>
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <Card style={styles.card}>
+            <Field
+              label="Describe the meal"
+              placeholder="Two rotis with dal and a katori of rice"
+              value={description}
+              onChangeText={setDescription}
+              multiline
+            />
+            <Row gap={space.m}>
+              <AppButton title="Take photo" onPress={() => void pickImage('camera')} variant="secondary" small />
+              <AppButton title="Choose from library" onPress={() => void pickImage('library')} variant="secondary" small />
+            </Row>
+            {imageUri !== null && <Image source={{ uri: imageUri }} style={styles.preview} />}
+            {error !== null && <Text style={[type.caption, { color: t.danger }]}>{error}</Text>}
+            <AppButton
+              title="Estimate"
+              onPress={runEstimate}
+              busy={busy}
+              disabled={description.trim() === '' && !imageBase64}
+            />
+          </Card>
+          {units.length === 0 && <EmptyState message="Loading your units…" />}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1 },
+  flex: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

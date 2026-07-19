@@ -17,6 +17,9 @@ export const RESET_REMOTE_TABLES = [
   'finance_transactions',
   'finance_valuations',
   'finance_recurring_transactions',
+  'finance_goals',
+  'finance_budgets',
+  'finance_coach_chat_turns',
 ] as const;
 
 export interface ResetAuth {

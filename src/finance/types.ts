@@ -24,6 +24,8 @@ export interface Account {
   interestRate: number | null;
   minimumPaymentMinor: MoneyMinor | null;
   dueDay: number | null;
+  /** Credit cards only. */
+  creditLimitMinor: MoneyMinor | null;
   source: 'manual' | 'imported';
   archivedAt: string | null;
   updatedAt: string;
@@ -94,5 +96,33 @@ export interface RecurringTransaction {
   endDate: IsoDate | null;
   lastMaterializedDate: IsoDate | null;
   active: boolean;
+  updatedAt: string;
+}
+
+/** A standing monthly spending target — editing it changes the target going forward, it doesn't rewrite past months. */
+export interface Budget {
+  id: string;
+  externalId: string;
+  /** Null = overall monthly cap; otherwise the per-category limit. */
+  categoryExternalId: string | null;
+  amountMinor: MoneyMinor;
+  currency: CurrencyCode;
+  archivedAt: string | null;
+  updatedAt: string;
+}
+
+export type FinanceGoalStatus = 'active' | 'completed' | 'archived';
+
+/** A savings goal ("save for a house") — progress tracks a linked account's live balance, never a manual check-in. */
+export interface FinanceGoal {
+  id: string;
+  externalId: string;
+  name: string;
+  targetAmountMinor: MoneyMinor;
+  currency: CurrencyCode;
+  linkedAccountExternalId: string;
+  targetDate: IsoDate | null;
+  status: FinanceGoalStatus;
+  archivedAt: string | null;
   updatedAt: string;
 }

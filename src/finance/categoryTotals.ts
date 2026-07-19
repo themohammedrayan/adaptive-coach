@@ -6,17 +6,17 @@ export interface CategoryTotal {
   totalMinor: number;
 }
 
-/** Totals by category for one kind within a given month, sorted largest first. Transfers/adjustments are never `kind`, so they're excluded automatically. */
+/** Totals by category for one kind within a given period (day/month/year prefix), sorted largest first. Transfers/adjustments are never `kind`, so they're excluded automatically. */
 export function categoryBreakdown(
   transactions: Transaction[],
   categories: Category[],
-  monthPrefix: string,
+  periodPrefix: string,
   kind: CategoryKind,
 ): CategoryTotal[] {
   const categoryByExternalId = new Map(categories.map((c) => [c.externalId, c]));
   const totals = new Map<string, number>();
   for (const t of transactions) {
-    if (t.type !== kind || t.categoryExternalId === null || !t.txnDate.startsWith(monthPrefix)) continue;
+    if (t.type !== kind || t.categoryExternalId === null || !t.txnDate.startsWith(periodPrefix)) continue;
     totals.set(t.categoryExternalId, (totals.get(t.categoryExternalId) ?? 0) + t.amountMinor);
   }
   return Array.from(totals.entries())

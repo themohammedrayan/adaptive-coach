@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getChallengeRuntime } from '../challenges/runtime';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import {
@@ -256,33 +256,35 @@ function EditProfileForm({
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Card style={styles.card}>
-        <Overline>Edit profile</Overline>
-        <Row>
-          <Chip label="Male" active={sex === 'male'} onPress={() => setSex('male')} />
-          <Chip label="Female" active={sex === 'female'} onPress={() => setSex('female')} />
-        </Row>
-        <Row gap={space.m}>
-          <Field label="Age" keyboardType="number-pad" value={age} onChangeText={setAge} style={styles.flex} />
-          <Field label="Height (cm)" keyboardType="decimal-pad" value={heightCm} onChangeText={setHeightCm} style={styles.flex} />
-        </Row>
-        <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Activity level</Text>
-        <Row style={styles.wrap}>
-          {ACTIVITY_LEVELS.map((level) => (
-            <Chip
-              key={level.label}
-              label={level.label}
-              active={activityFactor === level.value}
-              onPress={() => setActivityFactor(level.value)}
-            />
-          ))}
-        </Row>
-      </Card>
-      {error !== null && <Text style={[type.caption, { color: t.danger, textAlign: 'center' }]}>{error}</Text>}
-      <AppButton title="Save changes" onPress={save} busy={busy} />
-      <AppButton title="Cancel" onPress={onCancel} variant="ghost" disabled={busy} />
-    </ScrollView>
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
+      <ScrollView contentContainerStyle={styles.container}>
+        <Card style={styles.card}>
+          <Overline>Edit profile</Overline>
+          <Row>
+            <Chip label="Male" active={sex === 'male'} onPress={() => setSex('male')} />
+            <Chip label="Female" active={sex === 'female'} onPress={() => setSex('female')} />
+          </Row>
+          <Row gap={space.m}>
+            <Field label="Age" keyboardType="number-pad" value={age} onChangeText={setAge} style={styles.flex} />
+            <Field label="Height (cm)" keyboardType="decimal-pad" value={heightCm} onChangeText={setHeightCm} style={styles.flex} />
+          </Row>
+          <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Activity level</Text>
+          <Row style={styles.wrap}>
+            {ACTIVITY_LEVELS.map((level) => (
+              <Chip
+                key={level.label}
+                label={level.label}
+                active={activityFactor === level.value}
+                onPress={() => setActivityFactor(level.value)}
+              />
+            ))}
+          </Row>
+        </Card>
+        {error !== null && <Text style={[type.caption, { color: t.danger, textAlign: 'center' }]}>{error}</Text>}
+        <AppButton title="Save changes" onPress={save} busy={busy} />
+        <AppButton title="Cancel" onPress={onCancel} variant="ghost" disabled={busy} />
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

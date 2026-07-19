@@ -1,18 +1,42 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   upsertAccount,
+  upsertBudget,
   upsertCategory,
+  upsertGoal,
   upsertRecurringTransaction,
   upsertTransaction,
   upsertValuation,
 } from './api';
-import type { Account, AccountValuation, Category, RecurringTransaction, Transaction } from './types';
+import type {
+  Account,
+  AccountValuation,
+  Budget,
+  Category,
+  FinanceGoal,
+  RecurringTransaction,
+  Transaction,
+} from './types';
 
 const OUTBOX_KEY = 'finance:outbox:v1';
 
-export type OutboxEntityType = 'account' | 'category' | 'transaction' | 'valuation' | 'recurringTransaction';
+export type OutboxEntityType =
+  | 'account'
+  | 'category'
+  | 'transaction'
+  | 'valuation'
+  | 'recurringTransaction'
+  | 'goal'
+  | 'budget';
 
-export type OutboxPayload = Account | Category | Transaction | AccountValuation | RecurringTransaction;
+export type OutboxPayload =
+  | Account
+  | Category
+  | Transaction
+  | AccountValuation
+  | RecurringTransaction
+  | FinanceGoal
+  | Budget;
 
 export interface OutboxEntry {
   entityType: OutboxEntityType;
@@ -68,6 +92,10 @@ async function replayEntry(entry: OutboxEntry): Promise<void> {
       return upsertValuation(entry.payload as AccountValuation);
     case 'recurringTransaction':
       return upsertRecurringTransaction(entry.payload as RecurringTransaction);
+    case 'goal':
+      return upsertGoal(entry.payload as FinanceGoal);
+    case 'budget':
+      return upsertBudget(entry.payload as Budget);
   }
 }
 

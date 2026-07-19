@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { defaultGenId } from '../../finance/ids';
 import { formatMoneyMinor, parseMoneyInput } from '../../finance/money';
 import { UNCATEGORISED_EXTERNAL_ID } from '../../finance/presetCategories';
@@ -46,7 +46,8 @@ export function TransactionsScreen() {
   const activeRecurringCount = recurringTransactions.filter((r) => r.active).length;
 
   return (
-    <View style={{ gap: space.m }}>
+    <View style={styles.flex}>
+      <ScrollView contentContainerStyle={styles.list}>
       <Row style={{ justifyContent: 'space-between' }}>
         <Overline>Recent</Overline>
         <Pressable onPress={() => setRecurringOpen(true)}>
@@ -84,6 +85,7 @@ export function TransactionsScreen() {
           </Card>
         );
       })}
+      </ScrollView>
 
       <FAB icon="plus" accessibilityLabel="Add transaction" onPress={() => setAddOpen(true)} />
 
@@ -180,86 +182,88 @@ export function AddTransactionModal({ visible, onClose }: { visible: boolean; on
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheetWrap} onPress={() => {}}>
-          <Card style={{ gap: space.m }}>
-            <Overline>Add transaction</Overline>
-            <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-              {KIND_OPTIONS.map((opt) => (
-                <Chip key={opt.value} label={opt.label} active={kind === opt.value} onPress={() => selectKind(opt.value)} />
-              ))}
-            </Row>
-
-            <Field placeholder="Amount" keyboardType="decimal-pad" value={amountInput} onChangeText={setAmountInput} autoFocus />
-
-            <Text style={[type.caption, { color: t.secondary }]}>
-              {kind === 'transfer' ? 'From account' : 'Account'}
-            </Text>
-            <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-              {accounts
-                .filter((a) => a.archivedAt === null)
-                .map((a) => (
-                  <Chip
-                    key={a.externalId}
-                    label={a.name}
-                    active={accountExternalId === a.externalId}
-                    onPress={() => setAccountExternalId(a.externalId)}
-                  />
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <Pressable style={styles.sheetWrap} onPress={() => {}}>
+            <Card style={{ gap: space.m }}>
+              <Overline>Add transaction</Overline>
+              <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                {KIND_OPTIONS.map((opt) => (
+                  <Chip key={opt.value} label={opt.label} active={kind === opt.value} onPress={() => selectKind(opt.value)} />
                 ))}
-            </Row>
+              </Row>
 
-            {kind === 'transfer' && (
-              <>
-                <Text style={[type.caption, { color: t.secondary }]}>To account</Text>
-                <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-                  {accounts
-                    .filter((a) => a.archivedAt === null && a.externalId !== accountExternalId)
-                    .map((a) => (
-                      <Chip
-                        key={a.externalId}
-                        label={a.name}
-                        active={counterAccountExternalId === a.externalId}
-                        onPress={() => setCounterAccountExternalId(a.externalId)}
-                      />
-                    ))}
-                </Row>
-              </>
-            )}
+              <Field placeholder="Amount" keyboardType="decimal-pad" value={amountInput} onChangeText={setAmountInput} autoFocus />
 
-            {(kind === 'expense' || kind === 'income') && (
-              <>
-                <Text style={[type.caption, { color: t.secondary }]}>Category</Text>
-                <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-                  {categoriesForKind.map((c) => (
+              <Text style={[type.caption, { color: t.secondary }]}>
+                {kind === 'transfer' ? 'From account' : 'Account'}
+              </Text>
+              <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                {accounts
+                  .filter((a) => a.archivedAt === null)
+                  .map((a) => (
                     <Chip
-                      key={c.externalId}
-                      label={c.name}
-                      active={categoryExternalId === c.externalId}
-                      onPress={() => setCategoryExternalId(c.externalId)}
+                      key={a.externalId}
+                      label={a.name}
+                      active={accountExternalId === a.externalId}
+                      onPress={() => setAccountExternalId(a.externalId)}
                     />
                   ))}
-                  <Chip label="+ New" active={addingCategory} onPress={() => setAddingCategory(!addingCategory)} />
-                </Row>
-                {addingCategory && (
-                  <Row gap={space.m}>
-                    <Field
-                      placeholder="New category name"
-                      value={newCategoryName}
-                      onChangeText={setNewCategoryName}
-                      style={{ flex: 1 }}
-                    />
-                    <AppButton title="Add" onPress={addCategory} small />
+              </Row>
+
+              {kind === 'transfer' && (
+                <>
+                  <Text style={[type.caption, { color: t.secondary }]}>To account</Text>
+                  <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                    {accounts
+                      .filter((a) => a.archivedAt === null && a.externalId !== accountExternalId)
+                      .map((a) => (
+                        <Chip
+                          key={a.externalId}
+                          label={a.name}
+                          active={counterAccountExternalId === a.externalId}
+                          onPress={() => setCounterAccountExternalId(a.externalId)}
+                        />
+                      ))}
                   </Row>
-                )}
-              </>
-            )}
+                </>
+              )}
 
-            <Field placeholder="Note (optional)" value={note} onChangeText={setNote} />
+              {(kind === 'expense' || kind === 'income') && (
+                <>
+                  <Text style={[type.caption, { color: t.secondary }]}>Category</Text>
+                  <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                    {categoriesForKind.map((c) => (
+                      <Chip
+                        key={c.externalId}
+                        label={c.name}
+                        active={categoryExternalId === c.externalId}
+                        onPress={() => setCategoryExternalId(c.externalId)}
+                      />
+                    ))}
+                    <Chip label="+ New" active={addingCategory} onPress={() => setAddingCategory(!addingCategory)} />
+                  </Row>
+                  {addingCategory && (
+                    <Row gap={space.m}>
+                      <Field
+                        placeholder="New category name"
+                        value={newCategoryName}
+                        onChangeText={setNewCategoryName}
+                        style={{ flex: 1 }}
+                      />
+                      <AppButton title="Add" onPress={addCategory} small />
+                    </Row>
+                  )}
+                </>
+              )}
 
-            <AppButton title="Save" onPress={submit} />
-          </Card>
+              <Field placeholder="Note (optional)" value={note} onChangeText={setNote} />
+
+              <AppButton title="Save" onPress={submit} />
+            </Card>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -289,29 +293,31 @@ function RecurringListModal({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheetWrap} onPress={() => {}}>
-          <Card style={{ gap: space.m }}>
-            <Overline>Recurring transactions</Overline>
-            {recurringTransactions.length === 0 && (
-              <Text style={[type.body, { color: t.muted }]}>No recurring rules yet — rent, EMIs, SIPs, subscriptions.</Text>
-            )}
-            {recurringTransactions.map((rule) => (
-              <Row key={rule.id} style={{ justifyContent: 'space-between' }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[type.body, { color: t.ink }]}>{describeRule(rule, accounts, categories)}</Text>
-                  <Text style={[type.caption, { color: t.muted }]}>{formatMoneyMinor(rule.amountMinor, rule.currency)}</Text>
-                </View>
-                <AppSwitch
-                  value={rule.active}
-                  onChange={(active) => void saveRecurringTransaction({ ...rule, active, updatedAt: new Date().toISOString() })}
-                />
-              </Row>
-            ))}
-            <AppButton title="Add recurring transaction" onPress={onAddNew} variant="secondary" />
-          </Card>
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <Pressable style={styles.sheetWrap} onPress={() => {}}>
+            <Card style={{ gap: space.m }}>
+              <Overline>Recurring transactions</Overline>
+              {recurringTransactions.length === 0 && (
+                <Text style={[type.body, { color: t.muted }]}>No recurring rules yet — rent, EMIs, SIPs, subscriptions.</Text>
+              )}
+              {recurringTransactions.map((rule) => (
+                <Row key={rule.id} style={{ justifyContent: 'space-between' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[type.body, { color: t.ink }]}>{describeRule(rule, accounts, categories)}</Text>
+                    <Text style={[type.caption, { color: t.muted }]}>{formatMoneyMinor(rule.amountMinor, rule.currency)}</Text>
+                  </View>
+                  <AppSwitch
+                    value={rule.active}
+                    onChange={(active) => void saveRecurringTransaction({ ...rule, active, updatedAt: new Date().toISOString() })}
+                  />
+                </Row>
+              ))}
+              <AppButton title="Add recurring transaction" onPress={onAddNew} variant="secondary" />
+            </Card>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -373,65 +379,69 @@ function AddRecurringModal({ visible, onClose }: { visible: boolean; onClose: ()
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheetWrap} onPress={() => {}}>
-          <Card style={{ gap: space.m }}>
-            <Overline>Add recurring transaction</Overline>
-            <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-              {(['expense', 'income', 'transfer'] as const).map((k) => (
-                <Chip key={k} label={k[0].toUpperCase() + k.slice(1)} active={kind === k} onPress={() => setKind(k)} />
-              ))}
-            </Row>
-            <Field placeholder="Amount" keyboardType="decimal-pad" value={amountInput} onChangeText={setAmountInput} autoFocus />
-
-            <Text style={[type.caption, { color: t.secondary }]}>{kind === 'transfer' ? 'From account' : 'Account'}</Text>
-            <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-              {accounts
-                .filter((a) => a.archivedAt === null)
-                .map((a) => (
-                  <Chip key={a.externalId} label={a.name} active={accountExternalId === a.externalId} onPress={() => setAccountExternalId(a.externalId)} />
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <Pressable style={styles.sheetWrap} onPress={() => {}}>
+            <Card style={{ gap: space.m }}>
+              <Overline>Add recurring transaction</Overline>
+              <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                {(['expense', 'income', 'transfer'] as const).map((k) => (
+                  <Chip key={k} label={k[0].toUpperCase() + k.slice(1)} active={kind === k} onPress={() => setKind(k)} />
                 ))}
-            </Row>
+              </Row>
+              <Field placeholder="Amount" keyboardType="decimal-pad" value={amountInput} onChangeText={setAmountInput} autoFocus />
 
-            {kind === 'transfer' ? (
-              <>
-                <Text style={[type.caption, { color: t.secondary }]}>To account</Text>
-                <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-                  {accounts
-                    .filter((a) => a.archivedAt === null && a.externalId !== accountExternalId)
-                    .map((a) => (
-                      <Chip key={a.externalId} label={a.name} active={counterAccountExternalId === a.externalId} onPress={() => setCounterAccountExternalId(a.externalId)} />
-                    ))}
-                </Row>
-              </>
-            ) : (
-              <>
-                <Text style={[type.caption, { color: t.secondary }]}>Category</Text>
-                <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-                  {categoriesForKind.map((c) => (
-                    <Chip key={c.externalId} label={c.name} active={categoryExternalId === c.externalId} onPress={() => setCategoryExternalId(c.externalId)} />
+              <Text style={[type.caption, { color: t.secondary }]}>{kind === 'transfer' ? 'From account' : 'Account'}</Text>
+              <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                {accounts
+                  .filter((a) => a.archivedAt === null)
+                  .map((a) => (
+                    <Chip key={a.externalId} label={a.name} active={accountExternalId === a.externalId} onPress={() => setAccountExternalId(a.externalId)} />
                   ))}
-                </Row>
-              </>
-            )}
+              </Row>
 
-            <Text style={[type.caption, { color: t.secondary }]}>Repeats</Text>
-            <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-              {FREQUENCY_OPTIONS.map((opt) => (
-                <Chip key={opt.value} label={opt.label} active={frequency === opt.value} onPress={() => setFrequency(opt.value)} />
-              ))}
-            </Row>
+              {kind === 'transfer' ? (
+                <>
+                  <Text style={[type.caption, { color: t.secondary }]}>To account</Text>
+                  <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                    {accounts
+                      .filter((a) => a.archivedAt === null && a.externalId !== accountExternalId)
+                      .map((a) => (
+                        <Chip key={a.externalId} label={a.name} active={counterAccountExternalId === a.externalId} onPress={() => setCounterAccountExternalId(a.externalId)} />
+                      ))}
+                  </Row>
+                </>
+              ) : (
+                <>
+                  <Text style={[type.caption, { color: t.secondary }]}>Category</Text>
+                  <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                    {categoriesForKind.map((c) => (
+                      <Chip key={c.externalId} label={c.name} active={categoryExternalId === c.externalId} onPress={() => setCategoryExternalId(c.externalId)} />
+                    ))}
+                  </Row>
+                </>
+              )}
 
-            <Field placeholder="Note (optional)" value={note} onChangeText={setNote} />
-            <AppButton title="Save" onPress={submit} />
-          </Card>
+              <Text style={[type.caption, { color: t.secondary }]}>Repeats</Text>
+              <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                {FREQUENCY_OPTIONS.map((opt) => (
+                  <Chip key={opt.value} label={opt.label} active={frequency === opt.value} onPress={() => setFrequency(opt.value)} />
+                ))}
+              </Row>
+
+              <Field placeholder="Note (optional)" value={note} onChangeText={setNote} />
+              <AppButton title="Save" onPress={submit} />
+            </Card>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  list: { padding: space.l, gap: space.m },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   sheetWrap: { padding: space.l },
 });

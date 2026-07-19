@@ -6,7 +6,9 @@ import { materializeDueRecurrences } from '../../finance/recurrence';
 import type {
   Account,
   AccountValuation,
+  Budget,
   Category,
+  FinanceGoal,
   RecurringTransaction,
   Transaction,
 } from '../../finance/types';
@@ -19,6 +21,8 @@ interface FinanceData {
   transactions: Transaction[];
   valuations: AccountValuation[];
   recurringTransactions: RecurringTransaction[];
+  goals: FinanceGoal[];
+  budgets: Budget[];
 }
 
 const EMPTY_DATA: FinanceData = {
@@ -27,6 +31,8 @@ const EMPTY_DATA: FinanceData = {
   transactions: [],
   valuations: [],
   recurringTransactions: [],
+  goals: [],
+  budgets: [],
 };
 
 interface FinanceDataValue extends FinanceData {
@@ -40,6 +46,10 @@ interface FinanceDataValue extends FinanceData {
   saveTransaction: (txn: Transaction) => Promise<void>;
   deleteTransaction: (externalId: string) => Promise<void>;
   saveRecurringTransaction: (rule: RecurringTransaction) => Promise<void>;
+  saveGoal: (goal: FinanceGoal) => Promise<void>;
+  archiveGoal: (externalId: string) => Promise<void>;
+  saveBudget: (budget: Budget) => Promise<void>;
+  archiveBudget: (externalId: string) => Promise<void>;
 }
 
 const FinanceDataCtx = createContext<FinanceDataValue | null>(null);
@@ -113,13 +123,16 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     if (cached !== null) setData(cached);
     try {
       await flushOutbox();
-      const [accounts, categories, transactions, valuations, recurringTransactions] = await Promise.all([
-        api.listAccounts(),
-        api.listCategories(),
-        api.listTransactions(),
-        api.listValuations(),
-        api.listRecurringTransactions(),
-      ]);
+      const [accounts, categories, transactions, valuations, recurringTransactions, goals, budgets] =
+        await Promise.all([
+          api.listAccounts(),
+          api.listCategories(),
+          api.listTransactions(),
+          api.listValuations(),
+          api.listRecurringTransactions(),
+          api.listGoals(),
+          api.listBudgets(),
+        ]);
       const materializedToday = deviceLocalDate(new Date().toISOString());
       const { transactions: newTxns, rules: updatedRules } = await materializeRecurring(
         recurringTransactions,
@@ -131,6 +144,8 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         transactions: [...newTxns, ...transactions],
         valuations,
         recurringTransactions: updatedRules,
+        goals,
+        budgets,
       }));
     } catch {
       // offline — whatever was cached stands
@@ -291,6 +306,96 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     [applyAndCache],
   );
 
+  const saveGoal = useCallback(
+    async (goal: FinanceGoal) => {
+      applyAndCache((prev) => ({
+        ...prev,
+        goals: [...prev.goals.filter((g) => g.externalId !== goal.externalId), goal],
+      }));
+      try {
+        await api.upsertGoal(goal);
+      } catch {
+        await enqueueOutbox({
+          entityType: 'goal',
+          externalId: goal.externalId,
+          payload: goal,
+          queuedAt: new Date().toISOString(),
+        });
+      }
+    },
+    [applyAndCache],
+  );
+
+  const archiveGoal = useCallback(
+    async (externalId: string) => {
+      const nowIso = new Date().toISOString();
+      applyAndCache((prev) => ({
+        ...prev,
+        goals: prev.goals.map((g) =>
+          g.externalId === externalId ? { ...g, status: 'archived', archivedAt: nowIso } : g,
+        ),
+      }));
+      try {
+        await api.archiveGoal(externalId, nowIso);
+      } catch {
+        const goal = data.goals.find((g) => g.externalId === externalId);
+        if (goal !== undefined) {
+          await enqueueOutbox({
+            entityType: 'goal',
+            externalId,
+            payload: { ...goal, status: 'archived', archivedAt: nowIso },
+            queuedAt: nowIso,
+          });
+        }
+      }
+    },
+    [applyAndCache, data.goals],
+  );
+
+  const saveBudget = useCallback(
+    async (budget: Budget) => {
+      applyAndCache((prev) => ({
+        ...prev,
+        budgets: [...prev.budgets.filter((b) => b.externalId !== budget.externalId), budget],
+      }));
+      try {
+        await api.upsertBudget(budget);
+      } catch {
+        await enqueueOutbox({
+          entityType: 'budget',
+          externalId: budget.externalId,
+          payload: budget,
+          queuedAt: new Date().toISOString(),
+        });
+      }
+    },
+    [applyAndCache],
+  );
+
+  const archiveBudget = useCallback(
+    async (externalId: string) => {
+      const nowIso = new Date().toISOString();
+      applyAndCache((prev) => ({
+        ...prev,
+        budgets: prev.budgets.map((b) => (b.externalId === externalId ? { ...b, archivedAt: nowIso } : b)),
+      }));
+      try {
+        await api.archiveBudget(externalId, nowIso);
+      } catch {
+        const budget = data.budgets.find((b) => b.externalId === externalId);
+        if (budget !== undefined) {
+          await enqueueOutbox({
+            entityType: 'budget',
+            externalId,
+            payload: { ...budget, archivedAt: nowIso },
+            queuedAt: nowIso,
+          });
+        }
+      }
+    },
+    [applyAndCache, data.budgets],
+  );
+
   const value: FinanceDataValue = {
     ...data,
     loading,
@@ -303,6 +408,10 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     saveTransaction,
     deleteTransaction,
     saveRecurringTransaction,
+    saveGoal,
+    archiveGoal,
+    saveBudget,
+    archiveBudget,
   };
 
   return <FinanceDataCtx.Provider value={value}>{children}</FinanceDataCtx.Provider>;

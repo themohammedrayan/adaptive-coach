@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Dimensions,
+  Modal,
   Pressable,
   StyleSheet,
   Switch as RNSwitch,
@@ -486,8 +488,9 @@ const MODE_OPTIONS: { value: AppModeValue; label: string; icon: TabIconName }[] 
 ];
 
 /**
- * Top-right Goals/Health/Finance app-mode switcher — Duolingo app-picker
- * style: a colored icon tile per mode with a ring around the active one.
+ * Top-right Goals/Health/Finance app-mode switcher — a Duolingo-style
+ * course-picker: a single pill showing the active mode that expands into a
+ * dropdown of all modes on tap, rather than showing every option at once.
  */
 export function ModeSwitcher({
   mode,
@@ -498,47 +501,131 @@ export function ModeSwitcher({
 }) {
   const t = useTheme();
   const fill: Record<AppModeValue, string> = { goals: t.good, health: t.accent, finance: t.chart.protein };
+  const active = MODE_OPTIONS.find((o) => o.value === mode)!;
+
+  const triggerRef = useRef<View>(null);
+  const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+
+  const openMenu = () => {
+    triggerRef.current?.measureInWindow((x, y, width, height) => {
+      setAnchor({ top: y + height + space.xs, right: Dimensions.get('window').width - (x + width) });
+      setOpen(true);
+    });
+  };
 
   return (
-    <View style={{ flexDirection: 'row', gap: space.s }}>
-      {MODE_OPTIONS.map((o) => {
-        const active = o.value === mode;
-        return (
-          <Pressable
-            key={o.value}
-            onPress={() => onChange(o.value)}
-            style={({ pressed }) => ({ alignItems: 'center', gap: 3, opacity: pressed ? 0.7 : 1 })}
-          >
+    <View>
+      <Pressable
+        ref={triggerRef}
+        onPress={openMenu}
+        style={({ pressed }) => [
+          modeSwitcherStyles.trigger,
+          { backgroundColor: t.card, borderColor: t.hairline, opacity: pressed ? 0.7 : 1 },
+        ]}
+      >
+        <View style={[modeSwitcherStyles.icon, { backgroundColor: fill[active.value] }]}>
+          <TabIcon name={active.icon} color={t.onAccent} size={16} />
+        </View>
+        <Text style={{ fontSize: 13, fontWeight: '700', color: t.ink }}>{active.label}</Text>
+        <Chevron color={t.muted} />
+      </Pressable>
+
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={modeSwitcherStyles.backdrop} onPress={() => setOpen(false)}>
+          {anchor && (
             <View
-              style={{
-                padding: 3,
-                borderRadius: radius.control + 3,
-                borderWidth: 2,
-                borderColor: active ? t.accent : 'transparent',
-              }}
+              style={[
+                modeSwitcherStyles.menu,
+                { top: anchor.top, right: anchor.right, backgroundColor: t.card, borderColor: t.hairline },
+              ]}
             >
-              <View
-                style={{
-                  width: 40,
-                  height: 40,
-                  borderRadius: radius.control,
-                  backgroundColor: fill[o.value],
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <TabIcon name={o.icon} color={t.onAccent} size={20} />
-              </View>
+              {MODE_OPTIONS.map((o) => {
+                const isActive = o.value === mode;
+                return (
+                  <Pressable
+                    key={o.value}
+                    onPress={() => {
+                      setOpen(false);
+                      onChange(o.value);
+                    }}
+                    style={({ pressed }) => [
+                      modeSwitcherStyles.menuRow,
+                      { backgroundColor: isActive ? t.wash : 'transparent', opacity: pressed ? 0.7 : 1 },
+                    ]}
+                  >
+                    <View style={[modeSwitcherStyles.icon, { backgroundColor: fill[o.value] }]}>
+                      <TabIcon name={o.icon} color={t.onAccent} size={16} />
+                    </View>
+                    <Text style={{ flex: 1, fontSize: 14, fontWeight: isActive ? '700' : '500', color: t.ink }}>
+                      {o.label}
+                    </Text>
+                    {isActive && <Check color={t.accent} />}
+                  </Pressable>
+                );
+              })}
             </View>
-            <Text style={{ fontSize: 11, fontWeight: active ? '700' : '500', color: active ? t.ink : t.muted }}>
-              {o.label}
-            </Text>
-          </Pressable>
-        );
-      })}
+          )}
+        </Pressable>
+      </Modal>
     </View>
   );
 }
+
+function Chevron({ color }: { color: string }) {
+  return (
+    <Svg width={12} height={12} viewBox="0 0 24 24">
+      <Polyline points="5,9 12,16 19,9" stroke={color} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+function Check({ color }: { color: string }) {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24">
+      <Polyline points="5,12.5 10,17.5 19,7" stroke={color} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    </Svg>
+  );
+}
+
+const modeSwitcherStyles = StyleSheet.create({
+  trigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    paddingVertical: 6,
+    paddingHorizontal: space.s,
+    borderRadius: radius.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  icon: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.control - 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  backdrop: { flex: 1 },
+  menu: {
+    position: 'absolute',
+    minWidth: 168,
+    borderRadius: radius.control,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: space.xs,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.s,
+    paddingVertical: space.s,
+    paddingHorizontal: space.s,
+  },
+});
 
 /* ------------------------------------------------------------ empty states */
 

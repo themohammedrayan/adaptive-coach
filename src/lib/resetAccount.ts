@@ -19,7 +19,10 @@ export const RESET_REMOTE_TABLES = [
   'finance_recurring_transactions',
   'finance_goals',
   'finance_budgets',
-  'finance_coach_chat_turns',
+  'goals',
+  'habits',
+  'habit_log',
+  'goal_milestone_items',
 ] as const;
 
 export interface ResetAuth {
@@ -85,6 +88,7 @@ export async function resetUserData(): Promise<void> {
   const { REMINDER_IDS } = await import('../dashboard/reminderSchedule');
   const { clearFinanceCache } = await import('../finance/cache');
   const { clearOutbox } = await import('../finance/outbox');
+  const { clearGoalsCache } = await import('../goals/cache');
 
   const auth: ResetAuth = {
     getUserId: async () => {
@@ -123,7 +127,8 @@ export async function resetUserData(): Promise<void> {
       (Object.keys(REMINDER_IDS) as ReminderKind[]).map((kind) => cancelReminder(kind)),
     ).then(() => undefined);
 
-  const clearLocalCaches = () => Promise.all([clearFinanceCache(), clearOutbox()]).then(() => undefined);
+  const clearLocalCaches = () =>
+    Promise.all([clearFinanceCache(), clearOutbox(), clearGoalsCache()]).then(() => undefined);
 
   await resetUserDataCore(auth, remote, stores, cancelAllReminders, clearLocalCaches);
 }

@@ -34,6 +34,9 @@ function payload(): CoachPayload {
     trend: [],
     adherence: { loggedDays: 11, windowDays: 14, avgIntake: 2010, avgTarget: 2050 },
     reasons: [],
+    goals: [],
+    goalsAggregate: { activeCount: 0, blockedCount: 0, completedThisWeekCount: 0 },
+    goalSignals: [],
   };
 }
 
@@ -44,6 +47,7 @@ const ROW = {
   weekly_review: 'You logged 11 of 14 days.',
   stall_read: 'On track.',
   suggestion: 'Keep it up.',
+  goals_note: '',
   source: 'model' as const,
   model: 'claude-sonnet-5',
   generated_at: '2026-07-15T09:00:00.000Z',
@@ -91,6 +95,7 @@ describe('listCoachNotes — Coaching BRD §11 AT6 support (reads the stored/cac
         weeklyReview: 'You logged 11 of 14 days.',
         stallRead: 'On track.',
         suggestion: 'Keep it up.',
+        goalsNote: '',
         source: 'model',
         model: 'claude-sonnet-5',
         generatedAt: '2026-07-15T09:00:00.000Z',

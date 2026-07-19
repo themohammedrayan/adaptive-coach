@@ -354,7 +354,8 @@ export type TabIconName =
   | 'overview'
   | 'transactions'
   | 'accounts'
-  | 'reports';
+  | 'reports'
+  | 'goals';
 
 /**
  * Hand-drawn 24px line icons — no icon font is installed (expo-symbols is
@@ -421,6 +422,13 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
           <Rect x={16} y={5} width={3.5} height={15} rx={0.8} {...p} />
         </>
       )}
+      {name === 'goals' && (
+        <>
+          <Circle cx={12} cy={12} r={8} {...p} />
+          <Circle cx={12} cy={12} r={4} {...p} />
+          <Circle cx={12} cy={12} r={0.6} fill={color} stroke="none" />
+        </>
+      )}
     </Svg>
   );
 }
@@ -469,24 +477,27 @@ const tabBarStyles = StyleSheet.create({
   label: { fontSize: 11 },
 });
 
-const MODE_OPTIONS: { value: 'health' | 'finance'; label: string; icon: TabIconName }[] = [
+export type AppModeValue = 'health' | 'finance' | 'goals';
+
+const MODE_OPTIONS: { value: AppModeValue; label: string; icon: TabIconName }[] = [
+  { value: 'goals', label: 'Goals', icon: 'goals' },
   { value: 'health', label: 'Health', icon: 'weight' },
   { value: 'finance', label: 'Finance', icon: 'accounts' },
 ];
 
 /**
- * Top-right Health/Finance app-mode switcher — Duolingo app-picker style:
- * a colored icon tile per mode with a ring around the active one.
+ * Top-right Goals/Health/Finance app-mode switcher — Duolingo app-picker
+ * style: a colored icon tile per mode with a ring around the active one.
  */
 export function ModeSwitcher({
   mode,
   onChange,
 }: {
-  mode: 'health' | 'finance';
-  onChange: (mode: 'health' | 'finance') => void;
+  mode: AppModeValue;
+  onChange: (mode: AppModeValue) => void;
 }) {
   const t = useTheme();
-  const fill = { health: t.accent, finance: t.chart.protein };
+  const fill: Record<AppModeValue, string> = { goals: t.good, health: t.accent, finance: t.chart.protein };
 
   return (
     <View style={{ flexDirection: 'row', gap: space.s }}>

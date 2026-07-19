@@ -7,23 +7,27 @@ import { askCoachQuestion, listCoachChatTurns, type ChatHistoryTurn, type CoachC
 import { deviceLocalDate } from '../data-sync';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import { getDashboardRuntime } from '../dashboard/runtime';
+import * as financeApi from '../finance/api';
 import { getFoodLogRuntime } from '../food-log/runtime';
+import { loadResolvedGoals } from '../goals/loadResolvedGoals';
 import { AppButton, EmptyState, Field } from './kit';
 import { radius, space, type, useTheme, type Theme } from './theme';
 
 /**
- * v2 — ad-hoc coach Q&A. Reached via router.push('/coach-chat') from the
- * "Ask the coach a question" affordance on the Coach tab (CoachNotesFeed).
- * Unlike CoachNotesFeed, this asks a live question and gets a grounded
- * answer back — but the grounding itself still only narrates the cached
- * engine state, never computes anything new.
+ * Coach-unification — the single ad-hoc Q&A screen, reachable from any app
+ * mode (Health's Coach tab, Finance's Overview, Goals home). Grounds a
+ * question in whichever of health/finance/goals has data — never computes
+ * anything new, just narrates cached/resolved state. Gathers everything it
+ * needs itself (device runtimes, Finance's Supabase-direct reads, Goals'
+ * resolved snapshot) rather than depending on FinanceDataContext/
+ * GoalsDataProvider being mounted, since this route can be reached without
+ * either.
  */
 export function CoachChatScreen() {
   const t = useTheme();
   const router = useRouter();
   const [turns, setTurns] = useState<CoachChatTurn[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [noData, setNoData] = useState(false);
   const [question, setQuestion] = useState('');
   const [busy, setBusy] = useState(false);
   const listRef = useRef<FlatList<CoachChatTurn>>(null);
@@ -54,6 +58,15 @@ export function CoachChatScreen() {
         getChallengeRuntime(),
       ]);
       const today = deviceLocalDate(new Date().toISOString());
+      const [accounts, transactions, valuations, financeGoals, budgets, categories, goalsSnapshot] = await Promise.all([
+        financeApi.listAccounts(),
+        financeApi.listTransactions(),
+        financeApi.listValuations(),
+        financeApi.listGoals(),
+        financeApi.listBudgets(),
+        financeApi.listCategories(),
+        loadResolvedGoals(today),
+      ]);
       const history: ChatHistoryTurn[] = (turns ?? []).map((tn) => ({
         question: tn.question,
         answer: tn.answer,
@@ -64,15 +77,16 @@ export function CoachChatScreen() {
           foodLogStore: foodLogRt.store,
           dataSyncStore: dataSyncRt.store,
           challengeStore: challengeRt.store,
+          finance: { accounts, transactions, valuations, financeGoals, budgets, categories },
+          goals: {
+            activeGoals: goalsSnapshot.goals.filter((g) => g.status === 'active'),
+            progressByGoalId: goalsSnapshot.progressByGoalId,
+          },
         },
         trimmed,
         today,
         history,
       );
-      if (result.status === 'no-data') {
-        setNoData(true);
-        return;
-      }
       setQuestion('');
       setTurns((prev) => [...(prev ?? []), result.turn]);
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
@@ -104,11 +118,7 @@ export function CoachChatScreen() {
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
           renderItem={({ item }) => <TurnBubbles turn={item} t={t} />}
           ListEmptyComponent={
-            noData ? (
-              <EmptyState message="Ask the coach anything — once your first weekly recompute has run, it can ground answers in your current target and trend." />
-            ) : (
-              <EmptyState message={error ?? 'Ask anything about your target, trend, or adherence.'} />
-            )
+            <EmptyState message={error ?? 'Ask anything about your weight goal, finances, or other goals.'} />
           }
         />
 

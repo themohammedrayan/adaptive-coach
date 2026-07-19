@@ -4,7 +4,28 @@
 // out of coachNoteLogic.ts so coach-note and coach-chat share one
 // implementation instead of two independently-maintained copies.
 
-import type { CoachPayload } from './types.ts';
+import type { CoachGoalSummary, CoachGoalsAggregate, CoachPayload, GoalSignal } from './types.ts';
+
+/**
+ * Goals BRD §H.4 — every new number the coach might narrate must be added
+ * here, same anti-hallucination guarantee as the weight/finance narration.
+ * Factored out so both the health CoachPayload's own goals[] and the
+ * unified coach payload's top-level goals[] (coach-unification) share one
+ * implementation.
+ */
+export function collectGoalsNumbers(
+  goals: CoachGoalSummary[],
+  goalsAggregate: CoachGoalsAggregate,
+  goalSignals: GoalSignal[],
+): number[] {
+  const nums: (number | null | undefined)[] = [];
+  for (const g of goals) nums.push(g.pct, g.daysUntilTargetDate);
+  nums.push(goalsAggregate.activeCount, goalsAggregate.blockedCount, goalsAggregate.completedThisWeekCount);
+  for (const s of goalSignals) {
+    if (s.code === 'GOAL_DEADLINE_NEAR') nums.push(s.daysLeft);
+  }
+  return nums.filter((n): n is number => typeof n === 'number');
+}
 
 export function collectAllowedNumbers(payload: CoachPayload): number[] {
   const nums: (number | null | undefined)[] = [
@@ -46,7 +67,8 @@ export function collectAllowedNumbers(payload: CoachPayload): number[] {
         break;
     }
   }
-  return nums.filter((n): n is number => typeof n === 'number');
+
+  return [...nums.filter((n): n is number => typeof n === 'number'), ...collectGoalsNumbers(payload.goals, payload.goalsAggregate, payload.goalSignals)];
 }
 
 export function isAllowed(n: number, allowed: number[]): boolean {

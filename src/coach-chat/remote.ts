@@ -1,6 +1,5 @@
-import type { CoachPayload } from '../coaching';
 import { supabase } from '../lib/supabase';
-import type { ChatHistoryTurn, CoachChatTurn } from './types';
+import type { ChatHistoryTurn, CoachChatTurn, UnifiedCoachPayload } from './types';
 
 interface CoachChatTurnRow {
   id: string;
@@ -33,7 +32,7 @@ function fromServerRow(r: CoachChatTurnRow): CoachChatTurn {
 export async function askCoach(
   requestId: string,
   question: string,
-  payload: CoachPayload,
+  payload: UnifiedCoachPayload,
   history: ChatHistoryTurn[] = [],
 ): Promise<CoachChatTurn> {
   const { data, error } = await supabase.functions.invoke<{ turn: CoachChatTurn }>('coach-chat', {

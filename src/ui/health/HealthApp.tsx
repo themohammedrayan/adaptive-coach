@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { ChallengesScreen } from '../ChallengesScreen';
 import { CoachNotesFeed } from '../CoachNotesFeed';
 import { DashboardScreen } from '../DashboardScreen';
 import { FoodLogScreen } from '../FoodLogScreen';
@@ -10,13 +9,14 @@ import { ProfileScreen } from '../ProfileScreen';
 import { space, type, useTheme } from '../theme';
 import { WeightScreen } from '../WeightScreen';
 
-export type Tab = 'home' | 'food' | 'weight' | 'challenges' | 'coach' | 'profile';
+// Goals BRD §G.6 — the Challenges tab retired; metric-goal list/detail now
+// lives in the Goals module (src/ui/goals/GoalDetailScreen.tsx's metric branch).
+export type Tab = 'home' | 'food' | 'weight' | 'coach' | 'profile';
 
 const TABS: { key: Tab; label: string; icon: TabIconName; title: string }[] = [
   { key: 'home', label: 'Home', icon: 'home', title: 'Today' },
   { key: 'food', label: 'Food', icon: 'food', title: 'Food log' },
   { key: 'weight', label: 'Weight', icon: 'weight', title: 'Weight' },
-  { key: 'challenges', label: 'Challenges', icon: 'challenges', title: 'Challenges' },
   { key: 'coach', label: 'Coach', icon: 'coach', title: 'Coach' },
   { key: 'profile', label: 'Profile', icon: 'profile', title: 'Profile' },
 ];
@@ -46,7 +46,6 @@ export function HealthApp({ modeSwitcher }: { modeSwitcher?: ReactNode }) {
         {tab === 'home' && <DashboardScreen onNavigate={setTab} />}
         {tab === 'food' && <FoodLogScreen />}
         {tab === 'weight' && <WeightScreen />}
-        {tab === 'challenges' && <ChallengesScreen />}
         {tab === 'coach' && <CoachNotesFeed />}
         {tab === 'profile' && <ProfileScreen />}
       </View>

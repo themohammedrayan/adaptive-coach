@@ -1,3 +1,10 @@
 export * from './types';
-export { askCoachQuestion, type AskCoachDeps, type AskCoachResult } from './askCoach';
+export { assembleUnifiedCoachPayload } from './assemblePayload';
+export {
+  askCoachQuestion,
+  type AskCoachDeps,
+  type AskCoachFinanceInputs,
+  type AskCoachGoalsInputs,
+  type AskCoachResult,
+} from './askCoach';
 export { askCoach, listCoachChatTurns } from './remote';

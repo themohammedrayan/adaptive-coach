@@ -1,6 +1,10 @@
-// Deno-side duplicate of src/coaching/types.ts (this Edge Function is a
-// separate deploy target and cannot import RN app source). Keep these two
-// files in sync by hand — see src/coaching/types.ts for the sibling copy.
+// Deno-side duplicate of src/coaching/types.ts and src/coach-chat/types.ts
+// (this Edge Function is a separate deploy target and cannot import RN app
+// source). Keep these in sync by hand — see the RN-side files for the
+// sibling copies. FinanceCoachPayload lives in financeTypes.ts, mirroring
+// src/finance's coachPayload.ts.
+
+import type { FinanceCoachPayload } from './financeTypes.ts';
 
 export type IsoDate = string;
 
@@ -33,6 +37,27 @@ export interface CoachPayloadCurrent {
   boundHit: BoundHit;
 }
 
+export interface CoachGoalSummary {
+  externalId: string;
+  type: 'metric' | 'fund' | 'habit' | 'milestone';
+  title: string;
+  pct: number | null;
+  status: 'on_track' | 'behind' | 'ahead' | 'blocked' | 'no_data' | 'completed';
+  daysUntilTargetDate: number | null;
+  blocked: boolean;
+}
+
+export interface CoachGoalsAggregate {
+  activeCount: number;
+  blockedCount: number;
+  completedThisWeekCount: number;
+}
+
+export type GoalSignal =
+  | { code: 'GOAL_COMPLETED'; goalExternalId: string; title: string }
+  | { code: 'GOAL_BLOCKED'; goalExternalId: string; title: string; blockedByTitle: string }
+  | { code: 'GOAL_DEADLINE_NEAR'; goalExternalId: string; title: string; daysLeft: number };
+
 export interface CoachPayload {
   weekOf: IsoDate;
   goal: GoalSummary;
@@ -40,6 +65,9 @@ export interface CoachPayload {
   trend: { date: IsoDate; trendKg: number }[];
   adherence: { loggedDays: number; windowDays: number; avgIntake: number; avgTarget: number };
   reasons: Reason[];
+  goals: CoachGoalSummary[];
+  goalsAggregate: CoachGoalsAggregate;
+  goalSignals: GoalSignal[];
 }
 
 export interface CoachNoteContent {
@@ -47,6 +75,7 @@ export interface CoachNoteContent {
   weeklyReview: string;
   stallRead: string;
   suggestion: string;
+  goalsNote: string;
 }
 
 export interface CoachNote extends CoachNoteContent {
@@ -62,7 +91,7 @@ export interface ChatAnswerContent {
   answer: string;
 }
 
-/** v2 — ad-hoc coach Q&A storage shape (one row per turn). */
+/** v2 — ad-hoc coach Q&A storage shape (one row per turn). Domain-generic — coach-unification merged the health/finance turn tables into one. */
 export interface CoachChatTurn extends ChatAnswerContent {
   id: string;
   question: string;
@@ -70,6 +99,22 @@ export interface CoachChatTurn extends ChatAnswerContent {
   model: string | null;
   generatedAt: string;
   payloadHash: string;
+}
+
+/**
+ * Coach-unification — the merged ad-hoc Q&A grounding payload, replacing
+ * separately-passed CoachPayload/FinanceCoachPayload. `health` is null
+ * when there's no primary weight goal with a live EngineResult yet;
+ * `finance` is always buildable. See src/coach-chat/types.ts for the
+ * RN-side sibling and its fuller rationale.
+ */
+export interface UnifiedCoachPayload {
+  today: IsoDate;
+  health: CoachPayload | null;
+  finance: FinanceCoachPayload;
+  goals: CoachGoalSummary[];
+  goalsAggregate: CoachGoalsAggregate;
+  goalSignals: GoalSignal[];
 }
 
 /** v2 — the raw shape the model is asked to produce (before server-side kcal derivation). */

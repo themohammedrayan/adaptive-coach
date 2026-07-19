@@ -31,6 +31,7 @@ interface CoachNoteRow {
   weekly_review: string;
   stall_read: string;
   suggestion: string;
+  goals_note: string;
   source: 'model' | 'fallback';
   model: string | null;
   generated_at: string;
@@ -45,6 +46,7 @@ function fromRow(row: CoachNoteRow): CoachNote {
     weeklyReview: row.weekly_review,
     stallRead: row.stall_read,
     suggestion: row.suggestion,
+    goalsNote: row.goals_note,
     source: row.source,
     model: row.model,
     generatedAt: row.generated_at,
@@ -60,6 +62,7 @@ function toRow(userId: string, note: CoachNote): Omit<CoachNoteRow, 'id'> & { us
     weekly_review: note.weeklyReview,
     stall_read: note.stallRead,
     suggestion: note.suggestion,
+    goals_note: note.goalsNote,
     source: note.source,
     model: note.model,
     generated_at: note.generatedAt,
@@ -103,6 +106,7 @@ async function callModel(payload: CoachPayload): Promise<CoachNoteContent | null
       'weeklyReview',
       'stallRead',
       'suggestion',
+      'goalsNote',
     ];
     return fields.every((f) => typeof parsed[f] === 'string') ? (parsed as CoachNoteContent) : null;
   } catch {

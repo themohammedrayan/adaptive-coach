@@ -111,6 +111,7 @@ function note(): CoachNote {
     weeklyReview: 'You logged 10 of 14 days.',
     stallRead: 'On track.',
     suggestion: 'Keep it up.',
+    goalsNote: '',
     source: 'model',
     model: 'claude-sonnet-5',
     generatedAt: '2026-07-15T09:00:00.000Z',

@@ -19,6 +19,9 @@ function payload(overrides: Partial<CoachPayload> = {}): CoachPayload {
     trend: [],
     adherence: { loggedDays: 11, windowDays: 14, avgIntake: 2010, avgTarget: 2050 },
     reasons: [{ code: 'TARGET_CHANGED', from: 2100, to: 1975, deltaKcal: -125 }],
+    goals: [],
+    goalsAggregate: { activeCount: 0, blockedCount: 0, completedThisWeekCount: 0 },
+    goalSignals: [],
     ...overrides,
   };
 }
@@ -29,6 +32,7 @@ function validNote(): CoachNoteContent {
     weeklyReview: 'You logged 11 of 14 days, averaging 2010 kcal against a 2050 kcal target.',
     stallRead: 'Your trend is tracking the plan.',
     suggestion: 'We adjust gradually to keep things smooth.',
+    goalsNote: '',
   };
 }
 
@@ -63,5 +67,21 @@ describe('validateNote — Coaching BRD §11 AT8 (validation guard)', () => {
     const note = validNote();
     note.weeklyReview = 'Day 21 of your 180-day horizon, starting from 100kg toward 80kg.';
     expect(validateNote(note, payload())).toBe(true);
+  });
+
+  it('accepts an empty goalsNote (no active goals to report on)', () => {
+    expect(validateNote(validNote(), payload())).toBe(true);
+  });
+
+  it('accepts a goalsNote whose numbers trace back to goalsAggregate', () => {
+    const note = validNote();
+    note.goalsNote = '4 goals active, 2 blocked.';
+    expect(validateNote(note, payload({ goalsAggregate: { activeCount: 4, blockedCount: 2, completedThisWeekCount: 0 } }))).toBe(true);
+  });
+
+  it('rejects a goalsNote that invents a count not in goalsAggregate', () => {
+    const note = validNote();
+    note.goalsNote = '9 goals active.';
+    expect(validateNote(note, payload({ goalsAggregate: { activeCount: 4, blockedCount: 2, completedThisWeekCount: 0 } }))).toBe(false);
   });
 });

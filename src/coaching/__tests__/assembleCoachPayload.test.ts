@@ -39,7 +39,7 @@ describe('assembleCoachPayload — Coaching BRD §11 AT1 (payload hygiene)', () 
   it('contains only the aggregate fields, no raw food entries or PII', () => {
     const payload = assembleCoachPayload(result(), adherence, goal, '2026-07-15', trend);
     expect(Object.keys(payload).sort()).toEqual(
-      ['adherence', 'current', 'goal', 'reasons', 'trend', 'weekOf'].sort(),
+      ['adherence', 'current', 'goal', 'goalSignals', 'goals', 'goalsAggregate', 'reasons', 'trend', 'weekOf'].sort(),
     );
     expect(Object.keys(payload.current).sort()).toEqual(
       [
@@ -77,5 +77,31 @@ describe('assembleCoachPayload — Coaching BRD §11 AT1 (payload hygiene)', () 
   it('passes the trend series through as {date, trendKg} pairs', () => {
     const payload = assembleCoachPayload(result(), adherence, goal, '2026-07-15', trend);
     expect(payload.trend).toEqual([{ date: '2026-07-01', trendKg: 95 }]);
+  });
+});
+
+describe('assembleCoachPayload — Goals BRD §H.2 (goals/goalsAggregate)', () => {
+  it('defaults to an empty goals payload when none is passed (the weekly-note trigger has no live Goals context)', () => {
+    const payload = assembleCoachPayload(result(), adherence, goal, '2026-07-15', trend);
+    expect(payload.goals).toEqual([]);
+    expect(payload.goalsAggregate).toEqual({ activeCount: 0, blockedCount: 0, completedThisWeekCount: 0 });
+    expect(payload.goalSignals).toEqual([]);
+  });
+
+  it('derives goalsAggregate counts from the goals passed in', () => {
+    const goals = [
+      { externalId: 'g1', type: 'metric' as const, title: 'Lose 10kg', pct: 0.5, status: 'on_track' as const, daysUntilTargetDate: 90, blocked: false },
+      { externalId: 'g2', type: 'fund' as const, title: 'House fund', pct: 1, status: 'completed' as const, daysUntilTargetDate: null, blocked: false },
+      { externalId: 'g3', type: 'habit' as const, title: 'Read', pct: 0.2, status: 'blocked' as const, daysUntilTargetDate: null, blocked: true },
+    ];
+    const payload = assembleCoachPayload(result(), adherence, goal, '2026-07-15', trend, goals);
+    expect(payload.goals).toBe(goals);
+    expect(payload.goalsAggregate).toEqual({ activeCount: 3, blockedCount: 1, completedThisWeekCount: 1 });
+  });
+
+  it('threads goalSignals through unchanged', () => {
+    const goalSignals = [{ code: 'GOAL_COMPLETED' as const, goalExternalId: 'g2', title: 'House fund' }];
+    const payload = assembleCoachPayload(result(), adherence, goal, '2026-07-15', trend, [], goalSignals);
+    expect(payload.goalSignals).toBe(goalSignals);
   });
 });

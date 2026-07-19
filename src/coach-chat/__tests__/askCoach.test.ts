@@ -8,6 +8,7 @@ import { MemoryStore as DashboardMemoryStore } from '../../dashboard/store.memor
 import type { PersonProfile } from '../../dashboard/types';
 import type { EngineResult } from '../../engine';
 import { addLogEntry, createFood, MemoryStore as FoodLogMemoryStore } from '../../food-log';
+import type { AskCoachFinanceInputs, AskCoachGoalsInputs } from '../askCoach';
 import { askCoachQuestion } from '../askCoach';
 
 const TODAY = '2026-07-15';
@@ -34,6 +35,17 @@ const ENGINE_RESULT: EngineResult = {
   dataStatus: { loggedDays: 11, weighIns: 12, coldStartWeight: 0 },
   reasons: [],
 };
+
+const EMPTY_FINANCE: AskCoachFinanceInputs = {
+  accounts: [],
+  transactions: [],
+  valuations: [],
+  financeGoals: [],
+  budgets: [],
+  categories: [],
+};
+
+const EMPTY_GOALS: AskCoachGoalsInputs = { activeGoals: [], progressByGoalId: new Map() };
 
 function weightRow(localDate: string, kg: number): BodyMetricRow {
   return {
@@ -87,41 +99,47 @@ async function seedDeps(opts?: { skipChallenge?: boolean; skipResult?: boolean }
     );
   }
 
-  return { dashboardStore, foodLogStore, dataSyncStore, challengeStore };
+  return { dashboardStore, foodLogStore, dataSyncStore, challengeStore, finance: EMPTY_FINANCE, goals: EMPTY_GOALS };
 }
 
 beforeEach(() => {
   mockAskCoach.mockReset();
 });
 
-describe('askCoachQuestion — v2 ad-hoc Q&A orchestrator', () => {
-  it('returns no-data when there is no cached engine result yet', async () => {
+describe('askCoachQuestion — coach-unification ad-hoc Q&A orchestrator', () => {
+  it('builds a null health payload when there is no cached engine result yet', async () => {
     const deps = await seedDeps({ skipResult: true });
-    const result = await askCoachQuestion(deps, 'Why did my target drop?', TODAY);
-    expect(result).toEqual({ status: 'no-data' });
-    expect(mockAskCoach).not.toHaveBeenCalled();
+    mockAskCoach.mockResolvedValue({ id: 't1', question: 'q', answer: 'a', source: 'fallback', model: null, generatedAt: TODAY, payloadHash: 'h' });
+    await askCoachQuestion(deps, 'Why did my target drop?', TODAY);
+    const [, , payload] = mockAskCoach.mock.calls[0];
+    expect(payload.health).toBeNull();
+    expect(payload.finance).toBeDefined();
   });
 
-  it('returns no-data when no profile/challenge has been set up', async () => {
+  it('builds a null health payload when no profile/challenge has been set up', async () => {
     const dashboardStore = new DashboardMemoryStore();
     const foodLogStore = new FoodLogMemoryStore();
     const dataSyncStore = new DataSyncMemoryStore();
     const challengeStore = new ChallengeMemoryStore();
-    const result = await askCoachQuestion(
-      { dashboardStore, foodLogStore, dataSyncStore, challengeStore },
+    mockAskCoach.mockResolvedValue({ id: 't1', question: 'q', answer: 'a', source: 'fallback', model: null, generatedAt: TODAY, payloadHash: 'h' });
+    await askCoachQuestion(
+      { dashboardStore, foodLogStore, dataSyncStore, challengeStore, finance: EMPTY_FINANCE, goals: EMPTY_GOALS },
       'Why did my target drop?',
       TODAY,
     );
-    expect(result).toEqual({ status: 'no-data' });
+    const [, , payload] = mockAskCoach.mock.calls[0];
+    expect(payload.health).toBeNull();
   });
 
-  it('returns no-data when there is no primary challenge', async () => {
+  it('builds a null health payload when there is no primary challenge', async () => {
     const deps = await seedDeps({ skipChallenge: true });
-    const result = await askCoachQuestion(deps, 'Why did my target drop?', TODAY);
-    expect(result).toEqual({ status: 'no-data' });
+    mockAskCoach.mockResolvedValue({ id: 't1', question: 'q', answer: 'a', source: 'fallback', model: null, generatedAt: TODAY, payloadHash: 'h' });
+    await askCoachQuestion(deps, 'Why did my target drop?', TODAY);
+    const [, , payload] = mockAskCoach.mock.calls[0];
+    expect(payload.health).toBeNull();
   });
 
-  it('builds a payload from the cached result and asks the coach, without recomputing', async () => {
+  it('builds a health payload from the cached result and asks the coach, without recomputing', async () => {
     const deps = await seedDeps();
     mockAskCoach.mockResolvedValue({
       id: 'turn-1',
@@ -135,14 +153,15 @@ describe('askCoachQuestion — v2 ad-hoc Q&A orchestrator', () => {
 
     const result = await askCoachQuestion(deps, 'Why did my target drop?', TODAY);
 
-    expect(result.status).toBe('ok');
+    expect(result.turn.id).toBe('turn-1');
     expect(mockAskCoach).toHaveBeenCalledTimes(1);
     const [requestId, question, payload, history] = mockAskCoach.mock.calls[0];
     expect(typeof requestId).toBe('string');
     expect(requestId.length).toBeGreaterThan(0);
     expect(question).toBe('Why did my target drop?');
-    expect(payload.current.targetKcal).toBe(ENGINE_RESULT.targetKcal);
-    expect(payload.goal.startWeightKg).toBe(90);
+    expect(payload.health.current.targetKcal).toBe(ENGINE_RESULT.targetKcal);
+    expect(payload.health.goal.startWeightKg).toBe(90);
+    expect(payload.today).toBe(TODAY);
     expect(history).toEqual([]);
 
     // Cached challenge bookkeeping must be untouched — this never recomputes.

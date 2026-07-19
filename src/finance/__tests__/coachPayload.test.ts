@@ -1,5 +1,5 @@
-import { assembleFinanceCoachPayload } from '../assemblePayload';
-import type { Account, Budget, Category, FinanceGoal, Transaction } from '../../finance/types';
+import { assembleFinanceCoachPayload } from '../coachPayload';
+import type { Account, Budget, Category, FinanceGoal, Transaction } from '../types';
 
 const account: Account = {
   id: 'acc-bank',

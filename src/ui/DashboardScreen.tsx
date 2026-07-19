@@ -203,11 +203,8 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
         ) : primary === null ? (
           <View style={styles.noChallenge}>
             <Text style={[type.caption, { color: t.muted, textAlign: 'center' }]}>
-              No active weight challenge — create one to get a daily target.
+              No active weight goal — create one from the Goals tab to get a daily target.
             </Text>
-            {onNavigate !== undefined && (
-              <AppButton title="Create a challenge" onPress={() => onNavigate('challenges')} variant="secondary" small />
-            )}
           </View>
         ) : (
           <Text style={[type.caption, { color: t.muted, textAlign: 'center' }]}>

@@ -1,4 +1,6 @@
 import type { CoachPayload } from '../../coaching';
+import type { FinanceCoachPayload } from '../../finance';
+import type { UnifiedCoachPayload } from '../types';
 
 const mockInvoke = jest.fn();
 const mockOrder = jest.fn();
@@ -16,24 +18,49 @@ jest.mock('../../lib/supabase', () => ({
 // Imported after the mock so remote.ts picks up the mocked module.
 import { askCoach, listCoachChatTurns } from '../remote';
 
-function payload(): CoachPayload {
+const HEALTH: CoachPayload = {
+  weekOf: '2026-07-15',
+  goal: { startWeightKg: 100, goalWeightKg: 80, horizonDays: 180, daysElapsed: 21 },
+  current: {
+    targetKcal: 1975,
+    prevTargetKcal: 2100,
+    deltaKcal: -125,
+    macros: { proteinG: 180, fatG: 60, carbG: 170, fiberG: 28 },
+    tdeeEst: 2450,
+    effectiveDeficit: 475,
+    weeklyRateKg: -0.35,
+    projectedFinishDate: '2026-12-30',
+    boundHit: 'moveLimit',
+  },
+  trend: [],
+  adherence: { loggedDays: 11, windowDays: 14, avgIntake: 2010, avgTarget: 2050 },
+  reasons: [],
+  goals: [],
+  goalsAggregate: { activeCount: 0, blockedCount: 0, completedThisWeekCount: 0 },
+  goalSignals: [],
+};
+
+const FINANCE: FinanceCoachPayload = {
+  today: '2026-07-15',
+  currency: 'INR',
+  netWorthMinor: 0,
+  month: { incomeMinor: 0, expenseMinor: 0 },
+  topExpenseCategories: [],
+  accounts: [],
+  goals: [],
+  budgets: [],
+  healthRead: { status: 'good', reasons: [] },
+  projection: [],
+};
+
+function payload(): UnifiedCoachPayload {
   return {
-    weekOf: '2026-07-15',
-    goal: { startWeightKg: 100, goalWeightKg: 80, horizonDays: 180, daysElapsed: 21 },
-    current: {
-      targetKcal: 1975,
-      prevTargetKcal: 2100,
-      deltaKcal: -125,
-      macros: { proteinG: 180, fatG: 60, carbG: 170, fiberG: 28 },
-      tdeeEst: 2450,
-      effectiveDeficit: 475,
-      weeklyRateKg: -0.35,
-      projectedFinishDate: '2026-12-30',
-      boundHit: 'moveLimit',
-    },
-    trend: [],
-    adherence: { loggedDays: 11, windowDays: 14, avgIntake: 2010, avgTarget: 2050 },
-    reasons: [],
+    today: '2026-07-15',
+    health: HEALTH,
+    finance: FINANCE,
+    goals: [],
+    goalsAggregate: { activeCount: 0, blockedCount: 0, completedThisWeekCount: 0 },
+    goalSignals: [],
   };
 }
 

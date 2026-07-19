@@ -7,3 +7,4 @@ export * from './netWorth';
 export * from './categoryTotals';
 export * from './recurrence';
 export * from './presetCategories';
+export * from './coachPayload';

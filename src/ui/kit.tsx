@@ -469,7 +469,15 @@ const tabBarStyles = StyleSheet.create({
   label: { fontSize: 11 },
 });
 
-/** Top-right Health/Finance app-mode toggle, shared by both trees' headers. */
+const MODE_OPTIONS: { value: 'health' | 'finance'; label: string; icon: TabIconName }[] = [
+  { value: 'health', label: 'Health', icon: 'weight' },
+  { value: 'finance', label: 'Finance', icon: 'accounts' },
+];
+
+/**
+ * Top-right Health/Finance app-mode switcher — Duolingo app-picker style:
+ * a colored icon tile per mode with a ring around the active one.
+ */
 export function ModeSwitcher({
   mode,
   onChange,
@@ -477,16 +485,46 @@ export function ModeSwitcher({
   mode: 'health' | 'finance';
   onChange: (mode: 'health' | 'finance') => void;
 }) {
+  const t = useTheme();
+  const fill = { health: t.accent, finance: t.chart.protein };
+
   return (
-    <View style={{ width: 168 }}>
-      <SegmentedControl
-        options={[
-          { value: 'health' as const, label: 'Health' },
-          { value: 'finance' as const, label: 'Finance' },
-        ]}
-        value={mode}
-        onChange={onChange}
-      />
+    <View style={{ flexDirection: 'row', gap: space.s }}>
+      {MODE_OPTIONS.map((o) => {
+        const active = o.value === mode;
+        return (
+          <Pressable
+            key={o.value}
+            onPress={() => onChange(o.value)}
+            style={({ pressed }) => ({ alignItems: 'center', gap: 3, opacity: pressed ? 0.7 : 1 })}
+          >
+            <View
+              style={{
+                padding: 3,
+                borderRadius: radius.control + 3,
+                borderWidth: 2,
+                borderColor: active ? t.accent : 'transparent',
+              }}
+            >
+              <View
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: radius.control,
+                  backgroundColor: fill[o.value],
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <TabIcon name={o.icon} color={t.onAccent} size={20} />
+              </View>
+            </View>
+            <Text style={{ fontSize: 11, fontWeight: active ? '700' : '500', color: active ? t.ink : t.muted }}>
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

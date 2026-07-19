@@ -1,12 +1,13 @@
 import { CartesianGrid, Line, LineChart as RLineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatMoneyMinor } from '../../../finance/money';
+import { formatPeriodLabel } from '../../../finance/periods';
 import { useTheme } from '../../theme';
 import type { NetWorthTrendChartProps } from './types';
 
 /** Web export variant, same data contract as the native chart (NetWorthTrendChart.tsx). */
-export function NetWorthTrendChart({ data, currency }: NetWorthTrendChartProps) {
+export function NetWorthTrendChart({ data, currency, granularity }: NetWorthTrendChartProps) {
   const t = useTheme();
-  const chartData = data.map((d) => ({ date: d.date.slice(5), netWorth: d.netWorthMinor / 100 }));
+  const chartData = data.map((d) => ({ date: formatPeriodLabel(d.date, granularity), netWorth: d.netWorthMinor / 100 }));
 
   return (
     <ResponsiveContainer width="100%" height={180}>

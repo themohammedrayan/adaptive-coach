@@ -1,16 +1,17 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
 import { formatMoneyMinor } from '../../../finance/money';
+import { formatPeriodLabel } from '../../../finance/periods';
 import { type as typeScale, useTheme } from '../../theme';
 import type { NetWorthTrendChartProps } from './types';
 
-export function NetWorthTrendChart({ data, currency }: NetWorthTrendChartProps) {
+export function NetWorthTrendChart({ data, currency, granularity }: NetWorthTrendChartProps) {
   const t = useTheme();
   const majorValues = data.map((d) => d.netWorthMinor / 100);
   const min = Math.min(0, ...majorValues);
   const max = Math.max(...majorValues, 0);
   const span = max - min || 1;
-  const chartData = data.map((d, i) => ({ value: majorValues[i], label: d.date.slice(5) }));
+  const chartData = data.map((d, i) => ({ value: majorValues[i], label: formatPeriodLabel(d.date, granularity) }));
   const latest = data[data.length - 1];
 
   return (

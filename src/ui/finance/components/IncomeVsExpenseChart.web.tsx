@@ -1,12 +1,13 @@
 import { Bar, BarChart as RBarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { formatPeriodLabel } from '../../../finance/periods';
 import { useTheme } from '../../theme';
 import type { IncomeVsExpenseChartProps } from './types';
 
 /** Web export variant, same data contract as the native chart (IncomeVsExpenseChart.tsx). */
-export function IncomeVsExpenseChart({ data }: IncomeVsExpenseChartProps) {
+export function IncomeVsExpenseChart({ data, granularity }: IncomeVsExpenseChartProps) {
   const t = useTheme();
   const chartData = data.map((d) => ({
-    month: d.month.slice(5),
+    month: formatPeriodLabel(d.month, granularity),
     income: d.incomeMinor / 100,
     expense: d.expenseMinor / 100,
   }));

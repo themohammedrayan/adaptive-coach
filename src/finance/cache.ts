@@ -1,5 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Account, AccountValuation, Category, RecurringTransaction, Transaction } from './types';
+import type {
+  Account,
+  AccountValuation,
+  Budget,
+  Category,
+  FinanceGoal,
+  RecurringTransaction,
+  Transaction,
+} from './types';
 
 const CACHE_KEY = 'finance:cache:v1';
 
@@ -9,6 +17,8 @@ export interface FinanceCache {
   transactions: Transaction[];
   valuations: AccountValuation[];
   recurringTransactions: RecurringTransaction[];
+  goals: FinanceGoal[];
+  budgets: Budget[];
   cachedAt: string;
 }
 

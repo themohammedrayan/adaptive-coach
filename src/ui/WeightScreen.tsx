@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import type { BodyMetricRow, SyncResult } from '../data-sync/types';
 import { AppButton, Card, Dot, EmptyState, FAB, Field, Overline, Row } from './kit';
@@ -169,24 +169,26 @@ export function WeightScreen() {
       <FAB icon="plus" accessibilityLabel="Add weight" onPress={() => setAddOpen(true)} />
 
       <Modal visible={addOpen} transparent animationType="fade" onRequestClose={() => setAddOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setAddOpen(false)}>
-          <Pressable style={styles.sheetWrap} onPress={() => {}}>
-            <Card style={styles.sheet}>
-              <Overline>Add weight</Overline>
-              <Row gap={space.m}>
-                <Field
-                  placeholder="Weight (kg)"
-                  keyboardType="decimal-pad"
-                  value={input}
-                  onChangeText={setInput}
-                  style={styles.flex}
-                  autoFocus
-                />
-                <AppButton title="Add" onPress={addWeight} />
-              </Row>
-            </Card>
+        <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+          <Pressable style={styles.backdrop} onPress={() => setAddOpen(false)}>
+            <Pressable style={styles.sheetWrap} onPress={() => {}}>
+              <Card style={styles.sheet}>
+                <Overline>Add weight</Overline>
+                <Row gap={space.m}>
+                  <Field
+                    placeholder="Weight (kg)"
+                    keyboardType="decimal-pad"
+                    value={input}
+                    onChangeText={setInput}
+                    style={styles.flex}
+                    autoFocus
+                  />
+                  <AppButton title="Add" onPress={addWeight} />
+                </Row>
+              </Card>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

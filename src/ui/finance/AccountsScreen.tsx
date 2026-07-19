@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { accountBalanceAsOf } from '../../finance/netWorth';
 import { defaultGenId } from '../../finance/ids';
 import { formatMoneyMinor, parseMoneyInput } from '../../finance/money';
 import type { Account, AccountType } from '../../finance/types';
-import { AppButton, AppSwitch, Card, Chip, EmptyState, FAB, Field, Overline, Row } from '../kit';
+import { AppButton, AppSwitch, Card, Chip, EmptyState, FAB, Field, Overline, ProgressBar, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { useFinanceData } from './FinanceDataContext';
 
@@ -25,12 +25,38 @@ function defaultIsLiability(type: AccountType): boolean {
   return type === 'credit_card' || type === 'loan';
 }
 
+function CreditUtilization({
+  usedMinor,
+  limitMinor,
+  currency,
+}: {
+  usedMinor: number;
+  limitMinor: number;
+  currency: string;
+}) {
+  const t = useTheme();
+  const pct = limitMinor > 0 ? usedMinor / limitMinor : 0;
+  return (
+    <View style={{ gap: space.xs }}>
+      <Row style={{ justifyContent: 'space-between' }}>
+        <Text style={[type.caption, { color: t.muted }]}>
+          Used {formatMoneyMinor(usedMinor, currency)} of {formatMoneyMinor(limitMinor, currency)}
+        </Text>
+        <Text style={[type.caption, { color: pct > 0.8 ? t.danger : t.muted }]}>{Math.round(pct * 100)}%</Text>
+      </Row>
+      <ProgressBar pct={pct} color={pct > 0.8 ? t.danger : t.accent} />
+    </View>
+  );
+}
+
 export function AccountsScreen() {
   const t = useTheme();
-  const { accounts, transactions, valuations, today, saveAccount, archiveAccount, saveValuation } = useFinanceData();
+  const { accounts, transactions, valuations, today, saveAccount, archiveAccount, saveValuation, saveTransaction } =
+    useFinanceData();
   const [addOpen, setAddOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [valuationInput, setValuationInput] = useState('');
+  const [correctionInput, setCorrectionInput] = useState('');
 
   const activeAccounts = useMemo(() => accounts.filter((a) => a.archivedAt === null), [accounts]);
 
@@ -52,6 +78,31 @@ export function AccountsScreen() {
     setValuationInput('');
   };
 
+  /** Corrects a ledger account's balance by booking the delta as an 'adjustment' transaction — the balance itself is never stored directly. */
+  const submitCorrection = async (account: Account) => {
+    const enteredMinor = parseMoneyInput(correctionInput);
+    if (enteredMinor === null) return;
+    const currentMinor = balanceFor(account) ?? 0;
+    const deltaMinor = enteredMinor - currentMinor;
+    if (deltaMinor === 0) return;
+    await saveTransaction({
+      id: defaultGenId(),
+      externalId: defaultGenId(),
+      type: 'adjustment',
+      accountExternalId: account.externalId,
+      counterAccountExternalId: null,
+      categoryExternalId: null,
+      amountMinor: deltaMinor,
+      currency: account.currency,
+      note: 'Balance correction',
+      txnDate: today,
+      source: 'manual',
+      recurrenceExternalId: null,
+      updatedAt: new Date().toISOString(),
+    });
+    setCorrectionInput('');
+  };
+
   const confirmArchive = (account: Account) => {
     Alert.alert('Archive account?', `"${account.name}" will be hidden but kept for historical reports.`, [
       { text: 'Cancel', style: 'cancel' },
@@ -60,7 +111,9 @@ export function AccountsScreen() {
   };
 
   return (
-    <View style={{ gap: space.m }}>
+    <View style={styles.flex}>
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
+      <ScrollView contentContainerStyle={styles.list}>
       {activeAccounts.length === 0 && (
         <EmptyState message="Add a bank, cash, credit card, investment, or loan account to get started." />
       )}
@@ -85,6 +138,10 @@ export function AccountsScreen() {
               </Row>
             </Pressable>
 
+            {account.type === 'credit_card' && account.creditLimitMinor !== null && (
+              <CreditUtilization usedMinor={balance ?? 0} limitMinor={account.creditLimitMinor} currency={account.currency} />
+            )}
+
             {expanded && (
               <View style={{ gap: space.s, marginTop: space.xs }}>
                 {account.balanceMode === 'valuation' && (
@@ -100,9 +157,21 @@ export function AccountsScreen() {
                   </Row>
                 )}
                 {account.balanceMode === 'ledger' && (
-                  <Text style={[type.caption, { color: t.muted }]}>
-                    Balance updates automatically from logged transactions.
-                  </Text>
+                  <>
+                    <Text style={[type.caption, { color: t.muted }]}>
+                      Balance updates automatically from logged transactions. If it's wrong, correct it below.
+                    </Text>
+                    <Row gap={space.m}>
+                      <Field
+                        placeholder={`Actual balance (${account.currency})`}
+                        keyboardType="decimal-pad"
+                        value={correctionInput}
+                        onChangeText={setCorrectionInput}
+                        style={{ flex: 1 }}
+                      />
+                      <AppButton title="Correct" onPress={() => submitCorrection(account)} small />
+                    </Row>
+                  </>
                 )}
                 {(account.type === 'credit_card' || account.type === 'loan') && (
                   <Text style={[type.caption, { color: t.muted }]}>
@@ -116,6 +185,8 @@ export function AccountsScreen() {
           </Card>
         );
       })}
+      </ScrollView>
+      </KeyboardAvoidingView>
 
       <FAB icon="plus" accessibilityLabel="Add account" onPress={() => setAddOpen(true)} />
 
@@ -140,6 +211,7 @@ function AddAccountModal({
   const [accountType, setAccountType] = useState<AccountType>('bank');
   const [openingBalanceInput, setOpeningBalanceInput] = useState('');
   const [isLiability, setIsLiability] = useState(defaultIsLiability('bank'));
+  const [creditLimitInput, setCreditLimitInput] = useState('');
 
   const balanceMode = defaultBalanceMode(accountType);
 
@@ -151,6 +223,7 @@ function AddAccountModal({
   const submit = async () => {
     if (name.trim() === '') return;
     const openingBalanceMinor = balanceMode === 'ledger' ? (parseMoneyInput(openingBalanceInput) ?? 0) : 0;
+    const creditLimitMinor = accountType === 'credit_card' ? parseMoneyInput(creditLimitInput) : null;
     const nowIso = new Date().toISOString();
     await onSave({
       id: defaultGenId(),
@@ -165,6 +238,7 @@ function AddAccountModal({
       interestRate: null,
       minimumPaymentMinor: null,
       dueDay: null,
+      creditLimitMinor,
       source: 'manual',
       archivedAt: null,
       updatedAt: nowIso,
@@ -173,47 +247,60 @@ function AddAccountModal({
     setOpeningBalanceInput('');
     setAccountType('bank');
     setIsLiability(defaultIsLiability('bank'));
+    setCreditLimitInput('');
     onClose();
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheetWrap} onPress={() => {}}>
-          <Card style={{ gap: space.m }}>
-            <Overline>Add account</Overline>
-            <Field placeholder="Account name" value={name} onChangeText={setName} autoFocus />
-            <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
-              {ACCOUNT_TYPES.map((opt) => (
-                <Chip key={opt.value} label={opt.label} active={accountType === opt.value} onPress={() => selectType(opt.value)} />
-              ))}
-            </Row>
-            {balanceMode === 'ledger' && (
-              <Field
-                placeholder="Opening balance"
-                keyboardType="decimal-pad"
-                value={openingBalanceInput}
-                onChangeText={setOpeningBalanceInput}
-              />
-            )}
-            {balanceMode === 'valuation' && (
-              <Text style={[type.caption, { color: t.muted }]}>
-                You'll enter its current value right after creating it.
-              </Text>
-            )}
-            <Row style={{ justifyContent: 'space-between' }}>
-              <Text style={[type.body, { color: t.ink }]}>Counts as a liability</Text>
-              <AppSwitch value={isLiability} onChange={setIsLiability} />
-            </Row>
-            <AppButton title="Add account" onPress={submit} />
-          </Card>
+      <KeyboardAvoidingView behavior="padding" style={styles.flex}>
+        <Pressable style={styles.backdrop} onPress={onClose}>
+          <Pressable style={styles.sheetWrap} onPress={() => {}}>
+            <Card style={{ gap: space.m }}>
+              <Overline>Add account</Overline>
+              <Field placeholder="Account name" value={name} onChangeText={setName} autoFocus />
+              <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
+                {ACCOUNT_TYPES.map((opt) => (
+                  <Chip key={opt.value} label={opt.label} active={accountType === opt.value} onPress={() => selectType(opt.value)} />
+                ))}
+              </Row>
+              {balanceMode === 'ledger' && (
+                <Field
+                  placeholder="Opening balance"
+                  keyboardType="decimal-pad"
+                  value={openingBalanceInput}
+                  onChangeText={setOpeningBalanceInput}
+                />
+              )}
+              {balanceMode === 'valuation' && (
+                <Text style={[type.caption, { color: t.muted }]}>
+                  You'll enter its current value right after creating it.
+                </Text>
+              )}
+              {accountType === 'credit_card' && (
+                <Field
+                  placeholder="Credit limit (optional)"
+                  keyboardType="decimal-pad"
+                  value={creditLimitInput}
+                  onChangeText={setCreditLimitInput}
+                />
+              )}
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Text style={[type.body, { color: t.ink }]}>Counts as a liability</Text>
+                <AppSwitch value={isLiability} onChange={setIsLiability} />
+              </Row>
+              <AppButton title="Add account" onPress={submit} />
+            </Card>
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  list: { padding: space.l, gap: space.m },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.4)' },
   sheetWrap: { padding: space.l },
 });

@@ -15,6 +15,7 @@ function account(overrides: Partial<Account>): Account {
     interestRate: null,
     minimumPaymentMinor: null,
     dueDay: null,
+    creditLimitMinor: null,
     source: 'manual',
     archivedAt: null,
     updatedAt: '2026-07-01T00:00:00.000Z',

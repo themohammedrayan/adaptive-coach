@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -12,6 +12,7 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, Path, Polyline, Rect } from 'react-native-svg';
 import { radius, space, type, useTheme } from './theme';
 
@@ -219,6 +220,9 @@ export function Chip({
   );
 }
 
+const SEGMENT_PAD = 4;
+
+/** Duolingo-style raised pill toggle — a sliding thumb animates behind the active option. */
 export function SegmentedControl<T extends string>({
   options,
   value,
@@ -229,15 +233,51 @@ export function SegmentedControl<T extends string>({
   onChange: (v: T) => void;
 }) {
   const t = useTheme();
+  const [trackWidth, setTrackWidth] = useState(0);
+  const activeIndex = Math.max(0, options.findIndex((o) => o.value === value));
+  const segmentWidth = (trackWidth - SEGMENT_PAD * 2) / options.length;
+  const thumbX = useSharedValue(0);
+
+  useEffect(() => {
+    thumbX.value = withTiming(activeIndex * segmentWidth, { duration: 220 });
+  }, [activeIndex, segmentWidth, thumbX]);
+
+  const thumbStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: thumbX.value }],
+  }));
+
   return (
     <View
       style={{
         flexDirection: 'row',
         backgroundColor: t.wash,
-        borderRadius: radius.control,
-        padding: 3,
+        borderRadius: radius.pill,
+        padding: SEGMENT_PAD,
       }}
+      onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
     >
+      {trackWidth > 0 && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: 'absolute',
+              top: SEGMENT_PAD,
+              bottom: SEGMENT_PAD,
+              left: SEGMENT_PAD,
+              width: segmentWidth,
+              borderRadius: radius.pill,
+              backgroundColor: t.card,
+              elevation: 2,
+              shadowColor: '#000',
+              shadowOpacity: 0.12,
+              shadowRadius: 4,
+              shadowOffset: { width: 0, height: 1 },
+            },
+            thumbStyle,
+          ]}
+        />
+      )}
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -246,18 +286,14 @@ export function SegmentedControl<T extends string>({
             onPress={() => onChange(o.value)}
             style={{
               flex: 1,
-              paddingVertical: 6,
-              borderRadius: radius.control - 3,
-              backgroundColor: active ? t.card : 'transparent',
-              borderWidth: active ? StyleSheet.hairlineWidth : 0,
-              borderColor: t.hairline,
+              paddingVertical: 8,
               alignItems: 'center',
             }}
           >
             <Text
               style={{
-                fontSize: 13,
-                fontWeight: active ? '600' : '400',
+                fontSize: 14,
+                fontWeight: active ? '700' : '500',
                 color: active ? t.ink : t.secondary,
               }}
             >

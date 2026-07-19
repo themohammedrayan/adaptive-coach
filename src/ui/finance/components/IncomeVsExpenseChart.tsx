@@ -1,12 +1,13 @@
 import { StyleSheet, View } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
+import { formatPeriodLabel } from '../../../finance/periods';
 import { useTheme } from '../../theme';
 import type { IncomeVsExpenseChartProps } from './types';
 
-export function IncomeVsExpenseChart({ data }: IncomeVsExpenseChartProps) {
+export function IncomeVsExpenseChart({ data, granularity }: IncomeVsExpenseChartProps) {
   const t = useTheme();
   const barData = data.flatMap((d) => [
-    { value: d.incomeMinor / 100, label: d.month.slice(5), frontColor: t.good, spacing: 2 },
+    { value: d.incomeMinor / 100, label: formatPeriodLabel(d.month, granularity), frontColor: t.good, spacing: 2 },
     { value: d.expenseMinor / 100, frontColor: t.danger, spacing: 14 },
   ]);
 

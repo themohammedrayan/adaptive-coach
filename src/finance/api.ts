@@ -4,8 +4,11 @@ import type {
   AccountType,
   AccountValuation,
   BalanceMode,
+  Budget,
   Category,
   CategoryKind,
+  FinanceGoal,
+  FinanceGoalStatus,
   RecurrenceFrequency,
   RecurringTransaction,
   Transaction,
@@ -26,6 +29,7 @@ interface ServerAccountRow {
   interest_rate: number | null;
   minimum_payment_minor: number | null;
   due_day: number | null;
+  credit_limit_minor: number | null;
   source: 'manual' | 'imported';
   archived_at: string | null;
   updated_at?: string;
@@ -44,6 +48,7 @@ function accountToServer(a: Account) {
     interest_rate: a.interestRate,
     minimum_payment_minor: a.minimumPaymentMinor,
     due_day: a.dueDay,
+    credit_limit_minor: a.creditLimitMinor,
     source: a.source,
     archived_at: a.archivedAt,
   };
@@ -63,6 +68,7 @@ function accountFromServer(r: ServerAccountRow): Account {
     interestRate: r.interest_rate === null ? null : Number(r.interest_rate),
     minimumPaymentMinor: r.minimum_payment_minor === null ? null : Number(r.minimum_payment_minor),
     dueDay: r.due_day,
+    creditLimitMinor: r.credit_limit_minor === null ? null : Number(r.credit_limit_minor),
     source: r.source,
     archivedAt: r.archived_at,
     updatedAt: r.updated_at ?? '',
@@ -354,6 +360,123 @@ export async function updateRecurringLastMaterializedDate(externalId: string, la
   const { error } = await supabase
     .from('finance_recurring_transactions')
     .update({ last_materialized_date: lastMaterializedDate })
+    .eq('external_id', externalId);
+  if (error) throw new Error(error.message);
+}
+
+/* --------------------------------------------------------------- goals */
+
+interface ServerGoalRow {
+  external_id: string;
+  name: string;
+  target_amount_minor: number;
+  currency: string;
+  linked_account_external_id: string;
+  target_date: string | null;
+  status: FinanceGoalStatus;
+  archived_at: string | null;
+  updated_at?: string;
+}
+
+function goalToServer(g: FinanceGoal) {
+  return {
+    external_id: g.externalId,
+    name: g.name,
+    target_amount_minor: g.targetAmountMinor,
+    currency: g.currency,
+    linked_account_external_id: g.linkedAccountExternalId,
+    target_date: g.targetDate,
+    status: g.status,
+    archived_at: g.archivedAt,
+  };
+}
+
+function goalFromServer(r: ServerGoalRow): FinanceGoal {
+  return {
+    id: r.external_id,
+    externalId: r.external_id,
+    name: r.name,
+    targetAmountMinor: Number(r.target_amount_minor),
+    currency: r.currency,
+    linkedAccountExternalId: r.linked_account_external_id,
+    targetDate: r.target_date,
+    status: r.status,
+    archivedAt: r.archived_at,
+    updatedAt: r.updated_at ?? '',
+  };
+}
+
+export async function listGoals(): Promise<FinanceGoal[]> {
+  const { data, error } = await supabase.from('finance_goals').select('*').is('deleted_at', null);
+  if (error) throw new Error(error.message);
+  return (data as ServerGoalRow[]).map(goalFromServer);
+}
+
+export async function upsertGoal(goal: FinanceGoal): Promise<void> {
+  const { error } = await supabase
+    .from('finance_goals')
+    .upsert(goalToServer(goal), { onConflict: 'user_id,external_id' });
+  if (error) throw new Error(error.message);
+}
+
+export async function archiveGoal(externalId: string, archivedAtIso: string): Promise<void> {
+  const { error } = await supabase
+    .from('finance_goals')
+    .update({ status: 'archived', archived_at: archivedAtIso })
+    .eq('external_id', externalId);
+  if (error) throw new Error(error.message);
+}
+
+/* ------------------------------------------------------------- budgets */
+
+interface ServerBudgetRow {
+  external_id: string;
+  category_external_id: string | null;
+  amount_minor: number;
+  currency: string;
+  archived_at: string | null;
+  updated_at?: string;
+}
+
+function budgetToServer(b: Budget) {
+  return {
+    external_id: b.externalId,
+    category_external_id: b.categoryExternalId,
+    amount_minor: b.amountMinor,
+    currency: b.currency,
+    archived_at: b.archivedAt,
+  };
+}
+
+function budgetFromServer(r: ServerBudgetRow): Budget {
+  return {
+    id: r.external_id,
+    externalId: r.external_id,
+    categoryExternalId: r.category_external_id,
+    amountMinor: Number(r.amount_minor),
+    currency: r.currency,
+    archivedAt: r.archived_at,
+    updatedAt: r.updated_at ?? '',
+  };
+}
+
+export async function listBudgets(): Promise<Budget[]> {
+  const { data, error } = await supabase.from('finance_budgets').select('*').is('deleted_at', null);
+  if (error) throw new Error(error.message);
+  return (data as ServerBudgetRow[]).map(budgetFromServer);
+}
+
+export async function upsertBudget(budget: Budget): Promise<void> {
+  const { error } = await supabase
+    .from('finance_budgets')
+    .upsert(budgetToServer(budget), { onConflict: 'user_id,external_id' });
+  if (error) throw new Error(error.message);
+}
+
+export async function archiveBudget(externalId: string, archivedAtIso: string): Promise<void> {
+  const { error } = await supabase
+    .from('finance_budgets')
+    .update({ archived_at: archivedAtIso })
     .eq('external_id', externalId);
   if (error) throw new Error(error.message);
 }

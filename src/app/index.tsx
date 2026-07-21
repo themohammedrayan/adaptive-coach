@@ -59,7 +59,7 @@ export default function Index() {
   if (!hasProfile) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
-        <ProfileSetupScreen onDone={checkProfile} />
+        <ProfileSetupScreen onDone={checkProfile} modeSwitcher={modeSwitcher} />
       </SafeAreaView>
     );
   }

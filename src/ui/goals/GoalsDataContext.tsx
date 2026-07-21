@@ -93,10 +93,12 @@ export function GoalsDataProvider({ children }: { children: ReactNode }) {
     async (action: () => Promise<void>) => {
       try {
         await action();
-      } catch {
-        // best-effort, no outbox (Goals architecture decision) — reconciles on next successful load
+      } finally {
+        // Always reconcile from server/cache, success or failure — but let
+        // a write failure propagate so callers (e.g. CreateGoalScreen's
+        // submit handlers) can tell it didn't actually save.
+        await load();
       }
-      await load();
     },
     [load],
   );

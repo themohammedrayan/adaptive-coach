@@ -37,28 +37,34 @@ export function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [dashRt, foodRt, dataRt, challengeRt] = await Promise.all([
-      getDashboardRuntime(),
-      getFoodLogRuntime(),
-      getDataSyncRuntime(),
-      getChallengeRuntime(),
-    ]);
-    const today = foodRt.toLocalDate(foodRt.nowUtc());
-    const snap = await refreshDashboardSnapshot(
-      {
-        dashboardStore: dashRt.store,
-        foodLogStore: foodRt.store,
-        dataSyncStore: dataRt.store,
-        challengeStore: challengeRt.store,
-      },
-      today,
-    );
-    setSnapshot(snap);
-    const recent = await dataRt.listRecentWeights(1);
-    setCurrentWeightKg(recent.length > 0 ? recent[0].valueSI : null);
-    setReminders(await dashRt.store.getReminderConfig());
+    try {
+      const [dashRt, foodRt, dataRt, challengeRt] = await Promise.all([
+        getDashboardRuntime(),
+        getFoodLogRuntime(),
+        getDataSyncRuntime(),
+        getChallengeRuntime(),
+      ]);
+      const today = foodRt.toLocalDate(foodRt.nowUtc());
+      const snap = await refreshDashboardSnapshot(
+        {
+          dashboardStore: dashRt.store,
+          foodLogStore: foodRt.store,
+          dataSyncStore: dataRt.store,
+          challengeStore: challengeRt.store,
+        },
+        today,
+      );
+      setSnapshot(snap);
+      const recent = await dataRt.listRecentWeights(1);
+      setCurrentWeightKg(recent.length > 0 ? recent[0].valueSI : null);
+      setReminders(await dashRt.store.getReminderConfig());
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
+    }
   }, []);
 
   useEffect(() => {
@@ -113,7 +119,22 @@ export function ProfileScreen() {
     );
   };
 
-  if (snapshot === null || snapshot.profile === null) return null;
+  if (snapshot === null) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <Text style={[type.caption, { color: t.muted, textAlign: 'center' }]}>
+          {loadError !== null ? `Couldn't load your profile: ${loadError}` : 'Loading…'}
+        </Text>
+        {loadError !== null && (
+          <AppButton title="Retry" onPress={() => void load()} variant="secondary" small />
+        )}
+      </ScrollView>
+    );
+  }
+  if (snapshot.profile === null) return null;
   const profile = snapshot.profile;
 
   if (editing) {
@@ -250,6 +271,8 @@ function EditProfileForm({
       const dashRt = await getDashboardRuntime();
       await dashRt.store.setProfile({ sex, age: ageN, heightCm: heightN, activityFactor });
       onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }

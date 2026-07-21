@@ -35,9 +35,13 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     void (async () => {
-      const rt = await getDataSyncRuntime();
-      const recent = await rt.listRecentWeights(1);
-      if (recent.length > 0) setCurrentWeightKg(recent[0].valueSI);
+      try {
+        const rt = await getDataSyncRuntime();
+        const recent = await rt.listRecentWeights(1);
+        if (recent.length > 0) setCurrentWeightKg(recent[0].valueSI);
+      } catch {
+        // Falls back to the manual weight-input field below — no dedicated UI needed.
+      }
     })();
   }, []);
 
@@ -125,6 +129,8 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
         { force: true },
       );
       onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }

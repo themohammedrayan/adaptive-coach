@@ -1,7 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { addFavorite, type Food, type Meal, type Unit } from '../food-log';
 import { getFoodLogRuntime } from '../food-log/runtime';
@@ -27,24 +27,34 @@ export function EstimateMealScreen({ meal }: { meal: Meal | null }) {
   const [error, setError] = useState<string | null>(null);
   const [estimate, setEstimate] = useState<MealEstimate | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [unitsError, setUnitsError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
-      const rt = await getFoodLogRuntime();
-      setUnits(await rt.store.listUnits());
+      try {
+        const rt = await getFoodLogRuntime();
+        setUnits(await rt.store.listUnits());
+        setUnitsError(null);
+      } catch (e) {
+        setUnitsError(e instanceof Error ? e.message : String(e));
+      }
     })();
   }, []);
 
   const pickImage = async (source: 'camera' | 'library') => {
-    const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], base64: true, quality: 0.5 };
-    const result =
-      source === 'camera'
-        ? await ImagePicker.launchCameraAsync(options)
-        : await ImagePicker.launchImageLibraryAsync(options);
-    if (result.canceled || result.assets.length === 0) return;
-    const asset = result.assets[0];
-    setImageUri(asset.uri);
-    setImageBase64(asset.base64 ?? null);
+    try {
+      const options: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], base64: true, quality: 0.5 };
+      const result =
+        source === 'camera'
+          ? await ImagePicker.launchCameraAsync(options)
+          : await ImagePicker.launchImageLibraryAsync(options);
+      if (result.canceled || result.assets.length === 0) return;
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      setImageBase64(asset.base64 ?? null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const runEstimate = async () => {
@@ -69,9 +79,13 @@ export function EstimateMealScreen({ meal }: { meal: Meal | null }) {
   };
 
   const onFoodCreated = async (food: Food) => {
-    const rt = await getFoodLogRuntime();
-    await addFavorite(rt.store, food.id, meal, rt.nowUtc());
-    router.back();
+    try {
+      const rt = await getFoodLogRuntime();
+      await addFavorite(rt.store, food.id, meal, rt.nowUtc());
+      router.back();
+    } catch (e) {
+      Alert.alert('Couldn’t finish saving', e instanceof Error ? e.message : String(e));
+    }
   };
 
   const reset = () => {
@@ -153,7 +167,11 @@ export function EstimateMealScreen({ meal }: { meal: Meal | null }) {
               disabled={description.trim() === '' && !imageBase64}
             />
           </Card>
-          {units.length === 0 && <EmptyState message="Loading your units…" />}
+          {units.length === 0 && (
+            <EmptyState
+              message={unitsError !== null ? `Couldn't load your units: ${unitsError}` : 'Loading your units…'}
+            />
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

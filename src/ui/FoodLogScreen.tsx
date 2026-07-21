@@ -51,18 +51,25 @@ export function FoodLogScreen() {
   const [activeMeal, setActiveMeal] = useState<Meal | null>(null);
   const [actionEntry, setActionEntry] = useState<LogEntry | null>(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const rt = await getFoodLogRuntime();
-    const localDate = rt.toLocalDate(rt.nowUtc());
-    setToday(localDate);
-    setEntries(await rt.store.listEntriesByDate(localDate));
-    setUnits(await rt.store.listUnits());
-    // Include archived so historical entries still resolve to a name.
-    const foods = await rt.store.listFoods(true);
-    setFoodNames(new Map(foods.map((f: Food) => [f.id, f.name])));
-    const favs = await rt.store.listFavorites();
-    setFavoriteIds(new Set(favs.map((f: Favorite) => f.foodId)));
+    try {
+      const rt = await getFoodLogRuntime();
+      const localDate = rt.toLocalDate(rt.nowUtc());
+      setToday(localDate);
+      setEntries(await rt.store.listEntriesByDate(localDate));
+      setUnits(await rt.store.listUnits());
+      // Include archived so historical entries still resolve to a name.
+      const foods = await rt.store.listFoods(true);
+      setFoodNames(new Map(foods.map((f: Food) => [f.id, f.name])));
+      const favs = await rt.store.listFavorites();
+      setFavoriteIds(new Set(favs.map((f: Favorite) => f.foodId)));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }, []);
 
   useEffect(() => {
@@ -71,8 +78,12 @@ export function FoodLogScreen() {
 
   useEffect(() => {
     void (async () => {
-      const rt = await getFoodLogRuntime();
-      await rt.sync(false); // sync-on-open, mirrors data-sync's WeightScreen convention
+      try {
+        const rt = await getFoodLogRuntime();
+        await rt.sync(false); // sync-on-open, mirrors data-sync's WeightScreen convention
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
       await refresh();
     })();
   }, [refresh]);
@@ -94,25 +105,32 @@ export function FoodLogScreen() {
   const copyYesterday = async () => {
     if (today === null) return;
     setBusy(true);
+    setCopyError(null);
     try {
       const rt = await getFoodLogRuntime();
       await copyDay(rt.store, addDays(today, -1), today, rt.nowUtc());
       await refresh();
       void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+    } catch (e) {
+      setCopyError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   };
 
   const toggleFavorite = async (foodId: string) => {
-    const rt = await getFoodLogRuntime();
-    if (favoriteIds.has(foodId)) {
-      await removeFavorite(rt.store, foodId, rt.nowUtc());
-    } else {
-      await addFavorite(rt.store, foodId, activeMeal, rt.nowUtc());
+    try {
+      const rt = await getFoodLogRuntime();
+      if (favoriteIds.has(foodId)) {
+        await removeFavorite(rt.store, foodId, rt.nowUtc());
+      } else {
+        await addFavorite(rt.store, foodId, activeMeal, rt.nowUtc());
+      }
+      await refresh();
+      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+    } catch (e) {
+      Alert.alert('Couldn’t update favorite', e instanceof Error ? e.message : String(e));
     }
-    await refresh();
-    void rt.sync(true); // opportunistic push; offline is fine, outbox retries
   };
 
   return (
@@ -148,6 +166,9 @@ export function FoodLogScreen() {
                 Some foods are kcal-only — macro totals are incomplete.
               </Text>
             )}
+            {copyError !== null && (
+              <Text style={[type.caption, { color: t.danger }]}>Couldn’t copy yesterday: {copyError}</Text>
+            )}
           </Card>
         }
         renderSectionHeader={({ section }) => (
@@ -177,7 +198,7 @@ export function FoodLogScreen() {
             <Text style={[type.body, { color: t.secondary }]}>{Math.round(item.kcal)} kcal</Text>
           </TouchableOpacity>
         )}
-        ListEmptyComponent={<EmptyState message="Nothing logged today yet." />}
+        ListEmptyComponent={<EmptyState message={error ?? 'Nothing logged today yet.'} />}
       />
 
       {activeMeal !== null && (
@@ -236,10 +257,17 @@ function AddSheet({
   const [favorites, setFavorites] = useState<Food[]>([]);
   const [selected, setSelected] = useState<Food | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [logError, setLogError] = useState<string | null>(null);
 
   const loadFavorites = useCallback(async () => {
-    const rt = await getFoodLogRuntime();
-    setFavorites(await listFavorites(rt.store));
+    try {
+      const rt = await getFoodLogRuntime();
+      setFavorites(await listFavorites(rt.store));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }, []);
 
   useEffect(() => {
@@ -256,24 +284,33 @@ function AddSheet({
 
   const runSearch = useCallback(async (q: string) => {
     setQuery(q);
-    const rt = await getFoodLogRuntime();
-    setResults(q.trim() === '' ? [] : await searchFoods(rt.store, q));
+    try {
+      const rt = await getFoodLogRuntime();
+      setResults(q.trim() === '' ? [] : await searchFoods(rt.store, q));
+      setError(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   }, []);
 
   const pickFood = (food: Food) => setSelected(food);
 
   const logSelected = async (quantity: number, unitId: string) => {
     if (selected === null) return;
-    const rt = await getFoodLogRuntime();
-    await addLogEntry(
-      rt.store,
-      { foodId: selected.id, meal, quantity, unitId, loggedAt: rt.nowUtc() },
-      rt.toLocalDate,
-    );
-    setSelected(null);
-    onClose();
-    onLogged();
-    void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+    try {
+      const rt = await getFoodLogRuntime();
+      await addLogEntry(
+        rt.store,
+        { foodId: selected.id, meal, quantity, unitId, loggedAt: rt.nowUtc() },
+        rt.toLocalDate,
+      );
+      setSelected(null);
+      onClose();
+      onLogged();
+      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+    } catch (e) {
+      setLogError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const mealLabel = MEALS.find((m) => m.key === meal)?.label ?? meal;
@@ -301,6 +338,9 @@ function AddSheet({
                 onSubmit={logSelected}
                 onCancel={() => setSelected(null)}
               />
+              {logError !== null && (
+                <Text style={[type.caption, { color: t.danger }]}>{logError}</Text>
+              )}
             </View>
           ) : showCreate ? (
             <CreateFoodForm
@@ -316,6 +356,7 @@ function AddSheet({
           ) : (
             <View style={styles.sheetBody}>
               <Text style={[type.heading, { color: t.ink }]}>Add to {mealLabel}</Text>
+              {error !== null && <Text style={[type.caption, { color: t.danger }]}>{error}</Text>}
               <Field placeholder="Search your foods…" value={query} onChangeText={runSearch} autoFocus />
               <ScrollView style={styles.resultList} keyboardShouldPersistTaps="handled">
                 {query.trim() === '' && favorites.length > 0 && (
@@ -473,6 +514,7 @@ function EntryActionSheet({
 }) {
   const t = useTheme();
   const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const confirmDelete = () => {
     Alert.alert('Delete entry?', `${foodName} · ${Math.round(entry.kcal)} kcal`, [
@@ -482,11 +524,15 @@ function EntryActionSheet({
         style: 'destructive',
         onPress: () => {
           void (async () => {
-            const rt = await getFoodLogRuntime();
-            await rt.store.deleteEntry(entry.id, rt.nowUtc());
-            onClose();
-            onChanged();
-            void rt.sync(true); // opportunistic push; propagates the soft-delete
+            try {
+              const rt = await getFoodLogRuntime();
+              await rt.store.deleteEntry(entry.id, rt.nowUtc());
+              onClose();
+              onChanged();
+              void rt.sync(true); // opportunistic push; propagates the soft-delete
+            } catch (e) {
+              Alert.alert('Delete failed', e instanceof Error ? e.message : String(e));
+            }
           })();
         },
       },
@@ -505,22 +551,31 @@ function EntryActionSheet({
               {entry.quantity} × {unitName} · {Math.round(entry.grams)}g · {Math.round(entry.kcal)} kcal
             </Text>
             {editing ? (
-              <PortionForm
-                foodId={entry.foodId}
-                units={units}
-                initialQuantity={String(entry.quantity)}
-                initialUnitId={entry.unitId}
-                submitTitle="Save changes"
-                cancelTitle="Back"
-                onSubmit={async (quantity, unitId) => {
-                  const rt = await getFoodLogRuntime();
-                  await editLogEntry(rt.store, entry, { quantity, unitId }, rt.nowUtc());
-                  onClose();
-                  onChanged();
-                  void rt.sync(true); // opportunistic push; offline is fine, outbox retries
-                }}
-                onCancel={() => setEditing(false)}
-              />
+              <>
+                <PortionForm
+                  foodId={entry.foodId}
+                  units={units}
+                  initialQuantity={String(entry.quantity)}
+                  initialUnitId={entry.unitId}
+                  submitTitle="Save changes"
+                  cancelTitle="Back"
+                  onSubmit={async (quantity, unitId) => {
+                    try {
+                      const rt = await getFoodLogRuntime();
+                      await editLogEntry(rt.store, entry, { quantity, unitId }, rt.nowUtc());
+                      onClose();
+                      onChanged();
+                      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+                    } catch (e) {
+                      setEditError(e instanceof Error ? e.message : String(e));
+                    }
+                  }}
+                  onCancel={() => setEditing(false)}
+                />
+                {editError !== null && (
+                  <Text style={[type.caption, { color: t.danger }]}>{editError}</Text>
+                )}
+              </>
             ) : (
               <>
                 <AppButton title="Edit" onPress={() => setEditing(true)} />

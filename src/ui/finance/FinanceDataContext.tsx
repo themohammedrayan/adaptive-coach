@@ -44,9 +44,7 @@ interface FinanceDataValue extends FinanceData {
   saveCategory: (category: Category) => Promise<void>;
   saveValuation: (valuation: AccountValuation) => Promise<void>;
   saveTransaction: (txn: Transaction) => Promise<void>;
-  deleteTransaction: (externalId: string) => Promise<void>;
   saveRecurringTransaction: (rule: RecurringTransaction) => Promise<void>;
-  saveGoal: (goal: FinanceGoal) => Promise<void>;
   archiveGoal: (externalId: string) => Promise<void>;
   saveBudget: (budget: Budget) => Promise<void>;
   archiveBudget: (externalId: string) => Promise<void>;
@@ -267,22 +265,6 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     [applyAndCache],
   );
 
-  const deleteTransaction = useCallback(
-    async (externalId: string) => {
-      const nowIso = new Date().toISOString();
-      applyAndCache((prev) => ({
-        ...prev,
-        transactions: prev.transactions.filter((t) => t.externalId !== externalId),
-      }));
-      try {
-        await api.softDeleteTransaction(externalId, nowIso);
-      } catch {
-        // best-effort only — a delete that fails offline is rare for this personal app; it will reappear on next refresh, which is an acceptable v1 trade-off
-      }
-    },
-    [applyAndCache],
-  );
-
   const saveRecurringTransaction = useCallback(
     async (rule: RecurringTransaction) => {
       applyAndCache((prev) => ({
@@ -299,26 +281,6 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
           entityType: 'recurringTransaction',
           externalId: rule.externalId,
           payload: rule,
-          queuedAt: new Date().toISOString(),
-        });
-      }
-    },
-    [applyAndCache],
-  );
-
-  const saveGoal = useCallback(
-    async (goal: FinanceGoal) => {
-      applyAndCache((prev) => ({
-        ...prev,
-        goals: [...prev.goals.filter((g) => g.externalId !== goal.externalId), goal],
-      }));
-      try {
-        await api.upsertGoal(goal);
-      } catch {
-        await enqueueOutbox({
-          entityType: 'goal',
-          externalId: goal.externalId,
-          payload: goal,
           queuedAt: new Date().toISOString(),
         });
       }
@@ -406,9 +368,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     saveCategory,
     saveValuation,
     saveTransaction,
-    deleteTransaction,
     saveRecurringTransaction,
-    saveGoal,
     archiveGoal,
     saveBudget,
     archiveBudget,

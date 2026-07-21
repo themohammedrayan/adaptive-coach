@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AccountsScreen } from './AccountsScreen';
@@ -23,7 +22,7 @@ const TABS: { key: FinanceTab; label: string; icon: TabIconName; title: string }
   { key: 'reports', label: 'Reports', icon: 'reports', title: 'Reports' },
 ];
 
-export function FinanceApp({ modeSwitcher }: { modeSwitcher?: ReactNode }) {
+export function FinanceApp() {
   const t = useTheme();
   const router = useRouter();
   const [tab, setTab] = useState<FinanceTab>('overview');
@@ -32,11 +31,9 @@ export function FinanceApp({ modeSwitcher }: { modeSwitcher?: ReactNode }) {
   return (
     <FinanceDataProvider>
       <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={[type.title, { color: t.ink }]}>{active.title}</Text>
-        </View>
+        <AppButton title="← Back" onPress={() => router.back()} variant="ghost" small />
+        <Text style={[type.title, { color: t.ink, flex: 1 }]}>{active.title}</Text>
         <AppButton title="Ask coach" onPress={() => router.push('/coach-chat')} variant="ghost" small />
-        {modeSwitcher}
       </View>
 
       <View style={styles.content}>
@@ -55,7 +52,7 @@ export function FinanceApp({ modeSwitcher }: { modeSwitcher?: ReactNode }) {
 const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: space.l,
     paddingTop: space.m,

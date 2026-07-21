@@ -1,4 +1,3 @@
-import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getChallengeRuntime } from '../challenges/runtime';
@@ -21,7 +20,13 @@ import { space, type, useTheme } from './theme';
  * an existing challenge's goal isn't done in place — restart it (same goal,
  * fresh clock) or delete and create a new one from the Challenges tab.
  */
-export function ProfileSetupScreen({ onDone, modeSwitcher }: { onDone: () => void; modeSwitcher?: ReactNode }) {
+export function ProfileSetupScreen({
+  onDone,
+  onSkipToFinance,
+}: {
+  onDone: () => void;
+  onSkipToFinance: () => void;
+}) {
   const t = useTheme();
   const [sex, setSex] = useState<PersonProfile['sex']>('male');
   const [age, setAge] = useState('');
@@ -147,7 +152,7 @@ export function ProfileSetupScreen({ onDone, modeSwitcher }: { onDone: () => voi
               A few details seed your first calorie and macro target — it self-corrects weekly from there.
             </Text>
           </View>
-          {modeSwitcher}
+          <AppButton title="Skip to Finance" onPress={onSkipToFinance} variant="ghost" small />
         </View>
 
         <Card style={styles.card}>

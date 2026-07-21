@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { CreateGoalScreen } from './CreateGoalScreen';
@@ -12,13 +11,13 @@ import { space, type, useTheme } from '../theme';
 type Screen = { kind: 'list' } | { kind: 'create' } | { kind: 'detail'; goalId: string };
 
 /**
- * Goals BRD §G — the app's landing surface. Local screen-state (list/create/
- * detail), not a bottom-tab pattern like Health/Finance — Goals has no
- * natural second top-level section to tab into (goal *type* is a filter
- * within the list, not a destination), so a persistent tab bar isn't
- * warranted here.
+ * Goals BRD §G. Local screen-state (list/create/detail), not a bottom-tab
+ * pattern like Health/Finance — Goals has no natural second top-level section
+ * to tab into (goal *type* is a filter within the list, not a destination),
+ * so a persistent tab bar isn't warranted here. Mounted as one of the outer
+ * shell's 4 global tabs (see src/ui/AppShell.tsx).
  */
-export function GoalsApp({ modeSwitcher }: { modeSwitcher?: ReactNode }) {
+export function GoalsApp() {
   const t = useTheme();
   const router = useRouter();
   const [screen, setScreen] = useState<Screen>({ kind: 'list' });
@@ -36,7 +35,6 @@ export function GoalsApp({ modeSwitcher }: { modeSwitcher?: ReactNode }) {
               <Text style={[type.title, { color: t.ink }]}>Goals</Text>
             </View>
             <AppButton title="Ask coach" onPress={() => router.push('/coach-chat')} variant="ghost" small />
-            {modeSwitcher}
           </View>
           <View style={styles.content}>
             <GoalListScreen

@@ -4,7 +4,7 @@ import { accountBalanceAsOf } from '../../finance/netWorth';
 import { defaultGenId } from '../../finance/ids';
 import { formatMoneyMinor, parseMoneyInput } from '../../finance/money';
 import type { Account, AccountType } from '../../finance/types';
-import { AppButton, AppSwitch, Card, Chip, EmptyState, FAB, Field, Overline, ProgressBar, Row } from '../kit';
+import { AppButton, AppSwitch, Card, Chip, EmptyState, ErrorText, FAB, Field, Overline, ProgressBar, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { useFinanceData } from './FinanceDataContext';
 
@@ -212,6 +212,7 @@ function AddAccountModal({
   const [openingBalanceInput, setOpeningBalanceInput] = useState('');
   const [isLiability, setIsLiability] = useState(defaultIsLiability('bank'));
   const [creditLimitInput, setCreditLimitInput] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const balanceMode = defaultBalanceMode(accountType);
 
@@ -221,34 +222,39 @@ function AddAccountModal({
   };
 
   const submit = async () => {
-    if (name.trim() === '') return;
+    setError(null);
+    if (name.trim() === '') return setError('Enter an account name.');
     const openingBalanceMinor = balanceMode === 'ledger' ? (parseMoneyInput(openingBalanceInput) ?? 0) : 0;
     const creditLimitMinor = accountType === 'credit_card' ? parseMoneyInput(creditLimitInput) : null;
     const nowIso = new Date().toISOString();
-    await onSave({
-      id: defaultGenId(),
-      externalId: defaultGenId(),
-      name: name.trim(),
-      type: accountType,
-      balanceMode,
-      isLiability,
-      currency: 'INR',
-      openingBalanceMinor,
-      openingDate: balanceMode === 'ledger' ? today : null,
-      interestRate: null,
-      minimumPaymentMinor: null,
-      dueDay: null,
-      creditLimitMinor,
-      source: 'manual',
-      archivedAt: null,
-      updatedAt: nowIso,
-    });
-    setName('');
-    setOpeningBalanceInput('');
-    setAccountType('bank');
-    setIsLiability(defaultIsLiability('bank'));
-    setCreditLimitInput('');
-    onClose();
+    try {
+      await onSave({
+        id: defaultGenId(),
+        externalId: defaultGenId(),
+        name: name.trim(),
+        type: accountType,
+        balanceMode,
+        isLiability,
+        currency: 'INR',
+        openingBalanceMinor,
+        openingDate: balanceMode === 'ledger' ? today : null,
+        interestRate: null,
+        minimumPaymentMinor: null,
+        dueDay: null,
+        creditLimitMinor,
+        source: 'manual',
+        archivedAt: null,
+        updatedAt: nowIso,
+      });
+      setName('');
+      setOpeningBalanceInput('');
+      setAccountType('bank');
+      setIsLiability(defaultIsLiability('bank'));
+      setCreditLimitInput('');
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   return (
@@ -289,6 +295,7 @@ function AddAccountModal({
                 <Text style={[type.body, { color: t.ink }]}>Counts as a liability</Text>
                 <AppSwitch value={isLiability} onChange={setIsLiability} />
               </Row>
+              {error !== null && <ErrorText>{error}</ErrorText>}
               <AppButton title="Add account" onPress={submit} />
             </Card>
           </Pressable>

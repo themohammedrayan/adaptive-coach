@@ -11,7 +11,7 @@ import type {
   Transaction,
   TransactionType,
 } from '../../finance/types';
-import { AppButton, AppSwitch, Card, Chip, EmptyState, FAB, Field, Overline, Row } from '../kit';
+import { AppButton, AppSwitch, Card, Chip, EmptyState, ErrorText, FAB, Field, Overline, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { useFinanceData } from './FinanceDataContext';
 
@@ -120,6 +120,7 @@ export function AddTransactionModal({ visible, onClose }: { visible: boolean; on
   const [note, setNote] = useState('');
   const [newCategoryName, setNewCategoryName] = useState('');
   const [addingCategory, setAddingCategory] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const categoriesForKind = categories.filter((c) => c.kind === (kind === 'income' ? 'income' : 'expense'));
 
@@ -151,10 +152,14 @@ export function AddTransactionModal({ visible, onClose }: { visible: boolean; on
   };
 
   const submit = async () => {
+    setError(null);
     const parsed = parseMoneyInput(amountInput);
-    if (parsed === null || accountExternalId === null) return;
-    if (kind === 'transfer' && (counterAccountExternalId === null || counterAccountExternalId === accountExternalId)) return;
-    if (kind === 'adjustment' && parsed === 0) return;
+    if (parsed === null) return setError('Enter an amount.');
+    if (accountExternalId === null) return setError('Add an account first.');
+    if (kind === 'transfer' && (counterAccountExternalId === null || counterAccountExternalId === accountExternalId)) {
+      return setError('Pick a different "to" account for the transfer.');
+    }
+    if (kind === 'adjustment' && parsed === 0) return setError('Enter a non-zero adjustment amount.');
 
     const account = accounts.find((a) => a.externalId === accountExternalId);
     const nowIso = new Date().toISOString();
@@ -259,6 +264,7 @@ export function AddTransactionModal({ visible, onClose }: { visible: boolean; on
 
               <Field placeholder="Note (optional)" value={note} onChangeText={setNote} />
 
+              {error !== null && <ErrorText>{error}</ErrorText>}
               <AppButton title="Save" onPress={submit} />
             </Card>
           </Pressable>

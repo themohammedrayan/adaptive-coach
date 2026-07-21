@@ -8,7 +8,7 @@ import { parseMoneyInput } from '../../finance/money';
 import type { Account } from '../../finance/types';
 import { buildGoal, buildHabit } from '../../goals/crud';
 import type { GoalType } from '../../goals/types';
-import { AppButton, Card, Chip, Field, Row } from '../kit';
+import { AppButton, Card, Chip, ErrorText, Field, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { useGoalsData } from './GoalsDataContext';
 
@@ -292,11 +292,6 @@ function FormShell({
       </ScrollView>
     </KeyboardAvoidingView>
   );
-}
-
-function ErrorText({ children }: { children: ReactNode }) {
-  const t = useTheme();
-  return <Text style={[type.caption, { color: t.danger, textAlign: 'center' }]}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({

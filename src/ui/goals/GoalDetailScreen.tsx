@@ -15,7 +15,7 @@ import { getDataSyncRuntime } from '../../data-sync/runtime';
 import { buildChallengeProgress, type ChallengeProgress } from '../../dashboard';
 import { ChallengeCard } from '../../dashboard/components/ChallengeCard';
 import { getDashboardRuntime } from '../../dashboard/runtime';
-import { addDays, computeTrend, DEFAULT_CONFIG, trendAt } from '../../engine';
+import { addDays, computeTrend, DEFAULT_CONFIG, diffDays, trendAt } from '../../engine';
 import * as financeApi from '../../finance/api';
 import { formatMoneyMinor } from '../../finance/money';
 import type { Account, FinanceGoal } from '../../finance/types';
@@ -62,7 +62,11 @@ export function GoalDetailScreen({ goalId, onBack }: { goalId: string; onBack: (
           <MetricDetail challengeId={goal.sourceBinding.challengeId} onChanged={goalsData.refresh} />
         )}
         {goal.sourceBinding.type === 'fund' && (
-          <FundDetail financeGoalExternalId={goal.sourceBinding.financeGoalExternalId} progress={progress} />
+          <FundDetail
+            financeGoalExternalId={goal.sourceBinding.financeGoalExternalId}
+            progress={progress}
+            targetDate={goal.targetDate}
+          />
         )}
         {goal.sourceBinding.type === 'habit' && <HabitDetail habitExternalId={goal.sourceBinding.habitExternalId} />}
         {goal.sourceBinding.type === 'milestone' && <MilestoneDetail goalExternalId={goal.externalId} />}
@@ -219,8 +223,17 @@ function MetricDetail({ challengeId, onChanged }: { challengeId: string; onChang
   );
 }
 
-function FundDetail({ financeGoalExternalId, progress }: { financeGoalExternalId: string; progress: GoalProgress | undefined }) {
+function FundDetail({
+  financeGoalExternalId,
+  progress,
+  targetDate,
+}: {
+  financeGoalExternalId: string;
+  progress: GoalProgress | undefined;
+  targetDate: string | null;
+}) {
   const t = useTheme();
+  const { today } = useGoalsData();
   const [financeGoal, setFinanceGoal] = useState<FinanceGoal | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -253,10 +266,14 @@ function FundDetail({ financeGoalExternalId, progress }: { financeGoalExternalId
 
   const pct = progress?.pct ?? 0;
   const savedMinor = typeof progress?.numerator === 'number' ? progress.numerator : 0;
+  const daysLeft = targetDate !== null ? diffDays(targetDate, today) : null;
 
   return (
     <Card style={{ gap: space.m }}>
-      <Text style={[type.caption, { color: t.muted }]}>{account?.name ?? 'Unknown account'}</Text>
+      <Text style={[type.caption, { color: t.muted }]}>
+        {account?.name ?? 'Unknown account'}
+        {daysLeft !== null ? ` · ${daysLeft >= 0 ? `${daysLeft} days left` : 'past target date'}` : ''}
+      </Text>
       <ProgressBar pct={pct} color={pct >= 1 ? t.good : t.accent} />
       <Row style={styles.spread}>
         <Text style={[type.caption, { color: t.secondary }]}>{formatMoneyMinor(savedMinor, financeGoal.currency)} saved</Text>

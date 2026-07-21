@@ -1,6 +1,5 @@
-import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { incomeVsExpense } from '../../finance/categoryTotals';
 import { assessFinancialHealth, computeFinancialHealthInputs, type FinancialHealthStatus } from '../../finance/health';
 import { formatMoneyMinor } from '../../finance/money';
@@ -24,7 +23,6 @@ function healthColor(t: Theme, status: FinancialHealthStatus): string {
 
 export function OverviewScreen() {
   const t = useTheme();
-  const router = useRouter();
   const { accounts, transactions, valuations, categories, budgets, today, loading } = useFinanceData();
   const [addOpen, setAddOpen] = useState(false);
 
@@ -69,15 +67,6 @@ export function OverviewScreen() {
           ))}
         </Card>
       )}
-
-      <Pressable onPress={() => router.push('/coach-chat')}>
-        <Card style={{ gap: 2 }}>
-          <Text style={[type.body, { color: t.ink, fontWeight: '600' }]}>Ask the coach</Text>
-          <Text style={[type.caption, { color: t.muted }]}>
-            Get tips and a read on your spending, budget, and goal pace.
-          </Text>
-        </Card>
-      </Pressable>
 
       {monthTotals !== undefined && (
         <Card style={{ gap: space.s }}>

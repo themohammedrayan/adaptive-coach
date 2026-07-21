@@ -45,7 +45,6 @@ interface FinanceDataValue extends FinanceData {
   saveValuation: (valuation: AccountValuation) => Promise<void>;
   saveTransaction: (txn: Transaction) => Promise<void>;
   saveRecurringTransaction: (rule: RecurringTransaction) => Promise<void>;
-  archiveGoal: (externalId: string) => Promise<void>;
   saveBudget: (budget: Budget) => Promise<void>;
   archiveBudget: (externalId: string) => Promise<void>;
 }
@@ -288,32 +287,6 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     [applyAndCache],
   );
 
-  const archiveGoal = useCallback(
-    async (externalId: string) => {
-      const nowIso = new Date().toISOString();
-      applyAndCache((prev) => ({
-        ...prev,
-        goals: prev.goals.map((g) =>
-          g.externalId === externalId ? { ...g, status: 'archived', archivedAt: nowIso } : g,
-        ),
-      }));
-      try {
-        await api.archiveGoal(externalId, nowIso);
-      } catch {
-        const goal = data.goals.find((g) => g.externalId === externalId);
-        if (goal !== undefined) {
-          await enqueueOutbox({
-            entityType: 'goal',
-            externalId,
-            payload: { ...goal, status: 'archived', archivedAt: nowIso },
-            queuedAt: nowIso,
-          });
-        }
-      }
-    },
-    [applyAndCache, data.goals],
-  );
-
   const saveBudget = useCallback(
     async (budget: Budget) => {
       applyAndCache((prev) => ({
@@ -369,7 +342,6 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     saveValuation,
     saveTransaction,
     saveRecurringTransaction,
-    archiveGoal,
     saveBudget,
     archiveBudget,
   };

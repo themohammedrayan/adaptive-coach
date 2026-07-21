@@ -1,26 +1,19 @@
 import { useMemo } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { diffDays } from '../../engine';
 import { financeGoalProgress } from '../../finance/goals';
 import { formatMoneyMinor } from '../../finance/money';
 import { accountBalanceAsOf } from '../../finance/netWorth';
-import type { FinanceGoal } from '../../finance/types';
-import { AppButton, Card, EmptyState, ProgressBar, Row } from '../kit';
+import { Card, EmptyState, ProgressBar, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { useFinanceData } from './FinanceDataContext';
 
+/** Read-only — creating and archiving fund goals both happen through the unified Goals module (Goals → New goal → Fund / goal detail's Archive goal). */
 export function FundGoalsScreen() {
   const t = useTheme();
-  const { accounts, transactions, valuations, goals, today, archiveGoal } = useFinanceData();
+  const { accounts, transactions, valuations, goals, today } = useFinanceData();
 
   const activeGoals = useMemo(() => goals.filter((g) => g.status === 'active'), [goals]);
-
-  const confirmArchive = (goal: FinanceGoal) => {
-    Alert.alert('Archive goal?', `"${goal.name}" will be hidden from your active goals.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Archive', style: 'destructive', onPress: () => void archiveGoal(goal.externalId) },
-    ]);
-  };
 
   return (
     <View style={styles.flex}>
@@ -55,7 +48,6 @@ export function FundGoalsScreen() {
                   Target {formatMoneyMinor(goal.targetAmountMinor, goal.currency)}
                 </Text>
               </Row>
-              <AppButton title="Archive goal" onPress={() => confirmArchive(goal)} variant="ghost" small />
             </Card>
           );
         })}

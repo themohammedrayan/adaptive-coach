@@ -15,7 +15,7 @@ import { getDataSyncRuntime } from '../../data-sync/runtime';
 import { buildChallengeProgress, type ChallengeProgress } from '../../dashboard';
 import { ChallengeCard } from '../../dashboard/components/ChallengeCard';
 import { getDashboardRuntime } from '../../dashboard/runtime';
-import { addDays, computeTrend, DEFAULT_CONFIG, trendAt } from '../../engine';
+import { addDays, computeTrend, DEFAULT_CONFIG, diffDays, trendAt } from '../../engine';
 import * as financeApi from '../../finance/api';
 import { formatMoneyMinor } from '../../finance/money';
 import type { Account, FinanceGoal } from '../../finance/types';
@@ -62,13 +62,26 @@ export function GoalDetailScreen({ goalId, onBack }: { goalId: string; onBack: (
           <MetricDetail challengeId={goal.sourceBinding.challengeId} onChanged={goalsData.refresh} />
         )}
         {goal.sourceBinding.type === 'fund' && (
-          <FundDetail financeGoalExternalId={goal.sourceBinding.financeGoalExternalId} progress={progress} />
+          <FundDetail
+            financeGoalExternalId={goal.sourceBinding.financeGoalExternalId}
+            progress={progress}
+            targetDate={goal.targetDate}
+          />
         )}
         {goal.sourceBinding.type === 'habit' && <HabitDetail habitExternalId={goal.sourceBinding.habitExternalId} />}
         {goal.sourceBinding.type === 'milestone' && <MilestoneDetail goalExternalId={goal.externalId} />}
 
         {goal.type !== 'metric' && goal.status === 'active' && (
-          <AppButton title="Archive goal" onPress={() => void goalsData.archiveGoal(goal.externalId)} variant="ghost" small />
+          <AppButton
+            title="Archive goal"
+            onPress={() =>
+              void goalsData
+                .archiveGoal(goal.externalId)
+                .catch((e) => Alert.alert('Archive failed', e instanceof Error ? e.message : String(e)))
+            }
+            variant="ghost"
+            small
+          />
         )}
         {progress?.status === 'no_data' && progress.detail.sourceMissing === true && (
           <Text style={[type.caption, { color: t.warning }]}>This goal's source is no longer available.</Text>
@@ -84,24 +97,32 @@ function MetricDetail({ challengeId, onChanged }: { challengeId: string; onChang
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [challengeProgress, setChallengeProgress] = useState<ChallengeProgress | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [challengeRt, dataRt, dashRt] = await Promise.all([getChallengeRuntime(), getDataSyncRuntime(), getDashboardRuntime()]);
-    const c = await challengeRt.store.get(challengeId);
-    setChallenge(c);
-    if (c !== null) {
-      const today = deviceLocalDate(new Date().toISOString());
-      const weightRows = await dataRt.store.listByType('weight', { start: c.startDate, end: today });
-      const measurements = buildMeasurementSeries(weightRows, { start: c.startDate, end: today }, 'earliest');
-      const trendPoints = computeTrend(measurements, { end: today }, DEFAULT_CONFIG.ewmaHalfLifeDays);
-      const trendWeightKg = trendAt(trendPoints, today) ?? c.startWeightKg;
-      const cachedResult = await dashRt.store.getLastResult();
-      const projectedFinishDate = c.isPrimary ? (cachedResult?.result.projectedFinishDate ?? null) : null;
-      setChallengeProgress(
-        buildChallengeProgress(c.goalWeightKg, c.startDate, c.horizonDays, c.startWeightKg, trendWeightKg, projectedFinishDate, today),
-      );
+    try {
+      const [challengeRt, dataRt, dashRt] = await Promise.all([getChallengeRuntime(), getDataSyncRuntime(), getDashboardRuntime()]);
+      const c = await challengeRt.store.get(challengeId);
+      setChallenge(c);
+      if (c !== null) {
+        const today = deviceLocalDate(new Date().toISOString());
+        const weightRows = await dataRt.store.listByType('weight', { start: c.startDate, end: today });
+        const measurements = buildMeasurementSeries(weightRows, { start: c.startDate, end: today }, 'earliest');
+        const trendPoints = computeTrend(measurements, { end: today }, DEFAULT_CONFIG.ewmaHalfLifeDays);
+        const trendWeightKg = trendAt(trendPoints, today) ?? c.startWeightKg;
+        const cachedResult = await dashRt.store.getLastResult();
+        const projectedFinishDate = c.isPrimary ? (cachedResult?.result.projectedFinishDate ?? null) : null;
+        setChallengeProgress(
+          buildChallengeProgress(c.goalWeightKg, c.startDate, c.horizonDays, c.startWeightKg, trendWeightKg, projectedFinishDate, today),
+        );
+      }
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoaded(true);
     }
-    setLoaded(true);
   }, [challengeId]);
 
   useEffect(() => {
@@ -111,14 +132,25 @@ function MetricDetail({ challengeId, onChanged }: { challengeId: string; onChang
   const nowUtc = () => new Date().toISOString();
 
   const doAction = async (action: (store: ChallengeStore) => Promise<unknown>) => {
-    const rt = await getChallengeRuntime();
-    await action(rt.store);
-    await load();
-    await onChanged();
+    try {
+      const rt = await getChallengeRuntime();
+      await action(rt.store);
+      await load();
+      await onChanged();
+      setActionError(null);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   if (!loaded) return null;
-  if (challenge === null) return <EmptyState message="This weight goal's source is no longer available." />;
+  if (challenge === null) {
+    return (
+      <EmptyState
+        message={loadError !== null ? `Couldn't load this goal: ${loadError}` : "This weight goal's source is no longer available."}
+      />
+    );
+  }
 
   return (
     <Card style={{ gap: space.m }}>
@@ -152,11 +184,15 @@ function MetricDetail({ challengeId, onChanged }: { challengeId: string; onChang
                   text: 'Restart',
                   onPress: () => {
                     void (async () => {
-                      const dataRt = await getDataSyncRuntime();
-                      const t2 = deviceLocalDate(nowUtc());
-                      const recent = await dataRt.listRecentWeights(1);
-                      const currentWeightKg = recent[0]?.valueSI ?? challenge.startWeightKg;
-                      await doAction((store) => restartChallenge(store, challenge.id, nowUtc(), t2, currentWeightKg));
+                      try {
+                        const dataRt = await getDataSyncRuntime();
+                        const t2 = deviceLocalDate(nowUtc());
+                        const recent = await dataRt.listRecentWeights(1);
+                        const currentWeightKg = recent[0]?.valueSI ?? challenge.startWeightKg;
+                        await doAction((store) => restartChallenge(store, challenge.id, nowUtc(), t2, currentWeightKg));
+                      } catch (e) {
+                        setActionError(e instanceof Error ? e.message : String(e));
+                      }
                     })();
                   },
                 },
@@ -182,35 +218,62 @@ function MetricDetail({ challengeId, onChanged }: { challengeId: string; onChang
           small
         />
       </Row>
+      {actionError !== null && <Text style={[type.caption, { color: t.danger }]}>{actionError}</Text>}
     </Card>
   );
 }
 
-function FundDetail({ financeGoalExternalId, progress }: { financeGoalExternalId: string; progress: GoalProgress | undefined }) {
+function FundDetail({
+  financeGoalExternalId,
+  progress,
+  targetDate,
+}: {
+  financeGoalExternalId: string;
+  progress: GoalProgress | undefined;
+  targetDate: string | null;
+}) {
   const t = useTheme();
+  const { today } = useGoalsData();
   const [financeGoal, setFinanceGoal] = useState<FinanceGoal | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     void (async () => {
-      const [goals, accounts] = await Promise.all([financeApi.listGoals(), financeApi.listAccounts()]);
-      const fg = goals.find((g) => g.externalId === financeGoalExternalId) ?? null;
-      setFinanceGoal(fg);
-      setAccount(fg !== null ? (accounts.find((a) => a.externalId === fg.linkedAccountExternalId) ?? null) : null);
-      setLoaded(true);
+      try {
+        const [goals, accounts] = await Promise.all([financeApi.listGoals(), financeApi.listAccounts()]);
+        const fg = goals.find((g) => g.externalId === financeGoalExternalId) ?? null;
+        setFinanceGoal(fg);
+        setAccount(fg !== null ? (accounts.find((a) => a.externalId === fg.linkedAccountExternalId) ?? null) : null);
+        setLoadError(null);
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setLoaded(true);
+      }
     })();
   }, [financeGoalExternalId]);
 
   if (!loaded) return null;
-  if (financeGoal === null) return <EmptyState message="This fund goal's source is no longer available." />;
+  if (financeGoal === null) {
+    return (
+      <EmptyState
+        message={loadError !== null ? `Couldn't load this goal: ${loadError}` : "This fund goal's source is no longer available."}
+      />
+    );
+  }
 
   const pct = progress?.pct ?? 0;
   const savedMinor = typeof progress?.numerator === 'number' ? progress.numerator : 0;
+  const daysLeft = targetDate !== null ? diffDays(targetDate, today) : null;
 
   return (
     <Card style={{ gap: space.m }}>
-      <Text style={[type.caption, { color: t.muted }]}>{account?.name ?? 'Unknown account'}</Text>
+      <Text style={[type.caption, { color: t.muted }]}>
+        {account?.name ?? 'Unknown account'}
+        {daysLeft !== null ? ` · ${daysLeft >= 0 ? `${daysLeft} days left` : 'past target date'}` : ''}
+      </Text>
       <ProgressBar pct={pct} color={pct >= 1 ? t.good : t.accent} />
       <Row style={styles.spread}>
         <Text style={[type.caption, { color: t.secondary }]}>{formatMoneyMinor(savedMinor, financeGoal.currency)} saved</Text>
@@ -237,7 +300,7 @@ function HabitDetail({ habitExternalId }: { habitExternalId: string }) {
       </Text>
       <AppButton
         title={doneToday ? 'Checked in today ✓' : 'Check in today'}
-        onPress={() => void toggleHabitCheckIn(habit, today)}
+        onPress={() => void toggleHabitCheckIn(habit, today).catch(() => {})}
         variant={doneToday ? 'secondary' : 'primary'}
       />
       <Row style={styles.wrap} gap={6}>
@@ -258,7 +321,9 @@ function MilestoneDetail({ goalExternalId }: { goalExternalId: string }) {
   const addItem = () => {
     const title = newTitle.trim();
     if (title === '') return;
-    void saveMilestoneItem(buildMilestoneItem({ goalExternalId, title, sortOrder: items.length }, new Date().toISOString()));
+    void saveMilestoneItem(buildMilestoneItem({ goalExternalId, title, sortOrder: items.length }, new Date().toISOString())).catch(
+      () => {},
+    );
     setNewTitle('');
   };
 
@@ -266,7 +331,7 @@ function MilestoneDetail({ goalExternalId }: { goalExternalId: string }) {
     <Card style={{ gap: space.m }}>
       {items.length === 0 && <EmptyState message="No checklist items yet — add one below." />}
       {items.map((item) => (
-        <Pressable key={item.id} onPress={() => void toggleMilestoneItemCheck(item)}>
+        <Pressable key={item.id} onPress={() => void toggleMilestoneItemCheck(item).catch(() => {})}>
           <Row style={styles.spread}>
             <Text
               style={[

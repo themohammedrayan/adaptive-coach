@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { getChallengeRuntime } from '../../challenges/runtime';
+import * as financeApi from '../../finance/api';
 import * as api from '../../goals/api';
 import { readGoalsCache, writeGoalsCache } from '../../goals/cache';
 import {
@@ -93,10 +94,12 @@ export function GoalsDataProvider({ children }: { children: ReactNode }) {
     async (action: () => Promise<void>) => {
       try {
         await action();
-      } catch {
-        // best-effort, no outbox (Goals architecture decision) — reconciles on next successful load
+      } finally {
+        // Always reconcile from server/cache, success or failure — but let
+        // a write failure propagate so callers (e.g. CreateGoalScreen's
+        // submit handlers) can tell it didn't actually save.
+        await load();
       }
-      await load();
     },
     [load],
   );
@@ -104,8 +107,22 @@ export function GoalsDataProvider({ children }: { children: ReactNode }) {
   const saveGoal = useCallback((goal: Goal) => persistAndReload(() => api.upsertGoal(goal)), [persistAndReload]);
 
   const archiveGoal = useCallback(
-    (externalId: string) => persistAndReload(() => api.archiveGoal(externalId, new Date().toISOString())),
-    [persistAndReload],
+    (externalId: string) => {
+      const nowIso = new Date().toISOString();
+      const goal = data.goals.find((g) => g.externalId === externalId);
+      return persistAndReload(async () => {
+        await api.archiveGoal(externalId, nowIso);
+        // A fund goal is also tracked as its own row in finance_goals (Finance's
+        // read-only Fund Goals list and its coach payload both read that row's
+        // status directly) — cascade so the two don't drift out of sync. Not
+        // atomic with the write above: if this second call fails, finance_goals
+        // stays stale until the next successful archive retry.
+        if (goal?.sourceBinding.type === 'fund') {
+          await financeApi.archiveGoal(goal.sourceBinding.financeGoalExternalId, nowIso);
+        }
+      });
+    },
+    [persistAndReload, data.goals],
   );
 
   const saveHabit = useCallback((habit: Habit) => persistAndReload(() => api.upsertHabit(habit)), [persistAndReload]);

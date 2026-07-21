@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getChallengeRuntime } from '../challenges/runtime';
@@ -20,7 +21,7 @@ import { space, type, useTheme } from './theme';
  * an existing challenge's goal isn't done in place — restart it (same goal,
  * fresh clock) or delete and create a new one from the Challenges tab.
  */
-export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
+export function ProfileSetupScreen({ onDone, modeSwitcher }: { onDone: () => void; modeSwitcher?: ReactNode }) {
   const t = useTheme();
   const [sex, setSex] = useState<PersonProfile['sex']>('male');
   const [age, setAge] = useState('');
@@ -35,9 +36,13 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     void (async () => {
-      const rt = await getDataSyncRuntime();
-      const recent = await rt.listRecentWeights(1);
-      if (recent.length > 0) setCurrentWeightKg(recent[0].valueSI);
+      try {
+        const rt = await getDataSyncRuntime();
+        const recent = await rt.listRecentWeights(1);
+        if (recent.length > 0) setCurrentWeightKg(recent[0].valueSI);
+      } catch {
+        // Falls back to the manual weight-input field below — no dedicated UI needed.
+      }
     })();
   }, []);
 
@@ -125,6 +130,8 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
         { force: true },
       );
       onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -133,11 +140,14 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
   return (
     <KeyboardAvoidingView behavior="padding" style={styles.flex}>
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.intro}>
-          <Text style={[type.title, { color: t.ink }]}>Set up your goal</Text>
-          <Text style={[type.caption, { color: t.secondary }]}>
-            A few details seed your first calorie and macro target — it self-corrects weekly from there.
-          </Text>
+        <View style={styles.headerRow}>
+          <View style={styles.intro}>
+            <Text style={[type.title, { color: t.ink }]}>Set up your goal</Text>
+            <Text style={[type.caption, { color: t.secondary }]}>
+              A few details seed your first calorie and macro target — it self-corrects weekly from there.
+            </Text>
+          </View>
+          {modeSwitcher}
         </View>
 
         <Card style={styles.card}>
@@ -210,7 +220,8 @@ export function ProfileSetupScreen({ onDone }: { onDone: () => void }) {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   container: { padding: space.l, gap: space.l },
-  intro: { gap: space.xs },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  intro: { gap: space.xs, flex: 1 },
   card: { gap: space.m },
   wrap: { flexWrap: 'wrap' },
 });

@@ -51,15 +51,22 @@ export function WeightScreen() {
     void runSync(false); // sync-on-open (BRD §5)
   }, [runSync]);
 
+  const [addError, setAddError] = useState<string | null>(null);
+
   const addWeight = async () => {
     const kg = Number(input.replace(',', '.'));
     if (!Number.isFinite(kg) || kg <= 0 || kg > 400) return;
-    const rt = await getDataSyncRuntime();
-    await rt.addWeightKg(kg);
-    setInput('');
-    setAddOpen(false);
-    await refresh();
-    void runSync(true); // opportunistic push; offline is fine, outbox retries
+    setAddError(null);
+    try {
+      const rt = await getDataSyncRuntime();
+      await rt.addWeightKg(kg);
+      setInput('');
+      setAddOpen(false);
+      await refresh();
+      void runSync(true); // opportunistic push; offline is fine, outbox retries
+    } catch (e) {
+      setAddError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const confirmDeleteWeight = (item: BodyMetricRow) => {
@@ -71,10 +78,14 @@ export function WeightScreen() {
         style: 'destructive',
         onPress: () => {
           void (async () => {
-            const rt = await getDataSyncRuntime();
-            await rt.deleteWeight(item.externalId);
-            await refresh();
-            void runSync(true); // opportunistic push; propagates the soft-delete
+            try {
+              const rt = await getDataSyncRuntime();
+              await rt.deleteWeight(item.externalId);
+              await refresh();
+              void runSync(true); // opportunistic push; propagates the soft-delete
+            } catch (e) {
+              Alert.alert('Delete failed', e instanceof Error ? e.message : String(e));
+            }
           })();
         },
       },
@@ -185,6 +196,9 @@ export function WeightScreen() {
                   />
                   <AppButton title="Add" onPress={addWeight} />
                 </Row>
+                {addError !== null && (
+                  <Text style={[type.caption, { color: t.danger }]}>{addError}</Text>
+                )}
               </Card>
             </Pressable>
           </Pressable>

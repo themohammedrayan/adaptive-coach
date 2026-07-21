@@ -8,7 +8,7 @@ import { parseMoneyInput } from '../../finance/money';
 import type { Account } from '../../finance/types';
 import { buildGoal, buildHabit } from '../../goals/crud';
 import type { GoalType } from '../../goals/types';
-import { AppButton, Card, Chip, Field, Row } from '../kit';
+import { AppButton, Card, Chip, ErrorText, Field, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { useGoalsData } from './GoalsDataContext';
 
@@ -53,9 +53,13 @@ function MetricForm({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     void (async () => {
-      const rt = await getDataSyncRuntime();
-      const recent = await rt.listRecentWeights(1);
-      if (recent.length > 0) setCurrentWeightKg(recent[0].valueSI);
+      try {
+        const rt = await getDataSyncRuntime();
+        const recent = await rt.listRecentWeights(1);
+        if (recent.length > 0) setCurrentWeightKg(recent[0].valueSI);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
     })();
   }, []);
 
@@ -78,6 +82,8 @@ function MetricForm({ onDone }: { onDone: () => void }) {
         horizonDays: horizonN,
       });
       onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -149,6 +155,8 @@ function FundForm({ onDone }: { onDone: () => void }) {
         ),
       );
       onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -196,6 +204,8 @@ function HabitForm({ onDone }: { onDone: () => void }) {
       await saveHabit(habit);
       await saveGoal(buildGoal({ type: 'habit', title: name.trim(), sourceBinding: { type: 'habit', habitExternalId: habit.externalId } }, nowIso));
       onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -237,6 +247,8 @@ function MilestoneForm({ onDone }: { onDone: () => void }) {
         ),
       );
       onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
@@ -280,11 +292,6 @@ function FormShell({
       </ScrollView>
     </KeyboardAvoidingView>
   );
-}
-
-function ErrorText({ children }: { children: ReactNode }) {
-  const t = useTheme();
-  return <Text style={[type.caption, { color: t.danger, textAlign: 'center' }]}>{children}</Text>;
 }
 
 const styles = StyleSheet.create({

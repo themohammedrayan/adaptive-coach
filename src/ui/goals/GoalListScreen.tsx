@@ -28,7 +28,7 @@ function typeColor(t: ReturnType<typeof useTheme>, type: GoalType): string {
 /** Goals BRD §G.5 — the landing view: every active goal, sortable, blocked rows locked. */
 export function GoalListScreen({ onSelectGoal, onCreate }: { onSelectGoal: (goalId: string) => void; onCreate: () => void }) {
   const t = useTheme();
-  const { goals, progressByGoalId, today } = useGoalsData();
+  const { goals, progressByGoalId, today, loading } = useGoalsData();
 
   const active = goals
     .filter((g) => g.status === 'active')
@@ -43,7 +43,13 @@ export function GoalListScreen({ onSelectGoal, onCreate }: { onSelectGoal: (goal
         data={active}
         keyExtractor={(g) => g.id}
         contentContainerStyle={styles.list}
-        ListEmptyComponent={<EmptyState message="No goals yet — tap + to set one." />}
+        ListEmptyComponent={
+          loading ? (
+            <EmptyState message="Loading your goals…" />
+          ) : (
+            <EmptyState message="No goals yet — tap + to set one." />
+          )
+        }
         renderItem={({ item }) => {
           const progress = progressByGoalId.get(item.id);
           const blocked = progress?.status === 'blocked';

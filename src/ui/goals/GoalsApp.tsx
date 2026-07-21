@@ -11,7 +11,13 @@ import { space, type, useTheme } from '../theme';
 
 type Screen = { kind: 'list' } | { kind: 'create' } | { kind: 'detail'; goalId: string };
 
-/** Goals BRD §G — the app's landing surface. Local screen-state, not expo-router, matching Health/Finance's own tab-switch pattern. */
+/**
+ * Goals BRD §G — the app's landing surface. Local screen-state (list/create/
+ * detail), not a bottom-tab pattern like Health/Finance — Goals has no
+ * natural second top-level section to tab into (goal *type* is a filter
+ * within the list, not a destination), so a persistent tab bar isn't
+ * warranted here.
+ */
 export function GoalsApp({ modeSwitcher }: { modeSwitcher?: ReactNode }) {
   const t = useTheme();
   const router = useRouter();

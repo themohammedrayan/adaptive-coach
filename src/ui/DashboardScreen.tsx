@@ -56,6 +56,7 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
   const [refreshing, setRefreshing] = useState(false);
   const [remindersWarning, setRemindersWarning] = useState<string | null>(null);
   const [coachNote, setCoachNote] = useState<CoachNote | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadSnapshot = useCallback(async () => {
     const [dashRt, foodRt, dataRt, challengeRt] = await Promise.all([
@@ -136,9 +137,14 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
   }, []);
 
   const load = useCallback(async () => {
-    const { snap, today } = await loadSnapshot();
-    if (snap.profile !== null) {
-      await loadCharts(snap.primaryChallenge?.startDate ?? today, today, range);
+    try {
+      const { snap, today } = await loadSnapshot();
+      if (snap.profile !== null) {
+        await loadCharts(snap.primaryChallenge?.startDate ?? today, today, range);
+      }
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e));
     }
   }, [loadSnapshot, loadCharts, range]);
 
@@ -166,8 +172,24 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
     }
   };
 
+  if (snapshot === null) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.container}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        <View style={styles.noChallenge}>
+          <Text style={[type.caption, { color: t.muted, textAlign: 'center' }]}>
+            {loadError !== null ? `Couldn't load your dashboard: ${loadError}` : 'Loading…'}
+          </Text>
+          {loadError !== null && <AppButton title="Retry" onPress={() => void load()} variant="secondary" small />}
+        </View>
+      </ScrollView>
+    );
+  }
+
   // Profile creation is handled by the app-level onboarding gate.
-  if (snapshot === null || snapshot.profile === null) return null;
+  if (snapshot.profile === null) return null;
 
   const todayTotals = snapshot.last14[snapshot.last14.length - 1] ?? null;
   const consumed = todayTotals ? toMacros(todayTotals) : { proteinG: 0, carbG: 0, fatG: 0, fiberG: 0 };

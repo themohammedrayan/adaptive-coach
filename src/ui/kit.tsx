@@ -649,6 +649,11 @@ export function EmptyState({
   );
 }
 
+export function ErrorText({ children }: { children: ReactNode }) {
+  const t = useTheme();
+  return <Text style={[type.caption, { color: t.danger, textAlign: 'center' }]}>{children}</Text>;
+}
+
 /* ------------------------------------------------------------------ layout */
 
 export function Row({

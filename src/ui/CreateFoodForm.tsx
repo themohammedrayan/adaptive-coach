@@ -49,34 +49,40 @@ export function CreateFoodForm({
   const [fat, setFat] = useState(fieldString(iv.fatPer100g));
   const [fiber, setFiber] = useState(fieldString(iv.fiberPer100g));
   const [kcal, setKcal] = useState(fieldString(iv.kcalPer100g));
+  const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
     if (name.trim() === '') return;
-    const rt = await getFoodLogRuntime();
-    const food = await createFood(
-      rt.store,
-      kcalOnly
-        ? {
-            name,
-            proteinPer100g: null,
-            carbPer100g: null,
-            fatPer100g: null,
-            fiberPer100g: fiber === '' ? null : Number(fiber),
-            kcalPer100g: Number(kcal),
-            defaultUnitId,
-          }
-        : {
-            name,
-            proteinPer100g: Number(protein) || 0,
-            carbPer100g: Number(carb) || 0,
-            fatPer100g: Number(fat) || 0,
-            fiberPer100g: fiber === '' ? null : Number(fiber),
-            defaultUnitId,
-          },
-      rt.nowUtc(),
-    );
-    onDone(food);
-    void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+    setError(null);
+    try {
+      const rt = await getFoodLogRuntime();
+      const food = await createFood(
+        rt.store,
+        kcalOnly
+          ? {
+              name,
+              proteinPer100g: null,
+              carbPer100g: null,
+              fatPer100g: null,
+              fiberPer100g: fiber === '' ? null : Number(fiber),
+              kcalPer100g: Number(kcal),
+              defaultUnitId,
+            }
+          : {
+              name,
+              proteinPer100g: Number(protein) || 0,
+              carbPer100g: Number(carb) || 0,
+              fatPer100g: Number(fat) || 0,
+              fiberPer100g: fiber === '' ? null : Number(fiber),
+              defaultUnitId,
+            },
+        rt.nowUtc(),
+      );
+      onDone(food);
+      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   return (
@@ -108,6 +114,7 @@ export function CreateFoodForm({
           Default unit: {units.find((u) => u.id === defaultUnitId)?.name}
         </Text>
       )}
+      {error !== null && <Text style={[type.caption, { color: t.danger }]}>{error}</Text>}
       <AppButton title="Save food" onPress={save} />
       <AppButton title="Cancel" onPress={onCancel} variant="ghost" />
     </View>

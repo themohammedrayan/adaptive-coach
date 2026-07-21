@@ -1,10 +1,11 @@
+import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { CoachNotesFeed } from '../CoachNotesFeed';
 import { DashboardScreen } from '../DashboardScreen';
 import { FoodLogScreen } from '../FoodLogScreen';
-import { BottomTabBar, type TabIconName } from '../kit';
+import { AppButton, BottomTabBar, type TabIconName } from '../kit';
 import { ProfileScreen } from '../ProfileScreen';
 import { space, type, useTheme } from '../theme';
 import { WeightScreen } from '../WeightScreen';
@@ -23,6 +24,7 @@ const TABS: { key: Tab; label: string; icon: TabIconName; title: string }[] = [
 
 export function HealthApp({ modeSwitcher }: { modeSwitcher?: ReactNode }) {
   const t = useTheme();
+  const router = useRouter();
   const [tab, setTab] = useState<Tab>('home');
 
   const active = TABS.find((x) => x.key === tab)!;
@@ -39,6 +41,7 @@ export function HealthApp({ modeSwitcher }: { modeSwitcher?: ReactNode }) {
           <Text style={[type.title, { color: t.ink }]}>{active.title}</Text>
           {tab === 'home' && <Text style={[type.caption, { color: t.muted }]}>{today}</Text>}
         </View>
+        <AppButton title="Ask coach" onPress={() => router.push('/coach-chat')} variant="ghost" small />
         {modeSwitcher}
       </View>
 

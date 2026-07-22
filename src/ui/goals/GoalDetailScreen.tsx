@@ -163,7 +163,7 @@ function MetricDetail({
     }
   };
 
-  if (!loaded) return null;
+  if (!loaded) return <EmptyState message="Loading…" />;
   if (challenge === null) {
     return (
       <EmptyState
@@ -283,7 +283,7 @@ function FundDetail({
     })();
   }, [financeGoalExternalId]);
 
-  if (!loaded) return null;
+  if (!loaded) return <EmptyState message="Loading…" />;
   if (financeGoal === null) {
     return (
       <EmptyState

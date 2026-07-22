@@ -38,7 +38,7 @@ export function CoachNotesFeed() {
     }
   };
 
-  if (notes === null && error === null) return null;
+  const loading = notes === null && error === null;
 
   return (
     <View style={styles.flex}>
@@ -50,7 +50,11 @@ export function CoachNotesFeed() {
         renderItem={({ item }) => <CoachNoteCard note={item} />}
         ListEmptyComponent={
           <EmptyState
-            message={error ?? 'No coach notes yet — check back after your next weekly recompute.'}
+            message={
+              loading
+                ? 'Loading…'
+                : (error ?? 'No coach notes yet — check back after your next weekly recompute.')
+            }
           />
         }
       />

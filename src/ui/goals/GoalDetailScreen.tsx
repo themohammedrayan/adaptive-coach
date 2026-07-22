@@ -79,9 +79,17 @@ export function GoalDetailScreen({ goalId, onBack }: { goalId: string; onBack: (
           <AppButton
             title="Archive goal"
             onPress={() =>
-              void goalsData
-                .archiveGoal(goal.externalId)
-                .catch((e) => Alert.alert('Archive failed', e instanceof Error ? e.message : String(e)))
+              Alert.alert('Archive this goal?', `"${goal.title}" will be removed from your active goals.`, [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Archive',
+                  style: 'destructive',
+                  onPress: () =>
+                    void goalsData
+                      .archiveGoal(goal.externalId)
+                      .catch((e) => Alert.alert('Archive failed', e instanceof Error ? e.message : String(e))),
+                },
+              ])
             }
             variant="ghost"
             small

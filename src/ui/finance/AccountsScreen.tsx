@@ -57,50 +57,66 @@ export function AccountsScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [valuationInput, setValuationInput] = useState('');
   const [correctionInput, setCorrectionInput] = useState('');
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   const activeAccounts = useMemo(() => accounts.filter((a) => a.archivedAt === null), [accounts]);
 
   const balanceFor = (account: Account) => accountBalanceAsOf(account, transactions, valuations, today);
 
+  const toggleExpanded = (externalId: string) => {
+    setExpandedId((prev) => (prev === externalId ? null : externalId));
+    setInlineError(null);
+  };
+
   const submitValuation = async (account: Account) => {
     const amountMinor = parseMoneyInput(valuationInput);
-    if (amountMinor === null || amountMinor < 0) return;
-    await saveValuation({
-      id: defaultGenId(),
-      externalId: defaultGenId(),
-      accountExternalId: account.externalId,
-      amountMinor,
-      asOfDate: today,
-      source: 'manual',
-      note: null,
-      updatedAt: new Date().toISOString(),
-    });
-    setValuationInput('');
+    if (amountMinor === null || amountMinor < 0) return setInlineError('Enter a valid amount.');
+    try {
+      await saveValuation({
+        id: defaultGenId(),
+        externalId: defaultGenId(),
+        accountExternalId: account.externalId,
+        amountMinor,
+        asOfDate: today,
+        source: 'manual',
+        note: null,
+        updatedAt: new Date().toISOString(),
+      });
+      setValuationInput('');
+      setInlineError(null);
+    } catch (e) {
+      setInlineError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   /** Corrects a ledger account's balance by booking the delta as an 'adjustment' transaction — the balance itself is never stored directly. */
   const submitCorrection = async (account: Account) => {
     const enteredMinor = parseMoneyInput(correctionInput);
-    if (enteredMinor === null) return;
+    if (enteredMinor === null) return setInlineError('Enter a valid amount.');
     const currentMinor = balanceFor(account) ?? 0;
     const deltaMinor = enteredMinor - currentMinor;
-    if (deltaMinor === 0) return;
-    await saveTransaction({
-      id: defaultGenId(),
-      externalId: defaultGenId(),
-      type: 'adjustment',
-      accountExternalId: account.externalId,
-      counterAccountExternalId: null,
-      categoryExternalId: null,
-      amountMinor: deltaMinor,
-      currency: account.currency,
-      note: 'Balance correction',
-      txnDate: today,
-      source: 'manual',
-      recurrenceExternalId: null,
-      updatedAt: new Date().toISOString(),
-    });
-    setCorrectionInput('');
+    if (deltaMinor === 0) return setInlineError('That already matches the current balance.');
+    try {
+      await saveTransaction({
+        id: defaultGenId(),
+        externalId: defaultGenId(),
+        type: 'adjustment',
+        accountExternalId: account.externalId,
+        counterAccountExternalId: null,
+        categoryExternalId: null,
+        amountMinor: deltaMinor,
+        currency: account.currency,
+        note: 'Balance correction',
+        txnDate: today,
+        source: 'manual',
+        recurrenceExternalId: null,
+        updatedAt: new Date().toISOString(),
+      });
+      setCorrectionInput('');
+      setInlineError(null);
+    } catch (e) {
+      setInlineError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const confirmArchive = (account: Account) => {
@@ -123,7 +139,7 @@ export function AccountsScreen() {
         const expanded = expandedId === account.externalId;
         return (
           <Card key={account.id} style={{ gap: space.s }}>
-            <Pressable onPress={() => setExpandedId(expanded ? null : account.externalId)}>
+            <Pressable onPress={() => toggleExpanded(account.externalId)}>
               <Row style={{ justifyContent: 'space-between' }}>
                 <View style={{ gap: 2 }}>
                   <Text style={[type.heading, { color: t.ink }]}>{account.name}</Text>
@@ -179,6 +195,7 @@ export function AccountsScreen() {
                     {account.dueDay !== null ? ` · due day ${account.dueDay}` : ''}
                   </Text>
                 )}
+                {inlineError !== null && <ErrorText>{inlineError}</ErrorText>}
                 <AppButton title="Archive account" onPress={() => confirmArchive(account)} variant="ghost" small />
               </View>
             )}

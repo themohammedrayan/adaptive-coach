@@ -37,6 +37,7 @@ export function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -91,6 +92,18 @@ export function ProfileScreen() {
     } catch (e) {
       // Permission denial must be visible, not silent (Dashboard BRD §B2).
       setReminderError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+    } catch (e) {
+      Alert.alert('Sign out failed', e instanceof Error ? e.message : String(e));
+    } finally {
+      setSigningOut(false);
     }
   };
 
@@ -226,8 +239,9 @@ export function ProfileScreen() {
 
       <AppButton
         title="Sign out"
-        onPress={() => supabase.auth.signOut()}
+        onPress={() => void handleSignOut()}
         variant="danger"
+        busy={signingOut}
         disabled={resetting}
       />
       <AppButton
@@ -235,6 +249,7 @@ export function ProfileScreen() {
         onPress={confirmReset}
         variant="danger"
         busy={resetting}
+        disabled={signingOut}
       />
     </ScrollView>
   );

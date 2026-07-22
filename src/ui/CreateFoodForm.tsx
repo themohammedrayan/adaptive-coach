@@ -19,6 +19,14 @@ function fieldString(n: number | null | undefined): string {
   return n === null || n === undefined ? '' : String(n);
 }
 
+/** Parses a required non-negative number field. Returns null for anything that isn't one, including empty. */
+function parseNonNegNumber(s: string): number | null {
+  const trimmed = s.trim();
+  if (trimmed === '') return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
 /**
  * Food-Log BRD §2/§9 create-food form. Extracted out of FoodLogScreen so
  * both manual "create new food" and v2's AI meal-estimation review screen
@@ -52,32 +60,46 @@ export function CreateFoodForm({
   const [error, setError] = useState<string | null>(null);
 
   const save = async () => {
-    if (name.trim() === '') return;
+    if (name.trim() === '') return setError('Enter a food name.');
+
+    const fiberTrimmed = fiber.trim();
+    const fiberN = fiberTrimmed === '' ? null : parseNonNegNumber(fiberTrimmed);
+    if (fiberTrimmed !== '' && fiberN === null) return setError('Fiber must be a non-negative number.');
+
+    let input: Parameters<typeof createFood>[1];
+    if (kcalOnly) {
+      const kcalN = parseNonNegNumber(kcal);
+      if (kcalN === null) return setError('Enter calories per 100g.');
+      input = {
+        name: name.trim(),
+        proteinPer100g: null,
+        carbPer100g: null,
+        fatPer100g: null,
+        fiberPer100g: fiberN,
+        kcalPer100g: kcalN,
+        defaultUnitId,
+      };
+    } else {
+      const proteinN = protein.trim() === '' ? 0 : parseNonNegNumber(protein);
+      const carbN = carb.trim() === '' ? 0 : parseNonNegNumber(carb);
+      const fatN = fat.trim() === '' ? 0 : parseNonNegNumber(fat);
+      if (proteinN === null) return setError('Protein must be a non-negative number.');
+      if (carbN === null) return setError('Carb must be a non-negative number.');
+      if (fatN === null) return setError('Fat must be a non-negative number.');
+      input = {
+        name: name.trim(),
+        proteinPer100g: proteinN,
+        carbPer100g: carbN,
+        fatPer100g: fatN,
+        fiberPer100g: fiberN,
+        defaultUnitId,
+      };
+    }
+
     setError(null);
     try {
       const rt = await getFoodLogRuntime();
-      const food = await createFood(
-        rt.store,
-        kcalOnly
-          ? {
-              name,
-              proteinPer100g: null,
-              carbPer100g: null,
-              fatPer100g: null,
-              fiberPer100g: fiber === '' ? null : Number(fiber),
-              kcalPer100g: Number(kcal),
-              defaultUnitId,
-            }
-          : {
-              name,
-              proteinPer100g: Number(protein) || 0,
-              carbPer100g: Number(carb) || 0,
-              fatPer100g: Number(fat) || 0,
-              fiberPer100g: fiber === '' ? null : Number(fiber),
-              defaultUnitId,
-            },
-        rt.nowUtc(),
-      );
+      const food = await createFood(rt.store, input, rt.nowUtc());
       onDone(food);
       void rt.sync(true); // opportunistic push; offline is fine, outbox retries
     } catch (e) {

@@ -222,6 +222,14 @@ export async function upsertTransaction(txn: Transaction): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+export async function deleteTransaction(externalId: string, deletedAtIso: string): Promise<void> {
+  const { error } = await supabase
+    .from('finance_transactions')
+    .update({ deleted_at: deletedAtIso })
+    .eq('external_id', externalId);
+  if (error) throw new Error(error.message);
+}
+
 /* ------------------------------------------------------------ valuations */
 
 interface ServerValuationRow {

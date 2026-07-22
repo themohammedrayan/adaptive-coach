@@ -79,8 +79,15 @@ export function DayTimeline({
           {blocks.length === 0 && (
             <Text
               style={[
-                type.caption,
-                { color: t.muted, position: 'absolute', top: 12 * HOUR_HEIGHT, left: space.s },
+                type.body,
+                {
+                  color: t.muted,
+                  textAlign: 'center',
+                  position: 'absolute',
+                  top: 12 * HOUR_HEIGHT,
+                  left: 0,
+                  right: 0,
+                },
               ]}
             >
               No routine set for this day yet.

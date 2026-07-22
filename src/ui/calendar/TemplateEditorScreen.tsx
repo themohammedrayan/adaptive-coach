@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { BuildRoutineBlockInput } from '../../calendar/crud';
 import { ROUTINE_CATEGORIES, type RoutineBlock, type RoutineCategory } from '../../calendar/types';
-import { AppButton, Card, Chip, ErrorText, Field, Row } from '../kit';
+import { AppButton, Card, Chip, EmptyState, ErrorText, Field, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { useCalendarData } from './CalendarDataContext';
 import { formatClockInput, parseClock } from './timeInput';
@@ -50,9 +50,7 @@ export function TemplateEditorScreen({ onBack }: { onBack: () => void }) {
       </View>
       <ScrollView contentContainerStyle={styles.list}>
         {sorted.length === 0 && (
-          <Text style={[type.caption, { color: t.muted, textAlign: 'center' }]}>
-            No default blocks yet — add your usual sleep, work, and travel times.
-          </Text>
+          <EmptyState message="No default blocks yet — add your usual sleep, work, and travel times." />
         )}
         {sorted.map((block) => (
           <Pressable key={block.externalId} onPress={() => setScreen({ kind: 'edit', block })}>
@@ -95,6 +93,14 @@ function TemplateBlockForm({
 
   const toggleDay = (d: number) =>
     setDaysOfWeek((prev) => (prev.includes(d) ? prev.filter((x) => x !== d) : [...prev, d].sort((a, b) => a - b)));
+
+  const confirmDelete = () => {
+    if (onDelete === undefined) return;
+    Alert.alert('Delete this routine block?', `"${label}" will be removed from your weekly routine.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void onDelete() },
+    ]);
+  };
 
   const save = async () => {
     setError(null);
@@ -154,7 +160,7 @@ function TemplateBlockForm({
         </View>
       </Row>
 
-      {onDelete !== undefined && <AppButton title="Delete" onPress={() => void onDelete()} variant="danger" small />}
+      {onDelete !== undefined && <AppButton title="Delete" onPress={confirmDelete} variant="danger" small />}
     </ScrollView>
   );
 }

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  deleteTransaction,
   upsertAccount,
   upsertBudget,
   upsertCategory,
@@ -43,6 +44,8 @@ export interface OutboxEntry {
   externalId: string;
   payload: OutboxPayload;
   queuedAt: string;
+  /** Present only when this entry replays a soft-delete instead of an upsert. */
+  deletedAtIso?: string;
 }
 
 /**
@@ -81,6 +84,9 @@ export async function clearOutbox(): Promise<void> {
 }
 
 async function replayEntry(entry: OutboxEntry): Promise<void> {
+  if (entry.deletedAtIso !== undefined && entry.entityType === 'transaction') {
+    return deleteTransaction(entry.externalId, entry.deletedAtIso);
+  }
   switch (entry.entityType) {
     case 'account':
       return upsertAccount(entry.payload as Account);

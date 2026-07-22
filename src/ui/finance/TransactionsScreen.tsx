@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { defaultGenId } from '../../finance/ids';
 import { formatMoneyMinor, parseMoneyInput } from '../../finance/money';
 import { UNCATEGORISED_EXTERNAL_ID } from '../../finance/presetCategories';
@@ -34,7 +34,7 @@ function categoryName(categories: Category[], externalId: string | null): string
 
 export function TransactionsScreen() {
   const t = useTheme();
-  const { transactions, accounts, categories, recurringTransactions } = useFinanceData();
+  const { transactions, accounts, categories, recurringTransactions, deleteTransaction } = useFinanceData();
   const [addOpen, setAddOpen] = useState(false);
   const [recurringOpen, setRecurringOpen] = useState(false);
   const [addRecurringOpen, setAddRecurringOpen] = useState(false);
@@ -44,6 +44,13 @@ export function TransactionsScreen() {
     [transactions],
   );
   const activeRecurringCount = recurringTransactions.filter((r) => r.active).length;
+
+  const confirmDelete = (txn: Transaction) => {
+    Alert.alert('Delete this transaction?', `${formatMoneyMinor(txn.amountMinor, txn.currency)} on ${txn.txnDate}`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void deleteTransaction(txn.externalId) },
+    ]);
+  };
 
   return (
     <View style={styles.flex}>
@@ -58,6 +65,9 @@ export function TransactionsScreen() {
       </Row>
 
       {sorted.length === 0 && <EmptyState message="No transactions yet — tap + to log one." />}
+      {sorted.length > 0 && (
+        <Text style={[type.caption, { color: t.muted }]}>Long-press an entry to delete it.</Text>
+      )}
 
       {sorted.map((txn) => {
         const isExpense = txn.type === 'expense';
@@ -71,18 +81,20 @@ export function TransactionsScreen() {
               ? `${accountName(accounts, txn.accountExternalId)} · adjustment`
               : `${categoryName(categories, txn.categoryExternalId)} · ${accountName(accounts, txn.accountExternalId)}`;
         return (
-          <Card key={txn.id} style={{ gap: 2 }}>
-            <Row style={{ justifyContent: 'space-between' }}>
-              <Text style={[type.body, { color: t.ink }]}>{subtitle}</Text>
-              <Text style={[type.heading, { color }]}>{formatMoneyMinor(signedMinor, txn.currency)}</Text>
-            </Row>
-            <Row style={{ justifyContent: 'space-between' }}>
-              <Text style={[type.caption, { color: t.muted }]}>{txn.txnDate}</Text>
-              {txn.note !== null && txn.note !== '' && (
-                <Text style={[type.caption, { color: t.muted }]}>{txn.note}</Text>
-              )}
-            </Row>
-          </Card>
+          <Pressable key={txn.id} onLongPress={() => confirmDelete(txn)}>
+            <Card style={{ gap: 2 }}>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Text style={[type.body, { color: t.ink }]}>{subtitle}</Text>
+                <Text style={[type.heading, { color }]}>{formatMoneyMinor(signedMinor, txn.currency)}</Text>
+              </Row>
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Text style={[type.caption, { color: t.muted }]}>{txn.txnDate}</Text>
+                {txn.note !== null && txn.note !== '' && (
+                  <Text style={[type.caption, { color: t.muted }]}>{txn.note}</Text>
+                )}
+              </Row>
+            </Card>
+          </Pressable>
         );
       })}
       </ScrollView>

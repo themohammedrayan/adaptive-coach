@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ROUTINE_CATEGORIES, type ResolvedBlock, type RoutineCategory } from '../../calendar/types';
 import { AppButton, Card, Chip, ErrorText, Field, Row, SegmentedControl } from '../kit';
 import { radius, space, type, useTheme } from '../theme';
@@ -72,17 +72,34 @@ export function BlockEditorSheet({
     }
   };
 
-  const remove = async () => {
+  const remove = () => {
     if (onDelete === undefined) return;
-    setBusy(true);
-    try {
-      await onDelete(scope);
-      onClose();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
+    Alert.alert(
+      'Delete this block?',
+      scope === 'today'
+        ? `"${label}" will be removed from today's schedule only.`
+        : `"${label}" will be removed from your weekly routine.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setBusy(true);
+              try {
+                await onDelete(scope);
+                onClose();
+              } catch (e) {
+                setError(e instanceof Error ? e.message : String(e));
+              } finally {
+                setBusy(false);
+              }
+            })();
+          },
+        },
+      ],
+    );
   };
 
   return (

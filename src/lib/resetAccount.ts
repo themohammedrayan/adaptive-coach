@@ -25,6 +25,8 @@ export const RESET_REMOTE_TABLES = [
   'goal_milestone_items',
   'calendar_template_blocks',
   'calendar_overrides',
+  'medications',
+  'medication_doses',
 ] as const;
 
 export interface ResetAuth {
@@ -92,6 +94,8 @@ export async function resetUserData(): Promise<void> {
   const { clearOutbox } = await import('../finance/outbox');
   const { clearGoalsCache } = await import('../goals/cache');
   const { clearCalendarCache } = await import('../calendar/cache');
+  const { clearMedicationsCache } = await import('../medications/cache');
+  const { cancelAllMedicationReminders } = await import('../medications/reminders');
 
   const auth: ResetAuth = {
     getUserId: async () => {
@@ -126,12 +130,15 @@ export async function resetUserData(): Promise<void> {
   };
 
   const cancelAllReminders = () =>
-    Promise.all(
-      (Object.keys(REMINDER_IDS) as ReminderKind[]).map((kind) => cancelReminder(kind)),
-    ).then(() => undefined);
+    Promise.all([
+      ...(Object.keys(REMINDER_IDS) as ReminderKind[]).map((kind) => cancelReminder(kind)),
+      cancelAllMedicationReminders(),
+    ]).then(() => undefined);
 
   const clearLocalCaches = () =>
-    Promise.all([clearFinanceCache(), clearOutbox(), clearGoalsCache(), clearCalendarCache()]).then(() => undefined);
+    Promise.all([clearFinanceCache(), clearOutbox(), clearGoalsCache(), clearCalendarCache(), clearMedicationsCache()]).then(
+      () => undefined,
+    );
 
   await resetUserDataCore(auth, remote, stores, cancelAllReminders, clearLocalCaches);
 }

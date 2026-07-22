@@ -4,6 +4,8 @@ import { StyleSheet, Text, View } from 'react-native';
 import { CoachNotesFeed } from '../CoachNotesFeed';
 import { FoodLogScreen } from '../FoodLogScreen';
 import { AppButton, BottomTabBar, type TabIconName } from '../kit';
+import { MedicationsDataProvider } from '../medications/MedicationsDataContext';
+import { MedicationsScreen } from '../medications/MedicationsScreen';
 import { space, type, useTheme } from '../theme';
 import { WeightScreen } from '../WeightScreen';
 
@@ -12,11 +14,12 @@ import { WeightScreen } from '../WeightScreen';
 // The `home`/`profile` tabs retired when Dashboard/Profile became global outer
 // tabs (see src/ui/AppShell.tsx) — Health is now reached by drilling in from
 // the Dashboard tab and stays self-contained for its remaining sub-screens.
-export type Tab = 'food' | 'weight' | 'coach';
+export type Tab = 'food' | 'weight' | 'medications' | 'coach';
 
 const TABS: { key: Tab; label: string; icon: TabIconName; title: string }[] = [
   { key: 'food', label: 'Food', icon: 'food', title: 'Food log' },
   { key: 'weight', label: 'Weight', icon: 'weight', title: 'Weight' },
+  { key: 'medications', label: 'Meds', icon: 'medications', title: 'Medications' },
   { key: 'coach', label: 'Coach', icon: 'coach', title: 'Coach' },
 ];
 
@@ -38,6 +41,11 @@ export function HealthApp({ initialTab }: { initialTab?: Tab }) {
       <View style={styles.content}>
         {tab === 'food' && <FoodLogScreen />}
         {tab === 'weight' && <WeightScreen />}
+        {tab === 'medications' && (
+          <MedicationsDataProvider>
+            <MedicationsScreen />
+          </MedicationsDataProvider>
+        )}
         {tab === 'coach' && <CoachNotesFeed />}
       </View>
 

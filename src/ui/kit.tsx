@@ -356,7 +356,8 @@ export type TabIconName =
   | 'accounts'
   | 'reports'
   | 'goals'
-  | 'calendar';
+  | 'calendar'
+  | 'medications';
 
 /**
  * Hand-drawn 24px line icons — no icon font is installed (expo-symbols is
@@ -436,6 +437,12 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
           <Path d="M3.5 9.5h17" {...p} />
           <Path d="M8 3.5v3" {...p} />
           <Path d="M16 3.5v3" {...p} />
+        </>
+      )}
+      {name === 'medications' && (
+        <>
+          <Rect x={5.5} y={8.5} width={13} height={7} rx={3.5} {...p} transform="rotate(-45 12 12)" />
+          <Path d="M12 8.5v7" {...p} transform="rotate(-45 12 12)" />
         </>
       )}
     </Svg>

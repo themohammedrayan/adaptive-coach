@@ -59,7 +59,11 @@ export function GoalDetailScreen({ goalId, onBack }: { goalId: string; onBack: (
       <Header title={goal.title} onBack={onBack} />
       <ScrollView contentContainerStyle={styles.body}>
         {goal.sourceBinding.type === 'metric' && (
-          <MetricDetail challengeId={goal.sourceBinding.challengeId} onChanged={goalsData.refresh} />
+          <MetricDetail
+            challengeId={goal.sourceBinding.challengeId}
+            onChanged={goalsData.refresh}
+            onDeleted={() => goalsData.archiveGoal(goal.externalId)}
+          />
         )}
         {goal.sourceBinding.type === 'fund' && (
           <FundDetail
@@ -71,7 +75,7 @@ export function GoalDetailScreen({ goalId, onBack }: { goalId: string; onBack: (
         {goal.sourceBinding.type === 'habit' && <HabitDetail habitExternalId={goal.sourceBinding.habitExternalId} />}
         {goal.sourceBinding.type === 'milestone' && <MilestoneDetail goalExternalId={goal.externalId} />}
 
-        {goal.type !== 'metric' && goal.status === 'active' && (
+        {(goal.type !== 'metric' || progress?.detail.sourceMissing === true) && goal.status === 'active' && (
           <AppButton
             title="Archive goal"
             onPress={() =>
@@ -92,7 +96,15 @@ export function GoalDetailScreen({ goalId, onBack }: { goalId: string; onBack: (
 }
 
 /** Reuses src/challenges' own crud + src/dashboard's ChallengeCard — a metric goal's actions stay Challenge-specific (BRD AT5), not a generic goal-editing form. */
-function MetricDetail({ challengeId, onChanged }: { challengeId: string; onChanged: () => Promise<void> }) {
+function MetricDetail({
+  challengeId,
+  onChanged,
+  onDeleted,
+}: {
+  challengeId: string;
+  onChanged: () => Promise<void>;
+  onDeleted: () => Promise<void>;
+}) {
   const t = useTheme();
   const [challenge, setChallenge] = useState<Challenge | null>(null);
   const [challengeProgress, setChallengeProgress] = useState<ChallengeProgress | null>(null);
@@ -210,7 +222,15 @@ function MetricDetail({ challengeId, onChanged }: { challengeId: string; onChang
               {
                 text: 'Delete',
                 style: 'destructive',
-                onPress: () => void doAction((store) => deleteChallenge(store, challenge.id, nowUtc())),
+                onPress: () =>
+                  void doAction(async (store) => {
+                    const result = await deleteChallenge(store, challenge.id, nowUtc());
+                    // Deleting the Challenge doesn't touch the wrapping Goal row —
+                    // cascade-archive it so it leaves the active Goals list instead
+                    // of lingering there forever as a "source no longer available" entry.
+                    await onDeleted();
+                    return result;
+                  }),
               },
             ]);
           }}

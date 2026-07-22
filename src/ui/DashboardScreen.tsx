@@ -42,7 +42,13 @@ const RANGE_OPTIONS: { value: Range; label: string }[] = [
   { value: 'all', label: 'All' },
 ];
 
-export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => void }) {
+export function DashboardScreen({
+  onOpenHealth,
+  onOpenFinance,
+}: {
+  onOpenHealth?: (tab?: Tab) => void;
+  onOpenFinance?: () => void;
+}) {
   const t = useTheme();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
   const [range, setRange] = useState<Range>('30');
@@ -216,8 +222,8 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
       <Card style={styles.card}>
         <Row style={styles.cardHeader}>
           <Overline>Today</Overline>
-          {isEmptyConsumption(consumed) && onNavigate !== undefined && (
-            <AppButton title="Log food" onPress={() => onNavigate('food')} variant="ghost" small />
+          {isEmptyConsumption(consumed) && onOpenHealth !== undefined && (
+            <AppButton title="Log food" onPress={() => onOpenHealth('food')} variant="ghost" small />
           )}
         </Row>
         {snapshot.result !== null ? (
@@ -276,12 +282,30 @@ export function DashboardScreen({ onNavigate }: { onNavigate?: (tab: Tab) => voi
       <Card style={styles.card}>
         <Row style={styles.cardHeader}>
           <Overline>Coach</Overline>
-          {onNavigate !== undefined && coachNote !== null && (
-            <AppButton title="All notes" onPress={() => onNavigate('coach')} variant="ghost" small />
+          {onOpenHealth !== undefined && coachNote !== null && (
+            <AppButton title="All notes" onPress={() => onOpenHealth('coach')} variant="ghost" small />
           )}
         </Row>
         <LatestCoachNote note={coachNote} />
       </Card>
+
+      {(onOpenHealth !== undefined || onOpenFinance !== undefined) && (
+        <Card style={styles.card}>
+          <Overline>Open</Overline>
+          <Row gap={space.m}>
+            {onOpenHealth !== undefined && (
+              <View style={styles.openButton}>
+                <AppButton title="Health" onPress={() => onOpenHealth()} variant="secondary" />
+              </View>
+            )}
+            {onOpenFinance !== undefined && (
+              <View style={styles.openButton}>
+                <AppButton title="Finance" onPress={onOpenFinance} variant="secondary" />
+              </View>
+            )}
+          </Row>
+        </Card>
+      )}
 
       {remindersWarning !== null && (
         <Text style={[type.caption, { color: t.warning, textAlign: 'center' }]}>
@@ -297,4 +321,5 @@ const styles = StyleSheet.create({
   card: { gap: space.m },
   cardHeader: { justifyContent: 'space-between' },
   noChallenge: { alignItems: 'center', gap: space.s },
+  openButton: { flex: 1 },
 });

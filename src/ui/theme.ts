@@ -1,4 +1,5 @@
 import { useColorScheme } from 'react-native';
+import type { RoutineCategory } from '../calendar/types';
 
 /**
  * Design tokens — warm-neutral surfaces, green accent, and a CVD-validated
@@ -47,6 +48,8 @@ export interface Theme {
     /** Ring / bar background track. */
     track: string;
   };
+  /** Calendar routine-block colors, one per category. */
+  calendarCategory: Record<RoutineCategory, string>;
 }
 
 const light: Theme = {
@@ -75,6 +78,14 @@ const light: Theme = {
     grid: '#E1E0D9',
     track: '#EFEEE9',
   },
+  calendarCategory: {
+    sleep: '#5B4FCF',
+    work: '#2A78D6',
+    travel: '#D9720D',
+    exercise: '#0E8F6F',
+    meals: '#C23B6B',
+    other: '#767468',
+  },
 };
 
 const dark: Theme = {
@@ -102,6 +113,14 @@ const dark: Theme = {
     bodyFat: '#3987E5',
     grid: '#2C2C2A',
     track: '#262624',
+  },
+  calendarCategory: {
+    sleep: '#8A7EF0',
+    work: '#3987E5',
+    travel: '#F0912D',
+    exercise: '#22B08A',
+    meals: '#E45C8A',
+    other: '#A6A399',
   },
 };
 

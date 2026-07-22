@@ -2,12 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { getDashboardRuntime } from '../dashboard/runtime';
-import { useAppMode } from '../lib/appMode';
-import { FinanceApp } from '../ui/finance/FinanceApp';
-import { GoalsApp } from '../ui/goals/GoalsApp';
-import { HealthApp } from '../ui/health/HealthApp';
-import { ModeSwitcher } from '../ui/kit';
-import { ProfileSetupScreen } from '../ui/ProfileSetupScreen';
+import { AppShell } from '../ui/AppShell';
 import { SignIn } from '../ui/SignIn';
 import { useTheme } from '../ui/theme';
 import { useSession } from '../ui/useSession';
@@ -15,7 +10,6 @@ import { useSession } from '../ui/useSession';
 export default function Index() {
   const t = useTheme();
   const { session, loading } = useSession();
-  const { mode, setMode } = useAppMode();
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
   const checkProfile = useCallback(async () => {
@@ -31,7 +25,7 @@ export default function Index() {
     }
   }, [session, checkProfile]);
 
-  if (loading || mode === null) return null;
+  if (loading) return null;
 
   if (!session) {
     return (
@@ -41,40 +35,11 @@ export default function Index() {
     );
   }
 
-  const modeSwitcher = <ModeSwitcher mode={mode} onChange={setMode} />;
-
-  if (mode === 'finance') {
-    return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
-        <FinanceApp modeSwitcher={modeSwitcher} />
-      </SafeAreaView>
-    );
-  }
-
-  // Goals and Health both need the bio Profile/first weight goal set up
-  // first; Finance doesn't depend on it (unchanged from before Goals became
-  // the landing surface).
   if (hasProfile === null) return <View style={[styles.safe, { backgroundColor: t.page }]} />;
-
-  if (!hasProfile) {
-    return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
-        <ProfileSetupScreen onDone={checkProfile} modeSwitcher={modeSwitcher} />
-      </SafeAreaView>
-    );
-  }
-
-  if (mode === 'health') {
-    return (
-      <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
-        <HealthApp modeSwitcher={modeSwitcher} />
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: t.page }]}>
-      <GoalsApp modeSwitcher={modeSwitcher} />
+      <AppShell hasProfile={hasProfile} onProfileDone={checkProfile} />
     </SafeAreaView>
   );
 }

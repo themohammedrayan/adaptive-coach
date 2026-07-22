@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { budgetProgress } from '../../finance/budget';
 import { categoryBreakdown, incomeVsExpense } from '../../finance/categoryTotals';
 import { defaultGenId } from '../../finance/ids';
@@ -195,7 +195,7 @@ function EditBudgetsModal({
   categories: { externalId: string; name: string }[];
   currency: string;
 }) {
-  const { saveBudget } = useFinanceData();
+  const { saveBudget, archiveBudget } = useFinanceData();
   const activeBudgets = useMemo(() => budgets.filter((b) => b.archivedAt === null), [budgets]);
   const findBudget = (categoryExternalId: string | null) =>
     activeBudgets.find((b) => b.categoryExternalId === categoryExternalId) ?? null;
@@ -212,6 +212,23 @@ function EditBudgetsModal({
       }),
     ),
   );
+
+  const confirmRemove = (categoryExternalId: string | null, label: string) => {
+    const existing = findBudget(categoryExternalId);
+    if (existing === null) return;
+    Alert.alert('Remove this budget?', `The "${label}" budget will be removed.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: () => {
+          void archiveBudget(existing.externalId);
+          if (categoryExternalId === null) setOverallInput('');
+          else setCategoryInputs((prev) => ({ ...prev, [categoryExternalId]: '' }));
+        },
+      },
+    ]);
+  };
 
   const save = async () => {
     const nowIso = new Date().toISOString();
@@ -244,20 +261,31 @@ function EditBudgetsModal({
             <ScrollView>
               <Card style={{ gap: space.m }}>
                 <Overline>Edit budgets</Overline>
-                <Field
-                  label="Overall monthly budget (optional)"
-                  keyboardType="decimal-pad"
-                  value={overallInput}
-                  onChangeText={setOverallInput}
-                />
-                {categories.map((c) => (
+                <Row gap={space.m} style={{ alignItems: 'flex-end' }}>
                   <Field
-                    key={c.externalId}
-                    label={c.name}
+                    label="Overall monthly budget (optional)"
                     keyboardType="decimal-pad"
-                    value={categoryInputs[c.externalId] ?? ''}
-                    onChangeText={(v) => setCategoryInputs((prev) => ({ ...prev, [c.externalId]: v }))}
+                    value={overallInput}
+                    onChangeText={setOverallInput}
+                    style={{ flex: 1 }}
                   />
+                  {findBudget(null) !== null && (
+                    <AppButton title="Remove" onPress={() => confirmRemove(null, 'Overall')} variant="ghost" small />
+                  )}
+                </Row>
+                {categories.map((c) => (
+                  <Row key={c.externalId} gap={space.m} style={{ alignItems: 'flex-end' }}>
+                    <Field
+                      label={c.name}
+                      keyboardType="decimal-pad"
+                      value={categoryInputs[c.externalId] ?? ''}
+                      onChangeText={(v) => setCategoryInputs((prev) => ({ ...prev, [c.externalId]: v }))}
+                      style={{ flex: 1 }}
+                    />
+                    {findBudget(c.externalId) !== null && (
+                      <AppButton title="Remove" onPress={() => confirmRemove(c.externalId, c.name)} variant="ghost" small />
+                    )}
+                  </Row>
                 ))}
                 <AppButton title="Save budgets" onPress={save} />
               </Card>

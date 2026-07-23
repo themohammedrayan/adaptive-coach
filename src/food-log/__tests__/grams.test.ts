@@ -36,6 +36,12 @@ describe('resolveGrams / setFoodUnitOverride — Food-Log BRD §10 AT2 (store-aw
     expect(grams).toBe(150); // DEFAULT_UNITS seed value
   });
 
+  it('resolves ml at 1g per ml by default, for logging juices/liquids', async () => {
+    const store = new MemoryStore();
+    const grams = await resolveGrams(store, 'juice', 'ml', 250);
+    expect(grams).toBe(250);
+  });
+
   it('throws for an unknown unit id', async () => {
     const store = new MemoryStore();
     await expect(resolveGrams(store, 'rice', 'no-such-unit', 1)).rejects.toThrow();

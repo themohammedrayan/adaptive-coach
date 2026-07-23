@@ -7,6 +7,7 @@ import type { Unit } from './types';
  */
 export const DEFAULT_UNITS: Unit[] = [
   { id: 'gram', name: 'gram', defaultGrams: 1 },
+  { id: 'ml', name: 'ml', defaultGrams: 1 }, // 1 ml ≈ 1 g default density; override per food for denser/lighter liquids
   { id: 'katori', name: 'katori', defaultGrams: 150 },
   { id: 'roti', name: 'roti', defaultGrams: 40 },
   { id: 'piece', name: 'piece', defaultGrams: 30 },

@@ -8,7 +8,21 @@ export type MetricType =
   | 'bone_mass'
   | 'body_water'
   | 'height'
-  | 'bmr';
+  | 'bmr'
+  | 'waist'
+  | 'neck'
+  | 'shoulder'
+  | 'chest'
+  | 'bicep_left'
+  | 'bicep_right'
+  | 'forearm_left'
+  | 'forearm_right'
+  | 'abdomen'
+  | 'hips'
+  | 'thigh_left'
+  | 'thigh_right'
+  | 'calf_left'
+  | 'calf_right';
 
 /** One normalized row (BRD §6). Local id is deterministic: `${source}:${externalId}`. */
 export interface BodyMetricRow {

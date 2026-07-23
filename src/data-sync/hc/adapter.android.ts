@@ -11,8 +11,12 @@ import type { Permission, RecordType } from 'react-native-health-connect';
 import type { HealthConnectAdapter } from '../sync';
 import type { HCRecord, MetricType, SdkAvailability } from '../types';
 
-/** Data-Sync BRD §3 — record types we read, mapped to internal metric types. */
-const RECORD_TYPE_BY_METRIC: Record<MetricType, RecordType> = {
+/**
+ * Data-Sync BRD §3 — record types we read, mapped to internal metric types.
+ * Partial: circumference/tape measurements (Log Measurements screen) are
+ * manual-only and have no Health Connect record type.
+ */
+const RECORD_TYPE_BY_METRIC: Partial<Record<MetricType, RecordType>> = {
   weight: 'Weight',
   body_fat: 'BodyFat',
   lean_mass: 'LeanBodyMass',
@@ -66,6 +70,9 @@ function toHCRecord(record: {
         ?.inKilocaloriesPerDay;
       unit = 'kcal_per_day';
       break;
+    default:
+      // Manual-only types (circumferences, etc.) never come from METRIC_BY_RECORD_TYPE.
+      return null;
   }
   if (typeof value !== 'number') return null;
 
@@ -100,9 +107,11 @@ export function createHealthConnectAdapter(): HealthConnectAdapter {
 
     async ensurePermissions(types: MetricType[]): Promise<MetricType[]> {
       await ensureInit();
-      const wanted: Permission[] = types.map((t) => ({
+      // Manual-only types (circumferences, etc.) have no HC record type — never requested.
+      const hcTypes = types.filter((t) => RECORD_TYPE_BY_METRIC[t] !== undefined);
+      const wanted: Permission[] = hcTypes.map((t) => ({
         accessType: 'read',
-        recordType: RECORD_TYPE_BY_METRIC[t],
+        recordType: RECORD_TYPE_BY_METRIC[t] as RecordType,
       }));
       const has = (granted: { accessType?: string; recordType?: string }[], p: Permission) =>
         granted.some((g) => g.accessType === p.accessType && g.recordType === p.recordType);
@@ -111,8 +120,8 @@ export function createHealthConnectAdapter(): HealthConnectAdapter {
       if (!wanted.every((p) => has(granted, p))) {
         granted = (await requestPermission(wanted)) as { accessType?: string; recordType?: string }[];
       }
-      return types.filter((t) =>
-        has(granted, { accessType: 'read', recordType: RECORD_TYPE_BY_METRIC[t] }),
+      return hcTypes.filter((t) =>
+        has(granted, { accessType: 'read', recordType: RECORD_TYPE_BY_METRIC[t] as RecordType }),
       );
     },
 

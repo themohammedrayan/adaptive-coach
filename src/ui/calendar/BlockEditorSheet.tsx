@@ -3,7 +3,7 @@ import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ROUTINE_CATEGORIES, type ResolvedBlock, type RoutineCategory } from '../../calendar/types';
 import { AppButton, Card, Chip, ErrorText, Field, Row, SegmentedControl } from '../kit';
 import { radius, space, type, useTheme } from '../theme';
-import { formatClockInput, parseClock } from './timeInput';
+import { TimeFieldBox, WheelTimePicker } from './WheelTimePicker';
 
 export type EditScope = 'today' | 'always';
 
@@ -33,8 +33,9 @@ export function BlockEditorSheet({
 }) {
   const t = useTheme();
   const [label, setLabel] = useState('');
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
+  const [startMinute, setStartMinute] = useState(0);
+  const [endMinute, setEndMinute] = useState(0);
+  const [activeField, setActiveField] = useState<'start' | 'end' | null>(null);
   const [category, setCategory] = useState<RoutineCategory>('other');
   const [scope, setScope] = useState<EditScope>('today');
   const [error, setError] = useState<string | null>(null);
@@ -43,10 +44,11 @@ export function BlockEditorSheet({
   useEffect(() => {
     if (initial === null) return;
     setLabel(initial.label);
-    setStart(formatClockInput(initial.startMinute));
-    setEnd(formatClockInput(initial.endMinute));
+    setStartMinute(initial.startMinute);
+    setEndMinute(initial.endMinute);
     setCategory(initial.category);
     setScope('today');
+    setActiveField(null);
     setError(null);
   }, [initial]);
 
@@ -55,15 +57,13 @@ export function BlockEditorSheet({
   const save = async () => {
     setError(null);
     if (label.trim() === '') return setError('Label is required.');
-    const startMinute = parseClock(start);
-    let endMinute = parseClock(end);
-    if (startMinute === null || endMinute === null) return setError('Use 24h HH:MM, e.g. 09:30.');
-    if (endMinute <= startMinute) endMinute += 1440;
-    if (endMinute - startMinute > 1440) return setError("A block can't span more than 24 hours.");
+    let finalEndMinute = endMinute;
+    if (finalEndMinute <= startMinute) finalEndMinute += 1440;
+    if (finalEndMinute - startMinute > 1440) return setError("A block can't span more than 24 hours.");
 
     setBusy(true);
     try {
-      await onSave({ label: label.trim(), startMinute, endMinute, category }, scope);
+      await onSave({ label: label.trim(), startMinute, endMinute: finalEndMinute, category }, scope);
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -110,9 +110,26 @@ export function BlockEditorSheet({
             <Field label="Label" placeholder="Sleep" value={label} onChangeText={setLabel} />
 
             <Row gap={space.m}>
-              <Field label="Start (24h)" placeholder="23:00" value={start} onChangeText={setStart} style={styles.flex} />
-              <Field label="End (24h)" placeholder="07:00" value={end} onChangeText={setEnd} style={styles.flex} />
+              <TimeFieldBox
+                label="Start"
+                minute={startMinute}
+                active={activeField === 'start'}
+                onPress={() => setActiveField(activeField === 'start' ? null : 'start')}
+              />
+              <TimeFieldBox
+                label="End"
+                minute={endMinute}
+                active={activeField === 'end'}
+                onPress={() => setActiveField(activeField === 'end' ? null : 'end')}
+              />
             </Row>
+
+            {activeField !== null && (
+              <WheelTimePicker
+                minute={activeField === 'start' ? startMinute : endMinute}
+                onChange={activeField === 'start' ? setStartMinute : setEndMinute}
+              />
+            )}
 
             <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Category</Text>
             <Row style={styles.wrap}>

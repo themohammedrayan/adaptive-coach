@@ -1,25 +1,13 @@
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { ResolvedBlock } from '../../calendar/types';
 import { radius, space, type, useTheme } from '../theme';
+import { formatClock12h } from './timeInput';
+import { blockRect, DAY_HEIGHT, formatHour, GUTTER, HOUR_HEIGHT, HOUR_LABELS } from './timelineLayout';
 
-const HOUR_HEIGHT = 44;
-const DAY_HEIGHT = HOUR_HEIGHT * 24;
-const GUTTER = 52;
-const HOUR_LABELS = [0, 3, 6, 9, 12, 15, 18, 21];
-
-function formatHour(hour: number): string {
-  const period = hour < 12 ? 'am' : 'pm';
-  const display = hour % 12 === 0 ? 12 : hour % 12;
-  return `${display}${period}`;
-}
-
-function formatClock(minute: number): string {
-  const m = ((minute % 1440) + 1440) % 1440;
-  const h = Math.floor(m / 60);
-  const mm = m % 60;
-  const period = h < 12 ? 'am' : 'pm';
-  const display = h % 12 === 0 ? 12 : h % 12;
-  return `${display}:${String(mm).padStart(2, '0')}${period}`;
+function nowMinuteOfDay(): number {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
 }
 
 /**
@@ -31,11 +19,20 @@ function formatClock(minute: number): string {
 export function DayTimeline({
   blocks,
   onEditBlock,
+  isToday,
 }: {
   blocks: ResolvedBlock[];
   onEditBlock: (index: number) => void;
+  isToday: boolean;
 }) {
   const t = useTheme();
+  const [nowMinute, setNowMinute] = useState(nowMinuteOfDay);
+
+  useEffect(() => {
+    if (!isToday) return;
+    const id = setInterval(() => setNowMinute(nowMinuteOfDay()), 60000);
+    return () => clearInterval(id);
+  }, [isToday]);
 
   return (
     <ScrollView contentContainerStyle={{ paddingVertical: space.m, paddingHorizontal: space.l }}>
@@ -95,10 +92,7 @@ export function DayTimeline({
           )}
 
           {blocks.map((block, i) => {
-            const top = (block.startMinute / 60) * HOUR_HEIGHT;
-            const visibleEnd = Math.min(block.endMinute, 1440);
-            const height = Math.max(((visibleEnd - block.startMinute) / 60) * HOUR_HEIGHT, 20);
-            const overflowsToTomorrow = block.endMinute > 1440;
+            const { top, height, overflowsToTomorrow } = blockRect(block);
             const color = t.calendarCategory[block.category];
             return (
               <Pressable
@@ -114,13 +108,20 @@ export function DayTimeline({
                 </Text>
                 {height >= 40 && (
                   <Text style={[type.caption, { color: '#FFFFFF', opacity: 0.85 }]}>
-                    {formatClock(block.startMinute)} – {formatClock(block.endMinute)}
+                    {formatClock12h(block.startMinute)} – {formatClock12h(block.endMinute)}
                     {overflowsToTomorrow ? ' ↓' : ''}
                   </Text>
                 )}
               </Pressable>
             );
           })}
+
+          {isToday && (
+            <View pointerEvents="none" style={{ position: 'absolute', top: (nowMinute / 60) * HOUR_HEIGHT - 1, left: 0, right: 0 }}>
+              <View style={{ position: 'absolute', top: -4, left: -4, width: 8, height: 8, borderRadius: 4, backgroundColor: t.danger }} />
+              <View style={{ height: 2, backgroundColor: t.danger }} />
+            </View>
+          )}
         </View>
       </View>
     </ScrollView>

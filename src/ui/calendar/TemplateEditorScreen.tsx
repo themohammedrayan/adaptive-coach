@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { BuildRoutineBlockInput } from '../../calendar/crud';
-import { ROUTINE_CATEGORIES, type RoutineBlock, type RoutineCategory } from '../../calendar/types';
+import { ROUTINE_CATEGORIES, WEEKDAY_LABELS, type RoutineBlock, type RoutineCategory } from '../../calendar/types';
 import { AppButton, Card, Chip, EmptyState, ErrorText, Field, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { useCalendarData } from './CalendarDataContext';
-import { formatClockInput, parseClock } from './timeInput';
-
-const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+import { formatClockInput } from './timeInput';
+import { TimeFieldBox, WheelTimePicker } from './WheelTimePicker';
 
 type Screen = { kind: 'list' } | { kind: 'edit'; block: RoutineBlock | null };
 
@@ -84,8 +83,9 @@ function TemplateBlockForm({
 }) {
   const t = useTheme();
   const [label, setLabel] = useState(initial?.label ?? '');
-  const [start, setStart] = useState(initial !== null ? formatClockInput(initial.startMinute) : '');
-  const [end, setEnd] = useState(initial !== null ? formatClockInput(initial.endMinute) : '');
+  const [startMinute, setStartMinute] = useState(initial?.startMinute ?? 9 * 60);
+  const [endMinute, setEndMinute] = useState(initial?.endMinute ?? 17 * 60);
+  const [activeField, setActiveField] = useState<'start' | 'end' | null>(null);
   const [category, setCategory] = useState<RoutineCategory>(initial?.category ?? 'other');
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>(initial?.daysOfWeek ?? []);
   const [error, setError] = useState<string | null>(null);
@@ -105,16 +105,14 @@ function TemplateBlockForm({
   const save = async () => {
     setError(null);
     if (label.trim() === '') return setError('Label is required.');
-    const startMinute = parseClock(start);
-    let endMinute = parseClock(end);
-    if (startMinute === null || endMinute === null) return setError('Use 24h HH:MM, e.g. 09:30.');
-    if (endMinute <= startMinute) endMinute += 1440;
-    if (endMinute - startMinute > 1440) return setError("A block can't span more than 24 hours.");
+    let finalEndMinute = endMinute;
+    if (finalEndMinute <= startMinute) finalEndMinute += 1440;
+    if (finalEndMinute - startMinute > 1440) return setError("A block can't span more than 24 hours.");
     if (daysOfWeek.length === 0) return setError('Pick at least one day.');
 
     setBusy(true);
     try {
-      await onSave({ label: label.trim(), startMinute, endMinute, category, daysOfWeek });
+      await onSave({ label: label.trim(), startMinute, endMinute: finalEndMinute, category, daysOfWeek });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -126,9 +124,26 @@ function TemplateBlockForm({
     <ScrollView contentContainerStyle={styles.form}>
       <Field label="Label" placeholder="Work" value={label} onChangeText={setLabel} />
       <Row gap={space.m}>
-        <Field label="Start (24h)" placeholder="09:30" value={start} onChangeText={setStart} style={styles.flex} />
-        <Field label="End (24h)" placeholder="18:00" value={end} onChangeText={setEnd} style={styles.flex} />
+        <TimeFieldBox
+          label="Start"
+          minute={startMinute}
+          active={activeField === 'start'}
+          onPress={() => setActiveField(activeField === 'start' ? null : 'start')}
+        />
+        <TimeFieldBox
+          label="End"
+          minute={endMinute}
+          active={activeField === 'end'}
+          onPress={() => setActiveField(activeField === 'end' ? null : 'end')}
+        />
       </Row>
+
+      {activeField !== null && (
+        <WheelTimePicker
+          minute={activeField === 'start' ? startMinute : endMinute}
+          onChange={activeField === 'start' ? setStartMinute : setEndMinute}
+        />
+      )}
 
       <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>Category</Text>
       <Row style={styles.wrap}>

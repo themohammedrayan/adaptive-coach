@@ -1,10 +1,15 @@
-import type { IsoDate } from '../engine';
+import { addDays, type IsoDate } from '../engine';
 import type { DayOverride, ResolvedBlock, RoutineBlock } from './types';
 
 /** 0=Sun..6=Sat. Calendar-day arithmetic only — never touches device timezone. */
 export function dayOfWeek(date: IsoDate): number {
   const [y, m, d] = date.split('-').map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/** The Sunday (0) that begins the week containing `date`. */
+export function startOfWeek(date: IsoDate): IsoDate {
+  return addDays(date, -dayOfWeek(date));
 }
 
 function byStartMinute(a: ResolvedBlock, b: ResolvedBlock): number {

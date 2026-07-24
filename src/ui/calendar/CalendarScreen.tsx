@@ -2,17 +2,25 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { applyDateOverrideEdit } from '../../calendar/crud';
-import { dayOfWeek } from '../../calendar/resolve';
+import { dayOfWeek, startOfWeek } from '../../calendar/resolve';
 import type { ResolvedBlock, RoutineBlock } from '../../calendar/types';
 import { addDays, type IsoDate } from '../../engine';
-import { AppButton } from '../kit';
+import { AppButton, SegmentedControl } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { BlockEditorSheet, type EditScope } from './BlockEditorSheet';
 import { CalendarDataProvider, useCalendarData } from './CalendarDataContext';
+import { CategoryLegend } from './CategoryLegend';
 import { DayTimeline } from './DayTimeline';
 import { TemplateEditorScreen } from './TemplateEditorScreen';
+import { WeekGridView } from './WeekGridView';
 
-type Screen = { kind: 'day' } | { kind: 'template' };
+type Screen = { kind: 'day' } | { kind: 'week' } | { kind: 'template' };
+type ViewMode = 'day' | 'week';
+
+const VIEW_OPTIONS: { value: ViewMode; label: string }[] = [
+  { value: 'day', label: 'Day' },
+  { value: 'week', label: 'Week' },
+];
 
 export function CalendarScreen() {
   return (
@@ -79,36 +87,68 @@ function CalendarInner() {
     if (source !== null) await deleteRoutineBlock(source.externalId);
   };
 
+  const viewMode: ViewMode = screen.kind === 'week' ? 'week' : 'day';
+  const navDelta = viewMode === 'week' ? 7 : 1;
+  const weekStart = startOfWeek(date);
+  const dateLabel =
+    viewMode === 'week' ? `${weekStart} – ${addDays(weekStart, 6)}` : date === today ? 'Today' : date;
+
   return (
     <>
       <View style={styles.header}>
         <View style={styles.flex}>
           <Text style={[type.title, { color: t.ink }]}>Calendar</Text>
           <View style={styles.dateRow}>
-            <AppButton title="←" onPress={() => setDate(addDays(date, -1))} variant="ghost" small />
-            <Text style={[type.body, { color: t.secondary }]}>{date === today ? 'Today' : date}</Text>
-            <AppButton title="→" onPress={() => setDate(addDays(date, 1))} variant="ghost" small />
+            <AppButton title="←" onPress={() => setDate(addDays(date, -navDelta))} variant="ghost" small />
+            <Text style={[type.body, { color: t.secondary }]}>{dateLabel}</Text>
+            <AppButton title="→" onPress={() => setDate(addDays(date, navDelta))} variant="ghost" small />
           </View>
         </View>
         <AppButton title="Routine" onPress={() => setScreen({ kind: 'template' })} variant="ghost" small />
         <AppButton title="Ask coach" onPress={() => router.push('/coach-chat')} variant="ghost" small />
       </View>
 
+      <View style={styles.viewToggleRow}>
+        <SegmentedControl options={VIEW_OPTIONS} value={viewMode} onChange={(v) => setScreen({ kind: v })} />
+      </View>
+
+      {viewMode === 'day' && (
+        <View style={styles.legendRow}>
+          <CategoryLegend />
+        </View>
+      )}
+
       <View style={styles.content}>
-        <DayTimeline blocks={resolvedDay} onEditBlock={setEditingIndex} />
+        {viewMode === 'day' ? (
+          <DayTimeline blocks={resolvedDay} onEditBlock={setEditingIndex} isToday={date === today} />
+        ) : (
+          <WeekGridView
+            weekStartDate={weekStart}
+            today={today}
+            resolveDay={resolveDay}
+            onSelectDay={(d) => {
+              setDate(d);
+              setScreen({ kind: 'day' });
+            }}
+          />
+        )}
       </View>
 
-      <View style={styles.addRow}>
-        <AppButton title="+ Add block" onPress={() => setEditingIndex('new')} variant="secondary" />
-      </View>
+      {viewMode === 'day' && (
+        <View style={styles.addRow}>
+          <AppButton title="+ Add block" onPress={() => setEditingIndex('new')} variant="secondary" />
+        </View>
+      )}
 
-      <BlockEditorSheet
-        visible={editingIndex !== null}
-        initial={editingBlock}
-        onClose={() => setEditingIndex(null)}
-        onSave={handleSave}
-        onDelete={editingIndex !== null && editingIndex !== 'new' ? handleDelete : undefined}
-      />
+      {viewMode === 'day' && (
+        <BlockEditorSheet
+          visible={editingIndex !== null}
+          initial={editingBlock}
+          onClose={() => setEditingIndex(null)}
+          onSave={handleSave}
+          onDelete={editingIndex !== null && editingIndex !== 'new' ? handleDelete : undefined}
+        />
+      )}
     </>
   );
 }
@@ -125,6 +165,8 @@ const styles = StyleSheet.create({
     gap: space.s,
   },
   dateRow: { flexDirection: 'row', alignItems: 'center', gap: space.s },
+  viewToggleRow: { paddingHorizontal: space.l, paddingBottom: space.s },
+  legendRow: { paddingHorizontal: space.l, paddingBottom: space.s },
   content: { flex: 1 },
   addRow: { paddingHorizontal: space.l, paddingBottom: space.m },
 });

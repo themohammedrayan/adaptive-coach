@@ -1,4 +1,4 @@
-import { dayOfWeek, resolveDay } from '../resolve';
+import { dayOfWeek, resolveDay, startOfWeek } from '../resolve';
 import type { DayOverride, RoutineBlock } from '../types';
 
 const NOW = '2026-07-19T12:00:00.000Z';
@@ -22,6 +22,20 @@ describe('dayOfWeek', () => {
     expect(dayOfWeek('2026-07-19')).toBe(0);
     expect(dayOfWeek('2026-07-20')).toBe(1);
     expect(dayOfWeek('2026-07-25')).toBe(6);
+  });
+});
+
+describe('startOfWeek', () => {
+  it('returns the Sunday for a mid-week date', () => {
+    expect(startOfWeek('2026-07-22')).toBe('2026-07-19');
+  });
+
+  it('returns itself for a Sunday', () => {
+    expect(startOfWeek('2026-07-19')).toBe('2026-07-19');
+  });
+
+  it('returns the preceding Sunday for a Saturday', () => {
+    expect(startOfWeek('2026-07-25')).toBe('2026-07-19');
   });
 });
 

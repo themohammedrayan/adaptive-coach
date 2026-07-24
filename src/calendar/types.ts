@@ -11,6 +11,9 @@ export const ROUTINE_CATEGORIES: RoutineCategory[] = [
   'other',
 ];
 
+/** Sun..Sat, index-aligned with dayOfWeek()'s 0=Sun convention. */
+export const WEEKDAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
 /** A single resolved time block for one calendar day. */
 export interface ResolvedBlock {
   label: string;

@@ -1,7 +1,7 @@
 import type { ChallengeStore } from '../challenges/store';
 import type { DashboardStore } from '../dashboard/store';
 import type { ReminderKind } from '../dashboard/types';
-import type { BodyMetricsStore } from '../data-sync/store';
+import { KV, type BodyMetricsStore } from '../data-sync/store';
 import type { FoodLogStore } from '../food-log/store';
 
 /** Every table that carries a user_id column for this user's data (Master BRD — single user, full wipe on reset). */
@@ -39,6 +39,17 @@ export interface ResetRemote {
   deleteAllFrom(table: string, userId: string): Promise<void>;
 }
 
+export interface ResetHealthConnect {
+  /**
+   * Mints a fresh Health Connect sync baseline with no historical read, so
+   * the next sync is incremental-only from "now" — must not resurrect
+   * watch/scale data recorded before the reset. Returns null when no
+   * baseline can be established (HC unavailable/no permission yet); the
+   * next sync then falls back to its normal first-run backfill.
+   */
+  mintBaselineToken(): Promise<string | null>;
+}
+
 export interface ResetStores {
   dashboard: DashboardStore;
   foodLog: FoodLogStore;
@@ -56,6 +67,7 @@ export async function resetUserDataCore(
   auth: ResetAuth,
   remote: ResetRemote,
   stores: ResetStores,
+  hc: ResetHealthConnect,
   cancelAllReminders: () => Promise<void>,
   clearLocalCaches: () => Promise<void>,
 ): Promise<void> {
@@ -72,6 +84,14 @@ export async function resetUserDataCore(
     stores.dataSync.clearAll(),
     stores.challenge.clearAll(),
   ]);
+
+  // Health Connect itself isn't (and shouldn't be) touched by reset — it's
+  // OS-level data outside this app's ownership. Establish a fresh baseline
+  // right after wiping the local KV cursor above, so the next sync doesn't
+  // fall back to a full historical re-backfill that would re-import
+  // watch/scale data recorded before this reset.
+  const baselineToken = await hc.mintBaselineToken();
+  if (baselineToken !== null) await stores.dataSync.setKV(KV.hcChangesToken, baselineToken);
 
   // Finance has no full local store (decision: lightweight bolt-on), just a
   // cache + outbox — those AsyncStorage keys aren't caught by anything above.
@@ -96,6 +116,7 @@ export async function resetUserData(): Promise<void> {
   const { clearCalendarCache } = await import('../calendar/cache');
   const { clearMedicationsCache } = await import('../medications/cache');
   const { cancelAllMedicationReminders } = await import('../medications/reminders');
+  const { createHealthConnectAdapter } = await import('../data-sync/hc/adapter');
 
   const auth: ResetAuth = {
     getUserId: async () => {
@@ -115,6 +136,9 @@ export async function resetUserData(): Promise<void> {
       if (error) throw new Error(`resetUserData: failed to clear ${table}: ${error.message}`);
     },
   };
+
+  const hcAdapter = createHealthConnectAdapter();
+  const hc: ResetHealthConnect = { mintBaselineToken: () => hcAdapter.mintChangesToken() };
 
   const [dashRt, foodRt, dataRt, challengeRt] = await Promise.all([
     getDashboardRuntime(),
@@ -140,5 +164,5 @@ export async function resetUserData(): Promise<void> {
       () => undefined,
     );
 
-  await resetUserDataCore(auth, remote, stores, cancelAllReminders, clearLocalCaches);
+  await resetUserDataCore(auth, remote, stores, hc, cancelAllReminders, clearLocalCaches);
 }

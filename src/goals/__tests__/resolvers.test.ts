@@ -72,7 +72,7 @@ function makeContext(overrides: Partial<ResolverContext> = {}): ResolverContext 
 }
 
 describe('resolveGoalProgress — metric', () => {
-  it('returns no_data with sourceMissing when the challenge is missing', async () => {
+  it('returns no_data with sourceMissing and confirmedMissing when the challenge is missing', async () => {
     const goal = makeGoal();
     const progress = await resolveGoalProgress(goal, makeContext());
     expect(progress).toEqual({
@@ -81,17 +81,18 @@ describe('resolveGoalProgress — metric', () => {
       numerator: null,
       denominator: null,
       asOf: '2026-07-19',
-      detail: { sourceMissing: true },
+      detail: { sourceMissing: true, confirmedMissing: true },
     });
   });
 
-  it('returns no_data with sourceMissing when the challenge is deleted', async () => {
+  it('returns no_data with sourceMissing and confirmedMissing when the challenge is deleted', async () => {
     const store = new MemoryStore();
     await store.upsert(makeChallenge({ status: 'deleted' }));
     const goal = makeGoal();
     const progress = await resolveGoalProgress(goal, makeContext({ challengeStore: store }));
     expect(progress.status).toBe('no_data');
     expect(progress.detail.sourceMissing).toBe(true);
+    expect(progress.detail.confirmedMissing).toBe(true);
   });
 
   it('reads on_track/behind/no_data from the primary challenge\'s boundHit', async () => {
@@ -168,10 +169,11 @@ describe('resolveGoalProgress — metric', () => {
 describe('resolveGoalProgress — fund', () => {
   const fundGoal = makeGoal({ type: 'fund', sourceBinding: { type: 'fund', financeGoalExternalId: 'fg1' } });
 
-  it('returns no_data with sourceMissing when the finance goal is missing', async () => {
+  it('returns no_data with sourceMissing and confirmedMissing when the finance goal is missing', async () => {
     const progress = await resolveGoalProgress(fundGoal, makeContext());
     expect(progress.status).toBe('no_data');
     expect(progress.detail.sourceMissing).toBe(true);
+    expect(progress.detail.confirmedMissing).toBe(true);
   });
 
   it('computes on_track with no target date and completed once fully funded', async () => {
@@ -229,10 +231,11 @@ describe('resolveGoalProgress — habit', () => {
   const habitGoal = makeGoal({ type: 'habit', sourceBinding: { type: 'habit', habitExternalId: 'h1' } });
   const habit = { id: 'h1', externalId: 'h1', name: 'Read', cadenceKind: 'count_per_window' as const, targetCount: 5, windowDays: 7, archivedAt: null, updatedAt: '' };
 
-  it('returns no_data with sourceMissing when the habit is missing', async () => {
+  it('returns no_data with sourceMissing and confirmedMissing when the habit is missing', async () => {
     const progress = await resolveGoalProgress(habitGoal, makeContext());
     expect(progress.status).toBe('no_data');
     expect(progress.detail.sourceMissing).toBe(true);
+    expect(progress.detail.confirmedMissing).toBe(true);
   });
 
   it('reads behind when the rolling-window count is short of target, completed once met', async () => {

@@ -16,5 +16,8 @@ export function createHealthConnectAdapter(): HealthConnectAdapter {
     async read() {
       return { records: [], deletedExternalIds: [], nextChangesToken: null };
     },
+    async mintChangesToken() {
+      return null;
+    },
   };
 }

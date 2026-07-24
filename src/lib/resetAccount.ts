@@ -10,6 +10,7 @@ export const RESET_REMOTE_TABLES = [
   'foods',
   'favorites',
   'body_metrics',
+  'progress_photos',
   'coach_chat_turns',
   'coach_notes',
   'finance_accounts',
@@ -39,6 +40,16 @@ export interface ResetRemote {
   deleteAllFrom(table: string, userId: string): Promise<void>;
 }
 
+export interface ResetStorage {
+  /**
+   * Deletes every object under this user's folder in `bucket`. Throws on
+   * failure. Needed alongside RESET_REMOTE_TABLES because a table-row
+   * delete (e.g. progress_photos) never touches the actual file blobs —
+   * Storage is a separate system the generic table loop can't reach.
+   */
+  clearUserFolder(bucket: string, userId: string): Promise<void>;
+}
+
 export interface ResetHealthConnect {
   /**
    * Mints a fresh Health Connect sync baseline with no historical read, so
@@ -66,6 +77,7 @@ export interface ResetStores {
 export async function resetUserDataCore(
   auth: ResetAuth,
   remote: ResetRemote,
+  storage: ResetStorage,
   stores: ResetStores,
   hc: ResetHealthConnect,
   cancelAllReminders: () => Promise<void>,
@@ -77,6 +89,9 @@ export async function resetUserDataCore(
   for (const table of RESET_REMOTE_TABLES) {
     await remote.deleteAllFrom(table, userId);
   }
+  // progress_photos rows are gone above, but the image blobs themselves
+  // live in Storage, keyed by the same {userId}/{externalId}.jpg convention.
+  await storage.clearUserFolder('progress-photos', userId);
 
   await Promise.all([
     stores.dashboard.clearAll(),
@@ -137,6 +152,17 @@ export async function resetUserData(): Promise<void> {
     },
   };
 
+  const storage: ResetStorage = {
+    clearUserFolder: async (bucket, userId) => {
+      const { data, error: listError } = await supabase.storage.from(bucket).list(userId);
+      if (listError) throw new Error(`resetUserData: failed to list ${bucket}: ${listError.message}`);
+      if (data.length === 0) return;
+      const paths = data.map((f) => `${userId}/${f.name}`);
+      const { error: removeError } = await supabase.storage.from(bucket).remove(paths);
+      if (removeError) throw new Error(`resetUserData: failed to clear ${bucket}: ${removeError.message}`);
+    },
+  };
+
   const hcAdapter = createHealthConnectAdapter();
   const hc: ResetHealthConnect = { mintBaselineToken: () => hcAdapter.mintChangesToken() };
 
@@ -164,5 +190,5 @@ export async function resetUserData(): Promise<void> {
       () => undefined,
     );
 
-  await resetUserDataCore(auth, remote, stores, hc, cancelAllReminders, clearLocalCaches);
+  await resetUserDataCore(auth, remote, storage, stores, hc, cancelAllReminders, clearLocalCaches);
 }

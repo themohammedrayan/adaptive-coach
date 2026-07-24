@@ -3,7 +3,14 @@ import { MemoryStore as ChallengeMemoryStore } from '../../challenges/store.memo
 import { MemoryStore as DashboardMemoryStore } from '../../dashboard/store.memory';
 import { MemoryStore as DataSyncMemoryStore } from '../../data-sync/store.memory';
 import { MemoryStore as FoodLogMemoryStore } from '../../food-log/store.memory';
-import { RESET_REMOTE_TABLES, resetUserDataCore, type ResetAuth, type ResetHealthConnect, type ResetRemote } from '../resetAccount';
+import {
+  RESET_REMOTE_TABLES,
+  resetUserDataCore,
+  type ResetAuth,
+  type ResetHealthConnect,
+  type ResetRemote,
+  type ResetStorage,
+} from '../resetAccount';
 
 const USER_ID = 'user-1';
 
@@ -36,6 +43,14 @@ class FakeHealthConnect implements ResetHealthConnect {
   }
 }
 
+class FakeStorage implements ResetStorage {
+  cleared: { bucket: string; userId: string }[] = [];
+
+  async clearUserFolder(bucket: string, userId: string): Promise<void> {
+    this.cleared.push({ bucket, userId });
+  }
+}
+
 function stores() {
   return {
     dashboard: new DashboardMemoryStore(),
@@ -54,7 +69,7 @@ describe('resetUserDataCore', () => {
     const clearLocalCaches = jest.fn(async () => {});
 
     await expect(
-      resetUserDataCore(auth, remote, s, new FakeHealthConnect(), cancelAllReminders, clearLocalCaches),
+      resetUserDataCore(auth, remote, new FakeStorage(), s, new FakeHealthConnect(), cancelAllReminders, clearLocalCaches),
     ).rejects.toThrow('no signed-in user');
 
     expect(remote.deleted).toHaveLength(0);
@@ -112,13 +127,15 @@ describe('resetUserDataCore', () => {
       createdAt: '2026-07-01T00:00:00.000Z',
       updatedAt: '2026-07-01T00:00:00.000Z',
     });
+    const storage = new FakeStorage();
     const cancelAllReminders = jest.fn(async () => {});
     const clearLocalCaches = jest.fn(async () => {});
 
-    await resetUserDataCore(auth, remote, s, new FakeHealthConnect(), cancelAllReminders, clearLocalCaches);
+    await resetUserDataCore(auth, remote, storage, s, new FakeHealthConnect(), cancelAllReminders, clearLocalCaches);
 
     expect(remote.deleted.map((d) => d.table).sort()).toEqual([...RESET_REMOTE_TABLES].sort());
     expect(remote.deleted.every((d) => d.userId === USER_ID)).toBe(true);
+    expect(storage.cleared).toEqual([{ bucket: 'progress-photos', userId: USER_ID }]);
 
     expect(await s.dashboard.getProfile()).toBeNull();
     expect(await s.foodLog.listFoods()).toEqual([]);
@@ -138,7 +155,15 @@ describe('resetUserDataCore', () => {
     const cancelAllReminders = jest.fn(async () => {});
     const clearLocalCaches = jest.fn(async () => {});
 
-    await resetUserDataCore(auth, remote, s, new FakeHealthConnect('fresh-baseline'), cancelAllReminders, clearLocalCaches);
+    await resetUserDataCore(
+      auth,
+      remote,
+      new FakeStorage(),
+      s,
+      new FakeHealthConnect('fresh-baseline'),
+      cancelAllReminders,
+      clearLocalCaches,
+    );
 
     expect(await s.dataSync.getKV(KV.hcChangesToken)).toBe('fresh-baseline');
   });
@@ -150,28 +175,30 @@ describe('resetUserDataCore', () => {
     const cancelAllReminders = jest.fn(async () => {});
     const clearLocalCaches = jest.fn(async () => {});
 
-    await resetUserDataCore(auth, remote, s, new FakeHealthConnect(null), cancelAllReminders, clearLocalCaches);
+    await resetUserDataCore(auth, remote, new FakeStorage(), s, new FakeHealthConnect(null), cancelAllReminders, clearLocalCaches);
 
     expect(await s.dataSync.getKV(KV.hcChangesToken)).toBeNull();
   });
 
-  it('aborts before touching local stores when a remote delete fails', async () => {
+  it('aborts before touching local stores or storage when a remote delete fails', async () => {
     const auth = new FakeAuth();
     const remote: ResetRemote = {
       deleteAllFrom: async () => {
         throw new Error('network down');
       },
     };
+    const storage = new FakeStorage();
     const s = stores();
     await s.dashboard.setProfile({ sex: 'female', age: 25, heightCm: 165, activityFactor: 1.2 });
     const cancelAllReminders = jest.fn(async () => {});
     const clearLocalCaches = jest.fn(async () => {});
 
     await expect(
-      resetUserDataCore(auth, remote, s, new FakeHealthConnect(), cancelAllReminders, clearLocalCaches),
+      resetUserDataCore(auth, remote, storage, s, new FakeHealthConnect(), cancelAllReminders, clearLocalCaches),
     ).rejects.toThrow('network down');
 
     expect(await s.dashboard.getProfile()).not.toBeNull();
+    expect(storage.cleared).toHaveLength(0);
     expect(cancelAllReminders).not.toHaveBeenCalled();
     expect(clearLocalCaches).not.toHaveBeenCalled();
     expect(auth.signedOut).toBe(false);

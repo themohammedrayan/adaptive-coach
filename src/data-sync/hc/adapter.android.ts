@@ -94,6 +94,16 @@ export function createHealthConnectAdapter(): HealthConnectAdapter {
     }
     return initialized;
   };
+  const recordTypes = Object.values(RECORD_TYPE_BY_METRIC);
+
+  const mintChangesToken = async (): Promise<string | null> => {
+    await ensureInit();
+    try {
+      return (await getChanges({ recordTypes })).nextChangesToken ?? null;
+    } catch {
+      return null;
+    }
+  };
 
   return {
     async getSdkStatus(): Promise<SdkAvailability> {
@@ -127,7 +137,6 @@ export function createHealthConnectAdapter(): HealthConnectAdapter {
 
     async read({ changesToken, sinceIso, untilIso }) {
       await ensureInit();
-      const recordTypes = Object.values(RECORD_TYPE_BY_METRIC);
 
       const fullRead = async () => {
         const records: HCRecord[] = [];
@@ -145,12 +154,7 @@ export function createHealthConnectAdapter(): HealthConnectAdapter {
           }
         }
         // mint a fresh token so the next sync can be incremental
-        let nextChangesToken: string | null = null;
-        try {
-          nextChangesToken = (await getChanges({ recordTypes })).nextChangesToken ?? null;
-        } catch {
-          nextChangesToken = null;
-        }
+        const nextChangesToken = await mintChangesToken();
         return { records, deletedExternalIds: [], nextChangesToken };
       };
 
@@ -177,5 +181,7 @@ export function createHealthConnectAdapter(): HealthConnectAdapter {
       }
       return { records, deletedExternalIds, nextChangesToken: token };
     },
+
+    mintChangesToken,
   };
 }

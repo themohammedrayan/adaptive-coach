@@ -14,6 +14,13 @@ export interface HealthConnectAdapter {
     sinceIso: string;
     untilIso: string;
   }): Promise<{ records: HCRecord[]; deletedExternalIds: string[]; nextChangesToken: string | null }>;
+  /**
+   * Mints a fresh changes-token baseline with no historical read — used
+   * after an account reset so the very next sync is incremental-only from
+   * "now" instead of falling back to a full FIRST_RUN_BACKFILL_DAYS re-read
+   * (which would resurrect old watch/scale data the reset just deleted).
+   */
+  mintChangesToken(): Promise<string | null>;
 }
 
 /** Supabase push/pull seam; faked in tests. */

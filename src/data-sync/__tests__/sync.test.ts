@@ -46,6 +46,9 @@ class FakeHC implements HealthConnectAdapter {
       nextChangesToken: this.nextChangesToken,
     };
   }
+  async mintChangesToken() {
+    return this.nextChangesToken;
+  }
 }
 
 class FakeRemote implements RemoteStore {

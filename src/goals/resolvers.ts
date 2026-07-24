@@ -44,7 +44,11 @@ async function resolveMetricGoal(goal: Goal, ctx: ResolverContext): Promise<Goal
   if (goal.sourceBinding.type !== 'metric') return noData(ctx.today, { sourceMissing: true });
   const challenge = await ctx.challengeStore.get(goal.sourceBinding.challengeId);
   if (challenge === null || challenge.status === 'deleted') {
-    return noData(ctx.today, { sourceMissing: true });
+    // Distinct from the outer catch-all's sourceMissing: this one is a
+    // confirmed absence (the challenge really is gone), not "the resolver
+    // threw for some unrelated reason" — safe for loadResolvedGoals to act
+    // on by auto-archiving the goal, where the ambiguous catch-all isn't.
+    return noData(ctx.today, { sourceMissing: true, confirmedMissing: true });
   }
 
   const trend = computeTrend(ctx.measurements, { end: ctx.today }, DEFAULT_CONFIG.ewmaHalfLifeDays);
@@ -85,7 +89,7 @@ async function resolveMetricGoal(goal: Goal, ctx: ResolverContext): Promise<Goal
 async function resolveFundGoal(goal: Goal, ctx: ResolverContext): Promise<GoalProgress> {
   if (goal.sourceBinding.type !== 'fund') return noData(ctx.today, { sourceMissing: true });
   const financeGoal = await ctx.financeGoalStore.getByExternalId(goal.sourceBinding.financeGoalExternalId);
-  if (financeGoal === null) return noData(ctx.today, { sourceMissing: true });
+  if (financeGoal === null) return noData(ctx.today, { sourceMissing: true, confirmedMissing: true });
 
   // Goals BRD §I AT1 — a valuation-mode account with no entry yet reads
   // null (src/finance/netWorth.ts's accountBalanceAsOf), which is "no
@@ -118,7 +122,7 @@ async function resolveFundGoal(goal: Goal, ctx: ResolverContext): Promise<GoalPr
 async function resolveHabitGoal(goal: Goal, ctx: ResolverContext): Promise<GoalProgress> {
   if (goal.sourceBinding.type !== 'habit') return noData(ctx.today, { sourceMissing: true });
   const habit = await ctx.habitStore.getByExternalId(goal.sourceBinding.habitExternalId);
-  if (habit === null) return noData(ctx.today, { sourceMissing: true });
+  if (habit === null) return noData(ctx.today, { sourceMissing: true, confirmedMissing: true });
 
   const windowStart = addDays(ctx.today, -habit.windowDays);
   const count = await ctx.habitLogStore.countInRange(habit.externalId, windowStart, ctx.today);

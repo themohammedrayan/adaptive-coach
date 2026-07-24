@@ -109,5 +109,22 @@ export async function loadResolvedGoals(today: IsoDate): Promise<ResolvedGoalsSn
   );
   const progressByGoalId = applyBlocking(activeGoals, new Map(progressEntries));
 
-  return { goals: allGoals, habits, habitLog, milestoneItems, progressByGoalId };
+  // Self-heal: a goal whose bound source is *confirmed* gone (its Challenge/
+  // FinanceGoal/Habit no longer exists — not merely an ambiguous resolver
+  // error, see resolvers.ts's confirmedMissing) has nothing left to ever
+  // recover. This also covers a cascade-archive that failed partway (see
+  // GoalDetailScreen.tsx's Delete action) — it gets retried here instead of
+  // leaving the goal stuck reading "no data yet" forever.
+  const orphaned = activeGoals.filter((g) => progressByGoalId.get(g.id)?.detail.confirmedMissing === true);
+  for (const g of orphaned) {
+    try {
+      await api.archiveGoal(g.externalId, nowIso);
+    } catch {
+      // offline — retried on the next successful load
+    }
+  }
+  const orphanedIds = new Set(orphaned.map((g) => g.externalId));
+  const healedGoals = allGoals.map((g) => (orphanedIds.has(g.externalId) ? { ...g, status: 'archived' as const } : g));
+
+  return { goals: healedGoals, habits, habitLog, milestoneItems, progressByGoalId };
 }

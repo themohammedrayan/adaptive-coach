@@ -139,6 +139,10 @@ describe('Goals BRD §I AT2 — deleted or missing source module', () => {
     const progress = await resolveGoalProgress(makeGoal(), makeContext({ challengeStore: store }));
     expect(progress.status).toBe('no_data');
     expect(progress.detail.sourceMissing).toBe(true);
+    // confirmedMissing is what loadResolvedGoals.ts acts on to auto-archive
+    // an orphaned goal — distinct from the catch-all below, which must NOT
+    // set it (an unexpected error isn't proof the source is actually gone).
+    expect(progress.detail.confirmedMissing).toBe(true);
   });
 
   it('fund: finance goal not found reads no_data with sourceMissing', async () => {
@@ -146,6 +150,7 @@ describe('Goals BRD §I AT2 — deleted or missing source module', () => {
     const progress = await resolveGoalProgress(goal, makeContext());
     expect(progress.status).toBe('no_data');
     expect(progress.detail.sourceMissing).toBe(true);
+    expect(progress.detail.confirmedMissing).toBe(true);
   });
 
   it('habit: soft-deleted/missing habit reads no_data with sourceMissing', async () => {
@@ -153,9 +158,10 @@ describe('Goals BRD §I AT2 — deleted or missing source module', () => {
     const progress = await resolveGoalProgress(goal, makeContext());
     expect(progress.status).toBe('no_data');
     expect(progress.detail.sourceMissing).toBe(true);
+    expect(progress.detail.confirmedMissing).toBe(true);
   });
 
-  it('never throws on an unexpected resolver failure — converts to no_data', async () => {
+  it('never throws on an unexpected resolver failure — converts to no_data, but is not confirmedMissing', async () => {
     const goal = makeGoal({ type: 'fund', sourceBinding: { type: 'fund', financeGoalExternalId: 'fg1' } });
     const progress = await resolveGoalProgress(
       goal,
@@ -169,6 +175,9 @@ describe('Goals BRD §I AT2 — deleted or missing source module', () => {
     );
     expect(progress.status).toBe('no_data');
     expect(progress.detail.sourceMissing).toBe(true);
+    // An ambiguous failure (network blip, bug elsewhere) is not proof the
+    // source is actually gone — must not trigger auto-archiving.
+    expect(progress.detail.confirmedMissing).toBeUndefined();
   });
 });
 
@@ -194,5 +203,6 @@ describe('Goals BRD §I AT6 — cross-device metric with no local Challenge', ()
     const progress = await resolveGoalProgress(goal, makeContext({ challengeStore: new MemoryStore() }));
     expect(progress.status).toBe('no_data');
     expect(progress.detail.sourceMissing).toBe(true);
+    expect(progress.detail.confirmedMissing).toBe(true);
   });
 });

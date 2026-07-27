@@ -32,6 +32,7 @@ import { addDays } from '../engine';
 import type { IsoDate } from '../engine';
 import { getLatestCoachNote, type CoachNote } from '../coaching';
 import { getFoodLogRuntime } from '../food-log/runtime';
+import { syncWallpaperSnapshot } from '../wallpaper';
 import type { Tab } from './health/HealthApp';
 import { AppButton, Card, Overline, Row, SegmentedControl } from './kit';
 import { space, type, useTheme } from './theme';
@@ -168,6 +169,22 @@ export function DashboardScreen({
       return loadCharts(anchor ?? today, today, range);
     });
   }, [range, snapshot, loadCharts]);
+
+  useEffect(() => {
+    if (snapshot === null || snapshot.result === null || today === null) return;
+    const primary = snapshot.primaryChallenge;
+    if (primary === null) return;
+    const progress = buildChallengeProgress(
+      primary.goalWeightKg,
+      primary.startDate,
+      primary.horizonDays,
+      primary.startWeightKg,
+      snapshot.liveTrendWeightKg ?? snapshot.result.trendWeightKg,
+      snapshot.result.projectedFinishDate,
+      today,
+    );
+    void syncWallpaperSnapshot(progress, today);
+  }, [snapshot, today]);
 
   const onRefresh = async () => {
     setRefreshing(true);

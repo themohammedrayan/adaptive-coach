@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getChallengeRuntime } from '../challenges/runtime';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import {
   ACTIVITY_LEVELS,
+  buildChallengeProgress,
   configureNotificationHandler,
   refreshDashboardSnapshot,
   scheduleReminders,
@@ -12,9 +13,11 @@ import {
 } from '../dashboard';
 import { getDashboardRuntime } from '../dashboard/runtime';
 import type { PersonProfile } from '../dashboard/types';
+import type { IsoDate } from '../engine';
 import { getFoodLogRuntime } from '../food-log/runtime';
 import { resetUserData } from '../lib/resetAccount';
 import { supabase } from '../lib/supabase';
+import { openWallpaperChooser, syncWallpaperSnapshot } from '../wallpaper';
 import { AppButton, AppSwitch, Card, Chip, Field, Overline, ProgressBar, Row } from './kit';
 import { space, type, useTheme } from './theme';
 
@@ -31,6 +34,7 @@ function fmtTime(hour: number, minute: number): string {
 export function ProfileScreen() {
   const t = useTheme();
   const [snapshot, setSnapshot] = useState<DashboardSnapshot | null>(null);
+  const [today, setToday] = useState<IsoDate | null>(null);
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
   const [reminders, setReminders] = useState<ReminderConfig | null>(null);
   const [reminderError, setReminderError] = useState<string | null>(null);
@@ -38,6 +42,7 @@ export function ProfileScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [wallpaperBusy, setWallpaperBusy] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -59,6 +64,7 @@ export function ProfileScreen() {
         today,
       );
       setSnapshot(snap);
+      setToday(today);
       const recent = await dataRt.listRecentWeights(1);
       setCurrentWeightKg(recent.length > 0 ? recent[0].valueSI : null);
       setReminders(await dashRt.store.getReminderConfig());
@@ -104,6 +110,27 @@ export function ProfileScreen() {
       Alert.alert('Sign out failed', e instanceof Error ? e.message : String(e));
     } finally {
       setSigningOut(false);
+    }
+  };
+
+  const refreshWallpaperNow = async () => {
+    if (snapshot === null || snapshot.result === null || today === null) return;
+    const primary = snapshot.primaryChallenge;
+    if (primary === null) return;
+    setWallpaperBusy(true);
+    try {
+      const progress = buildChallengeProgress(
+        primary.goalWeightKg,
+        primary.startDate,
+        primary.horizonDays,
+        primary.startWeightKg,
+        snapshot.liveTrendWeightKg ?? snapshot.result.trendWeightKg,
+        snapshot.result.projectedFinishDate,
+        today,
+      );
+      await syncWallpaperSnapshot(progress, today);
+    } finally {
+      setWallpaperBusy(false);
     }
   };
 
@@ -189,6 +216,25 @@ export function ProfileScreen() {
           <Text style={[type.caption, { color: t.secondary }]}>
             Manage this and other challenges from the Challenges tab.
           </Text>
+        </Card>
+      )}
+
+      {primary !== null && Platform.OS === 'android' && (
+        <Card style={styles.card}>
+          <Overline>Live wallpaper</Overline>
+          <Text style={[type.caption, { color: t.secondary }]}>
+            Shows days left and calories banked for this challenge on your home screen.
+          </Text>
+          <Row gap={space.m}>
+            <AppButton title="Set as wallpaper" onPress={() => void openWallpaperChooser()} variant="secondary" small />
+            <AppButton
+              title="Refresh now"
+              onPress={() => void refreshWallpaperNow()}
+              variant="ghost"
+              small
+              busy={wallpaperBusy}
+            />
+          </Row>
         </Card>
       )}
 

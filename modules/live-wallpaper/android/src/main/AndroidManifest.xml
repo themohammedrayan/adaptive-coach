@@ -1,0 +1,16 @@
+<manifest>
+  <application>
+    <service
+      android:name="expo.modules.livewallpaper.LiveWallpaperService"
+      android:label="@string/live_wallpaper_label"
+      android:permission="android.permission.BIND_WALLPAPER"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.service.wallpaper.WallpaperService" />
+      </intent-filter>
+      <meta-data
+        android:name="android.service.wallpaper"
+        android:resource="@xml/live_wallpaper" />
+    </service>
+  </application>
+</manifest>

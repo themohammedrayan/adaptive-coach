@@ -1,5 +1,5 @@
-import { buildDebtOverview, paidInCycle, payoffOrder, statementCycle, type DebtLine } from '../debt';
-import type { Account, AccountValuation, Transaction } from '../types';
+import { buildDebtOverview, iouPosition, paidInCycle, payoffOrder, statementCycle, type DebtLine } from '../debt';
+import type { Account, AccountValuation, Iou, Transaction } from '../types';
 
 function account(overrides: Partial<Account>): Account {
   return {
@@ -262,5 +262,48 @@ describe('buildDebtOverview', () => {
       cardCount: 0,
       loanCount: 0,
     });
+  });
+});
+
+describe('iouPosition', () => {
+  function iou(overrides: Partial<Iou>): Iou {
+    return {
+      id: 'i1',
+      externalId: 'i1',
+      personName: 'Sam',
+      direction: 'owed_to_me',
+      amountMinor: 50000,
+      currency: 'INR',
+      note: null,
+      incurredDate: '2026-08-01',
+      dueDate: null,
+      settledAt: null,
+      updatedAt: '2026-08-01T00:00:00.000Z',
+      ...overrides,
+    };
+  }
+
+  it('nets what you are owed against what you owe', () => {
+    const position = iouPosition([
+      iou({ externalId: 'a', direction: 'owed_to_me', amountMinor: 80000 }),
+      iou({ externalId: 'b', direction: 'i_owe', amountMinor: 30000 }),
+    ]);
+    expect(position).toEqual({ netMinor: 50000, owedToMeMinor: 80000, iOweMinor: 30000, openCount: 2 });
+  });
+
+  it('goes negative when you owe more than you are owed', () => {
+    expect(iouPosition([iou({ direction: 'i_owe', amountMinor: 20000 })]).netMinor).toBe(-20000);
+  });
+
+  it('excludes settled IOUs from every total', () => {
+    const position = iouPosition([
+      iou({ externalId: 'a', amountMinor: 80000, settledAt: '2026-08-09T00:00:00.000Z' }),
+      iou({ externalId: 'b', amountMinor: 10000 }),
+    ]);
+    expect(position).toEqual({ netMinor: 10000, owedToMeMinor: 10000, iOweMinor: 0, openCount: 1 });
+  });
+
+  it('is all zeroes with nothing outstanding', () => {
+    expect(iouPosition([])).toEqual({ netMinor: 0, owedToMeMinor: 0, iOweMinor: 0, openCount: 0 });
   });
 });

@@ -5,6 +5,7 @@ import type {
   Budget,
   Category,
   FinanceGoal,
+  Iou,
   RecurringTransaction,
   Transaction,
 } from './types';
@@ -19,6 +20,7 @@ export interface FinanceCache {
   recurringTransactions: RecurringTransaction[];
   goals: FinanceGoal[];
   budgets: Budget[];
+  ious: Iou[];
   cachedAt: string;
 }
 

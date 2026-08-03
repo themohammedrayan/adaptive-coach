@@ -5,6 +5,7 @@ import {
   upsertBudget,
   upsertCategory,
   upsertGoal,
+  upsertIou,
   upsertRecurringTransaction,
   upsertTransaction,
   upsertValuation,
@@ -15,6 +16,7 @@ import type {
   Budget,
   Category,
   FinanceGoal,
+  Iou,
   RecurringTransaction,
   Transaction,
 } from './types';
@@ -28,7 +30,8 @@ export type OutboxEntityType =
   | 'valuation'
   | 'recurringTransaction'
   | 'goal'
-  | 'budget';
+  | 'budget'
+  | 'iou';
 
 export type OutboxPayload =
   | Account
@@ -37,7 +40,8 @@ export type OutboxPayload =
   | AccountValuation
   | RecurringTransaction
   | FinanceGoal
-  | Budget;
+  | Budget
+  | Iou;
 
 export interface OutboxEntry {
   entityType: OutboxEntityType;
@@ -102,6 +106,10 @@ async function replayEntry(entry: OutboxEntry): Promise<void> {
       return upsertGoal(entry.payload as FinanceGoal);
     case 'budget':
       return upsertBudget(entry.payload as Budget);
+    // Settling rides this same path: settledAt is a field on the row, so the
+    // queued payload already carries it and replays as an ordinary upsert.
+    case 'iou':
+      return upsertIou(entry.payload as Iou);
   }
 }
 

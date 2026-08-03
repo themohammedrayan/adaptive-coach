@@ -19,6 +19,7 @@ export const RESET_REMOTE_TABLES = [
   'finance_recurring_transactions',
   'finance_goals',
   'finance_budgets',
+  'finance_ious',
   'goals',
   'habits',
   'habit_log',

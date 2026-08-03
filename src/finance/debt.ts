@@ -2,7 +2,7 @@ import { addDays, type IsoDate } from '../engine';
 import { accountBalanceAsOf } from './netWorth';
 import { monthEndDatesForPrefixes } from './periods';
 import { clampDayOfMonth } from './recurrenceDates';
-import type { Account, AccountValuation, MoneyMinor, Transaction } from './types';
+import type { Account, AccountValuation, Iou, MoneyMinor, Transaction } from './types';
 
 /**
  * Debt ranking and statement-cycle tracking over the accounts already modelled
@@ -177,4 +177,30 @@ export function buildDebtOverview(
     cardCount: lines.filter((l) => l.account.type === 'credit_card').length,
     loanCount: lines.filter((l) => l.account.type === 'loan').length,
   };
+}
+
+export interface IouPosition {
+  /** Positive = people owe you more than you owe them. */
+  netMinor: MoneyMinor;
+  owedToMeMinor: MoneyMinor;
+  iOweMinor: MoneyMinor;
+  openCount: number;
+}
+
+/**
+ * Net position across unsettled IOUs. Settled ones stay for history but drop
+ * out of the totals.
+ *
+ * Deliberately not part of net worth: `netWorthAsOf` feeds Reports, the health
+ * read, the coach payload and the projection, and informal IOUs are small and
+ * uncertain enough that folding them in would move four downstream numbers for
+ * little gain.
+ */
+export function iouPosition(ious: Iou[]): IouPosition {
+  const open = ious.filter((i) => i.settledAt === null);
+  const owedToMeMinor = open
+    .filter((i) => i.direction === 'owed_to_me')
+    .reduce((sum, i) => sum + i.amountMinor, 0);
+  const iOweMinor = open.filter((i) => i.direction === 'i_owe').reduce((sum, i) => sum + i.amountMinor, 0);
+  return { netMinor: owedToMeMinor - iOweMinor, owedToMeMinor, iOweMinor, openCount: open.length };
 }

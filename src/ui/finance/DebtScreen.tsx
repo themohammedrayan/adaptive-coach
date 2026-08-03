@@ -1,20 +1,22 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { buildDebtOverview, type PayoffStrategy } from '../../finance/debt';
+import { buildDebtOverview, iouPosition, type PayoffStrategy } from '../../finance/debt';
 import { formatMoneyMinor } from '../../finance/money';
 import { Card, EmptyState, FAB, Overline, Row, SegmentedControl } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { DebtLineCard } from './components/DebtLineCard';
+import { IouSection } from './components/IouSection';
 import { useFinanceData } from './FinanceDataContext';
 import { AddTransactionModal } from './TransactionsScreen';
 
 const DEFAULT_CURRENCY = 'INR';
 
-type DebtLens = 'cards' | 'loans';
+type DebtLens = 'cards' | 'loans' | 'ious';
 
 const LENS_OPTIONS: { value: DebtLens; label: string }[] = [
-  { value: 'cards', label: 'Credit cards' },
+  { value: 'cards', label: 'Cards' },
   { value: 'loans', label: 'Debts' },
+  { value: 'ious', label: 'IOUs' },
 ];
 
 const STRATEGY_OPTIONS: { value: PayoffStrategy; label: string }[] = [
@@ -46,7 +48,7 @@ function Tile({ label, value, tone }: { label: string; value: string; tone?: str
  */
 export function DebtScreen() {
   const t = useTheme();
-  const { accounts, transactions, valuations, today, loading } = useFinanceData();
+  const { accounts, transactions, valuations, ious, today, loading } = useFinanceData();
   const [lens, setLens] = useState<DebtLens>('cards');
   const [strategy, setStrategy] = useState<PayoffStrategy>('avalanche');
   const [addOpen, setAddOpen] = useState(false);
@@ -57,6 +59,7 @@ export function DebtScreen() {
   );
 
   const currency = accounts.find((a) => a.archivedAt === null)?.currency ?? DEFAULT_CURRENCY;
+  const position = iouPosition(ious);
   const visible = overview.lines.filter((l) =>
     lens === 'cards' ? l.account.type === 'credit_card' : l.account.type === 'loan',
   );
@@ -66,11 +69,11 @@ export function DebtScreen() {
   return (
     <View style={styles.flex}>
       <ScrollView contentContainerStyle={styles.list}>
-        {!loading && overview.lines.length === 0 && (
-          <EmptyState message="No credit cards or loans yet. Add one from Accounts to track payoff here." />
+        {!loading && overview.lines.length === 0 && position.openCount === 0 && (
+          <EmptyState message="No credit cards, loans or IOUs yet. Add a card or loan from Accounts to track payoff here." />
         )}
 
-        {overview.lines.length > 0 && (
+        {(overview.lines.length > 0 || position.openCount > 0) && (
           <>
             <Card style={{ gap: space.s }}>
               <Overline>Total outstanding</Overline>
@@ -90,25 +93,29 @@ export function DebtScreen() {
 
             <SegmentedControl options={LENS_OPTIONS} value={lens} onChange={setLens} />
 
-            <Card style={{ gap: space.s }}>
-              <Row style={{ justifyContent: 'space-between' }}>
-                <Overline>Payoff strategy</Overline>
-              </Row>
-              <SegmentedControl options={STRATEGY_OPTIONS} value={strategy} onChange={setStrategy} />
-              <Text style={[type.caption, { color: t.muted }]}>{STRATEGY_EXPLAINER[strategy]}</Text>
-            </Card>
+            {lens === 'ious' ? (
+              <IouSection currency={currency} />
+            ) : (
+              <>
+                <Card style={{ gap: space.s }}>
+                  <Overline>Payoff strategy</Overline>
+                  <SegmentedControl options={STRATEGY_OPTIONS} value={strategy} onChange={setStrategy} />
+                  <Text style={[type.caption, { color: t.muted }]}>{STRATEGY_EXPLAINER[strategy]}</Text>
+                </Card>
 
-            {visible.length === 0 && (
-              <EmptyState message={lens === 'cards' ? 'No credit cards yet.' : 'No loans yet.'} />
+                {visible.length === 0 && (
+                  <EmptyState message={lens === 'cards' ? 'No credit cards yet.' : 'No loans yet.'} />
+                )}
+
+                {visible.map((line) => (
+                  <DebtLineCard
+                    key={line.account.id}
+                    line={line}
+                    payFirst={line.account.externalId === payFirstId}
+                  />
+                ))}
+              </>
             )}
-
-            {visible.map((line) => (
-              <DebtLineCard
-                key={line.account.id}
-                line={line}
-                payFirst={line.account.externalId === payFirstId}
-              />
-            ))}
           </>
         )}
       </ScrollView>

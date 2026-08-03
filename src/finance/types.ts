@@ -111,6 +111,28 @@ export interface Budget {
   updatedAt: string;
 }
 
+export type IouDirection = 'owed_to_me' | 'i_owe';
+
+/**
+ * An informal person-to-person debt. Deliberately outside net worth — see the
+ * migration comment. `settledAt` is the lifecycle field; a settled IOU stays
+ * for history but drops out of the net position.
+ */
+export interface Iou {
+  id: string;
+  externalId: string;
+  personName: string;
+  direction: IouDirection;
+  /** Always positive; `direction` carries the sign. */
+  amountMinor: MoneyMinor;
+  currency: CurrencyCode;
+  note: string | null;
+  incurredDate: IsoDate;
+  dueDate: IsoDate | null;
+  settledAt: string | null;
+  updatedAt: string;
+}
+
 export type FinanceGoalStatus = 'active' | 'completed' | 'archived';
 
 /** A savings goal ("save for a house") — progress tracks a linked account's live balance, never a manual check-in. */

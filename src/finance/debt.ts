@@ -204,3 +204,102 @@ export function iouPosition(ious: Iou[]): IouPosition {
   const iOweMinor = open.filter((i) => i.direction === 'i_owe').reduce((sum, i) => sum + i.amountMinor, 0);
   return { netMinor: owedToMeMinor - iOweMinor, owedToMeMinor, iOweMinor, openCount: open.length };
 }
+
+export interface PayoffPlan {
+  strategy: PayoffStrategy;
+  months: number;
+  totalInterestMinor: MoneyMinor;
+  debtFreeDate: IsoDate;
+  /** Account externalIds in the order they get cleared. */
+  order: string[];
+}
+
+/** A runaway plan terminates rather than looping — 50 years is well past useful. */
+const MAX_SIMULATED_MONTHS = 600;
+
+/**
+ * Simulates clearing every debt at `monthlyBudgetMinor` per month: accrue
+ * interest, pay each minimum, then throw everything left at the head of the
+ * payoff order, rolling a cleared debt's payment into the next.
+ *
+ * Returns null when the simulation can't say anything honest — no debts, a
+ * budget below the combined minimums (the balances would never fall), or any
+ * debt with no APR set, since guessing a rate would be inventing a number.
+ *
+ * A month is modelled as a single step at `apr / 12`; this is a comparison
+ * tool for avalanche vs snowball, not an amortisation schedule.
+ */
+export function simulatePayoff(
+  lines: DebtLine[],
+  monthlyBudgetMinor: MoneyMinor,
+  strategy: PayoffStrategy,
+  today: IsoDate,
+): PayoffPlan | null {
+  const active = lines.filter((l) => l.balanceMinor > 0);
+  if (active.length === 0) return null;
+  if (active.some((l) => l.aprPct === null)) return null;
+
+  const minimumsMinor = active.reduce((sum, l) => sum + (l.minimumPaymentMinor ?? 0), 0);
+  if (monthlyBudgetMinor < minimumsMinor || monthlyBudgetMinor <= 0) return null;
+
+  const ordered = payoffOrder(active, strategy);
+  let balances = ordered.map((l) => ({
+    externalId: l.account.externalId,
+    balanceMinor: l.balanceMinor,
+    monthlyRate: (l.aprPct as number) / 100 / 12,
+    minimumMinor: l.minimumPaymentMinor ?? 0,
+  }));
+
+  const order: string[] = [];
+  let totalInterestMinor = 0;
+  let months = 0;
+
+  while (balances.length > 0 && months < MAX_SIMULATED_MONTHS) {
+    months += 1;
+
+    for (const d of balances) {
+      const interest = Math.round(d.balanceMinor * d.monthlyRate);
+      d.balanceMinor += interest;
+      totalInterestMinor += interest;
+    }
+
+    let remaining = monthlyBudgetMinor;
+    for (const d of balances) {
+      const pay = Math.min(d.minimumMinor, d.balanceMinor, remaining);
+      d.balanceMinor -= pay;
+      remaining -= pay;
+    }
+    // Whatever's left goes to the head of the order, then the next one down as
+    // each is cleared — that rolling payment is what makes either strategy work.
+    for (const d of balances) {
+      if (remaining <= 0) break;
+      const pay = Math.min(d.balanceMinor, remaining);
+      d.balanceMinor -= pay;
+      remaining -= pay;
+    }
+
+    for (const d of balances) {
+      if (d.balanceMinor <= 0) order.push(d.externalId);
+    }
+    balances = balances.filter((d) => d.balanceMinor > 0);
+  }
+
+  if (balances.length > 0) return null; // never converged within the cap
+
+  return {
+    strategy,
+    months,
+    totalInterestMinor,
+    debtFreeDate: monthsAfter(today, months),
+    order,
+  };
+}
+
+/** `today` advanced by whole months, clamped for short months. */
+function monthsAfter(today: IsoDate, months: number): IsoDate {
+  const year = Number(today.slice(0, 4));
+  const month = Number(today.slice(5, 7));
+  const day = Number(today.slice(8, 10));
+  const totalIndex = month - 1 + months;
+  return clampDayOfMonth(year + Math.floor(totalIndex / 12), ((totalIndex % 12) + 12) % 12 + 1, day);
+}

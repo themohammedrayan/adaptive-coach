@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { buildDebtOverview, iouPosition, type PayoffStrategy } from '../../finance/debt';
-import { formatMoneyMinor } from '../../finance/money';
-import { Card, EmptyState, FAB, Overline, Row, SegmentedControl } from '../kit';
+import { buildDebtOverview, iouPosition, simulatePayoff, type PayoffStrategy } from '../../finance/debt';
+import { formatMoneyMinor, parseMoneyInput } from '../../finance/money';
+import { formatDayLabel } from '../../finance/periods';
+import { Card, EmptyState, FAB, Field, Overline, Row, SegmentedControl } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { DebtLineCard } from './components/DebtLineCard';
 import { IouSection } from './components/IouSection';
@@ -51,6 +52,7 @@ export function DebtScreen() {
   const { accounts, transactions, valuations, ious, today, loading } = useFinanceData();
   const [lens, setLens] = useState<DebtLens>('cards');
   const [strategy, setStrategy] = useState<PayoffStrategy>('avalanche');
+  const [budgetInput, setBudgetInput] = useState('');
   const [addOpen, setAddOpen] = useState(false);
 
   const overview = useMemo(
@@ -65,6 +67,20 @@ export function DebtScreen() {
   );
   // Only the top-ranked debt overall carries the badge, not the top of each lens.
   const payFirstId = overview.lines.find((l) => l.balanceMinor > 0)?.account.externalId ?? null;
+
+  // A what-if, held in component state only — nothing is persisted. Blank falls
+  // back to paying exactly the minimums.
+  const budgetMinor = parseMoneyInput(budgetInput) ?? overview.totalMinimumDueMinor;
+  const plan = useMemo(
+    () => simulatePayoff(overview.lines, budgetMinor, strategy, today),
+    [overview.lines, budgetMinor, strategy, today],
+  );
+  const otherPlan = useMemo(
+    () => simulatePayoff(overview.lines, budgetMinor, strategy === 'avalanche' ? 'snowball' : 'avalanche', today),
+    [overview.lines, budgetMinor, strategy, today],
+  );
+  const interestSavedMinor =
+    plan !== null && otherPlan !== null ? otherPlan.totalInterestMinor - plan.totalInterestMinor : 0;
 
   return (
     <View style={styles.flex}>
@@ -101,6 +117,37 @@ export function DebtScreen() {
                   <Overline>Payoff strategy</Overline>
                   <SegmentedControl options={STRATEGY_OPTIONS} value={strategy} onChange={setStrategy} />
                   <Text style={[type.caption, { color: t.muted }]}>{STRATEGY_EXPLAINER[strategy]}</Text>
+
+                  <Field
+                    label="Monthly payment"
+                    placeholder={`Minimums — ${formatMoneyMinor(overview.totalMinimumDueMinor, currency)}`}
+                    keyboardType="decimal-pad"
+                    value={budgetInput}
+                    onChangeText={setBudgetInput}
+                  />
+
+                  {plan !== null ? (
+                    <>
+                      <Text style={[type.body, { color: t.ink }]}>
+                        Debt-free in {plan.months} {plan.months === 1 ? 'month' : 'months'} —{' '}
+                        {formatDayLabel(plan.debtFreeDate)} {plan.debtFreeDate.slice(0, 4)}
+                      </Text>
+                      <Text style={[type.caption, { color: t.muted }]}>
+                        {formatMoneyMinor(plan.totalInterestMinor, currency)} of interest along the way
+                        {interestSavedMinor > 0
+                          ? ` · saves ${formatMoneyMinor(interestSavedMinor, currency)} vs ${
+                              strategy === 'avalanche' ? 'snowball' : 'avalanche'
+                            }`
+                          : ''}
+                      </Text>
+                    </>
+                  ) : (
+                    <Text style={[type.caption, { color: t.muted }]}>
+                      {overview.lines.some((l) => l.balanceMinor > 0 && l.aprPct === null)
+                        ? 'Set an APR on every debt to project a payoff date.'
+                        : 'Enter a monthly payment above the minimums to project a payoff date.'}
+                    </Text>
+                  )}
                 </Card>
 
                 {visible.length === 0 && (

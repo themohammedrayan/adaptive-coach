@@ -1,4 +1,12 @@
-import { buildDebtOverview, iouPosition, paidInCycle, payoffOrder, statementCycle, type DebtLine } from '../debt';
+import {
+  buildDebtOverview,
+  iouPosition,
+  paidInCycle,
+  payoffOrder,
+  simulatePayoff,
+  statementCycle,
+  type DebtLine,
+} from '../debt';
 import type { Account, AccountValuation, Iou, Transaction } from '../types';
 
 function account(overrides: Partial<Account>): Account {
@@ -305,5 +313,76 @@ describe('iouPosition', () => {
 
   it('is all zeroes with nothing outstanding', () => {
     expect(iouPosition([])).toEqual({ netMinor: 0, owedToMeMinor: 0, iOweMinor: 0, openCount: 0 });
+  });
+});
+
+describe('simulatePayoff', () => {
+  function line(externalId: string, balanceMinor: number, aprPct: number | null, minimumMinor: number | null): DebtLine {
+    return {
+      account: account({ id: externalId, externalId }),
+      balanceMinor,
+      aprPct,
+      minimumPaymentMinor: minimumMinor,
+      creditLimitMinor: null,
+      utilizationPct: null,
+      cycle: { start: '2026-08-01', due: '2026-08-31' },
+      paidThisCycleMinor: 0,
+      cycleStatus: 'unpaid',
+    };
+  }
+
+  // ₹20,000 at 36% and ₹5,000 at 12%, ₹1,000 + ₹500 minimums.
+  const expensive = line('expensive', 2000000, 36, 100000);
+  const small = line('small', 500000, 12, 50000);
+
+  it('clears an interest-free debt in exactly the arithmetic number of months', () => {
+    // ₹10,000 at 0% APR with a ₹2,000 budget → 5 months.
+    const plan = simulatePayoff([line('free', 1000000, 0, 100000)], 200000, 'avalanche', '2026-08-15')!;
+    expect(plan.months).toBe(5);
+    expect(plan.totalInterestMinor).toBe(0);
+    expect(plan.debtFreeDate).toBe('2027-01-15');
+    expect(plan.order).toEqual(['free']);
+  });
+
+  it('avalanche costs less interest than snowball on the same debts and budget', () => {
+    const budget = 300000; // ₹3,000/mo, above the ₹1,500 of minimums
+    const avalanche = simulatePayoff([expensive, small], budget, 'avalanche', '2026-08-15')!;
+    const snowball = simulatePayoff([expensive, small], budget, 'snowball', '2026-08-15')!;
+    expect(avalanche.totalInterestMinor).toBeLessThan(snowball.totalInterestMinor);
+  });
+
+  it('snowball clears the smallest debt first', () => {
+    const plan = simulatePayoff([expensive, small], 300000, 'snowball', '2026-08-15')!;
+    expect(plan.order[0]).toBe('small');
+  });
+
+  it('avalanche clears the highest-rate debt first', () => {
+    const plan = simulatePayoff([expensive, small], 300000, 'avalanche', '2026-08-15')!;
+    expect(plan.order[0]).toBe('expensive');
+  });
+
+  it('returns null when the budget cannot cover the minimums', () => {
+    expect(simulatePayoff([expensive, small], 100000, 'avalanche', '2026-08-15')).toBeNull();
+  });
+
+  it('returns null when any debt has no APR, rather than guessing one', () => {
+    expect(simulatePayoff([line('unknown', 500000, null, 50000)], 300000, 'avalanche', '2026-08-15')).toBeNull();
+  });
+
+  it('returns null when there is nothing to pay off', () => {
+    expect(simulatePayoff([], 300000, 'avalanche', '2026-08-15')).toBeNull();
+    expect(simulatePayoff([line('cleared', 0, 20, 1000)], 300000, 'avalanche', '2026-08-15')).toBeNull();
+  });
+
+  it('returns null when interest outruns the budget and the plan never converges', () => {
+    // ₹1,000,000 at 200% APR accrues far more each month than a ₹1,000 budget.
+    expect(simulatePayoff([line('runaway', 100000000, 200, 100000)], 100000, 'avalanche', '2026-08-15')).toBeNull();
+  });
+
+  it('clamps the debt-free date into a short month', () => {
+    // Starting Dec 31, three months out lands on Mar 31 — but one month lands on Jan 31.
+    const plan = simulatePayoff([line('free', 200000, 0, 100000)], 100000, 'avalanche', '2026-12-31')!;
+    expect(plan.months).toBe(2);
+    expect(plan.debtFreeDate).toBe('2027-02-28');
   });
 });

@@ -25,6 +25,60 @@ function defaultIsLiability(type: AccountType): boolean {
   return type === 'credit_card' || type === 'loan';
 }
 
+/** Credit cards and loans are the two types the debt module reads APR/minimum/due-day from. */
+function isDebtType(type: AccountType): boolean {
+  return type === 'credit_card' || type === 'loan';
+}
+
+interface DebtFields {
+  interestRate: number | null;
+  minimumPaymentMinor: number | null;
+  dueDay: number | null;
+}
+
+/** Renders a stored minor-unit amount back into something `parseMoneyInput` accepts. */
+function moneyInputValue(amountMinor: number | null): string {
+  return amountMinor === null ? '' : (amountMinor / 100).toFixed(2).replace(/\.00$/, '');
+}
+
+/**
+ * Parses the three optional debt fields shared by the add form and the inline
+ * editor. A blank field means "not set" (null), never zero — the debt module
+ * treats a null APR as unknown and refuses to rank on it.
+ */
+function parseDebtFields(
+  aprInput: string,
+  minimumInput: string,
+  dueDayInput: string,
+): { fields: DebtFields } | { error: string } {
+  let interestRate: number | null = null;
+  if (aprInput.trim() !== '') {
+    const parsed = Number(aprInput.trim());
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 200) {
+      return { error: 'Enter an APR between 0 and 200.' };
+    }
+    interestRate = parsed;
+  }
+
+  let minimumPaymentMinor: number | null = null;
+  if (minimumInput.trim() !== '') {
+    const parsed = parseMoneyInput(minimumInput);
+    if (parsed === null || parsed < 0) return { error: 'Enter a valid minimum payment.' };
+    minimumPaymentMinor = parsed;
+  }
+
+  let dueDay: number | null = null;
+  if (dueDayInput.trim() !== '') {
+    const parsed = Number(dueDayInput.trim());
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 31) {
+      return { error: 'Due day must be a whole number from 1 to 31.' };
+    }
+    dueDay = parsed;
+  }
+
+  return { fields: { interestRate, minimumPaymentMinor, dueDay } };
+}
+
 function CreditUtilization({
   usedMinor,
   limitMinor,
@@ -57,15 +111,34 @@ export function AccountsScreen() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [valuationInput, setValuationInput] = useState('');
   const [correctionInput, setCorrectionInput] = useState('');
+  const [aprInput, setAprInput] = useState('');
+  const [minimumInput, setMinimumInput] = useState('');
+  const [dueDayInput, setDueDayInput] = useState('');
   const [inlineError, setInlineError] = useState<string | null>(null);
 
   const activeAccounts = useMemo(() => accounts.filter((a) => a.archivedAt === null), [accounts]);
 
   const balanceFor = (account: Account) => accountBalanceAsOf(account, transactions, valuations, today);
 
-  const toggleExpanded = (externalId: string) => {
-    setExpandedId((prev) => (prev === externalId ? null : externalId));
+  /** Seeds the debt inputs from the account being opened — only one row is ever expanded. */
+  const toggleExpanded = (account: Account) => {
+    setExpandedId((prev) => (prev === account.externalId ? null : account.externalId));
     setInlineError(null);
+    setAprInput(account.interestRate === null ? '' : String(account.interestRate));
+    setMinimumInput(moneyInputValue(account.minimumPaymentMinor));
+    setDueDayInput(account.dueDay === null ? '' : String(account.dueDay));
+  };
+
+  const submitDebtFields = async (account: Account) => {
+    const parsed = parseDebtFields(aprInput, minimumInput, dueDayInput);
+    if ('error' in parsed) return setInlineError(parsed.error);
+    try {
+      // Same externalId, so upsert resolves to an update rather than an insert.
+      await saveAccount({ ...account, ...parsed.fields, updatedAt: new Date().toISOString() });
+      setInlineError(null);
+    } catch (e) {
+      setInlineError(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const submitValuation = async (account: Account) => {
@@ -139,7 +212,7 @@ export function AccountsScreen() {
         const expanded = expandedId === account.externalId;
         return (
           <Card key={account.id} style={{ gap: space.s }}>
-            <Pressable onPress={() => toggleExpanded(account.externalId)}>
+            <Pressable onPress={() => toggleExpanded(account)}>
               <Row style={{ justifyContent: 'space-between' }}>
                 <View style={{ gap: 2 }}>
                   <Text style={[type.heading, { color: t.ink }]}>{account.name}</Text>
@@ -189,11 +262,39 @@ export function AccountsScreen() {
                     </Row>
                   </>
                 )}
-                {(account.type === 'credit_card' || account.type === 'loan') && (
-                  <Text style={[type.caption, { color: t.muted }]}>
-                    {account.interestRate !== null ? `${account.interestRate}% interest` : 'No interest rate set'}
-                    {account.dueDay !== null ? ` · due day ${account.dueDay}` : ''}
-                  </Text>
+                {isDebtType(account.type) && (
+                  <View style={{ gap: space.s }}>
+                    <Text style={[type.caption, { color: t.muted }]}>
+                      Used by the Debt tab to rank what to pay first and track this cycle.
+                    </Text>
+                    <Row gap={space.m}>
+                      <Field
+                        label="APR %"
+                        placeholder="e.g. 36"
+                        keyboardType="decimal-pad"
+                        value={aprInput}
+                        onChangeText={setAprInput}
+                        style={{ flex: 1 }}
+                      />
+                      <Field
+                        label="Minimum"
+                        placeholder="e.g. 1000"
+                        keyboardType="decimal-pad"
+                        value={minimumInput}
+                        onChangeText={setMinimumInput}
+                        style={{ flex: 1 }}
+                      />
+                      <Field
+                        label="Due day"
+                        placeholder="1–31"
+                        keyboardType="number-pad"
+                        value={dueDayInput}
+                        onChangeText={setDueDayInput}
+                        style={{ flex: 1 }}
+                      />
+                    </Row>
+                    <AppButton title="Save debt details" onPress={() => submitDebtFields(account)} small />
+                  </View>
                 )}
                 {inlineError !== null && <ErrorText>{inlineError}</ErrorText>}
                 <AppButton title="Archive account" onPress={() => confirmArchive(account)} variant="ghost" small />
@@ -229,6 +330,9 @@ function AddAccountModal({
   const [openingBalanceInput, setOpeningBalanceInput] = useState('');
   const [isLiability, setIsLiability] = useState(defaultIsLiability('bank'));
   const [creditLimitInput, setCreditLimitInput] = useState('');
+  const [aprInput, setAprInput] = useState('');
+  const [minimumInput, setMinimumInput] = useState('');
+  const [dueDayInput, setDueDayInput] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   const balanceMode = defaultBalanceMode(accountType);
@@ -243,6 +347,10 @@ function AddAccountModal({
     if (name.trim() === '') return setError('Enter an account name.');
     const openingBalanceMinor = balanceMode === 'ledger' ? (parseMoneyInput(openingBalanceInput) ?? 0) : 0;
     const creditLimitMinor = accountType === 'credit_card' ? parseMoneyInput(creditLimitInput) : null;
+    const parsedDebt = isDebtType(accountType)
+      ? parseDebtFields(aprInput, minimumInput, dueDayInput)
+      : { fields: { interestRate: null, minimumPaymentMinor: null, dueDay: null } };
+    if ('error' in parsedDebt) return setError(parsedDebt.error);
     const nowIso = new Date().toISOString();
     try {
       await onSave({
@@ -255,9 +363,7 @@ function AddAccountModal({
         currency: 'INR',
         openingBalanceMinor,
         openingDate: balanceMode === 'ledger' ? today : null,
-        interestRate: null,
-        minimumPaymentMinor: null,
-        dueDay: null,
+        ...parsedDebt.fields,
         creditLimitMinor,
         source: 'manual',
         archivedAt: null,
@@ -268,6 +374,9 @@ function AddAccountModal({
       setAccountType('bank');
       setIsLiability(defaultIsLiability('bank'));
       setCreditLimitInput('');
+      setAprInput('');
+      setMinimumInput('');
+      setDueDayInput('');
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -307,6 +416,34 @@ function AddAccountModal({
                   value={creditLimitInput}
                   onChangeText={setCreditLimitInput}
                 />
+              )}
+              {isDebtType(accountType) && (
+                <Row gap={space.m}>
+                  <Field
+                    label="APR %"
+                    placeholder="Optional"
+                    keyboardType="decimal-pad"
+                    value={aprInput}
+                    onChangeText={setAprInput}
+                    style={{ flex: 1 }}
+                  />
+                  <Field
+                    label="Minimum"
+                    placeholder="Optional"
+                    keyboardType="decimal-pad"
+                    value={minimumInput}
+                    onChangeText={setMinimumInput}
+                    style={{ flex: 1 }}
+                  />
+                  <Field
+                    label="Due day"
+                    placeholder="1–31"
+                    keyboardType="number-pad"
+                    value={dueDayInput}
+                    onChangeText={setDueDayInput}
+                    style={{ flex: 1 }}
+                  />
+                </Row>
               )}
               <Row style={{ justifyContent: 'space-between' }}>
                 <Text style={[type.body, { color: t.ink }]}>Counts as a liability</Text>

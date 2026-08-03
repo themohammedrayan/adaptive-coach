@@ -31,15 +31,25 @@ function addDays(date: IsoDate, days: number): IsoDate {
   return toIso(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
 }
 
+/**
+ * A day-of-month pinned into a specific month, clamped to that month's length —
+ * day 31 lands on Feb 28. Shared with the debt module's statement cycles, which
+ * pin a due day the same way.
+ *
+ * `month` is 1-based.
+ */
+export function clampDayOfMonth(year: number, month: number, dayOfMonth: number): IsoDate {
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return toIso(year, month, Math.min(dayOfMonth, daysInMonth));
+}
+
 /** Advances by whole months, clamping to the target month's length — a rule on the 31st fires Feb 28. */
 function addMonthsClamped(date: IsoDate, months: number, dayOfMonth: number): IsoDate {
   const { y, m } = parseDateParts(date);
   const totalMonthIndex = m - 1 + months;
   const targetYear = y + Math.floor(totalMonthIndex / 12);
   const targetMonth = ((totalMonthIndex % 12) + 12) % 12;
-  const daysInTargetMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
-  const clampedDay = Math.min(dayOfMonth, daysInTargetMonth);
-  return toIso(targetYear, targetMonth + 1, clampedDay);
+  return clampDayOfMonth(targetYear, targetMonth + 1, dayOfMonth);
 }
 
 /** The next occurrence strictly after `from`, per the rule's frequency and interval. */

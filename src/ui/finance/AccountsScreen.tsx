@@ -4,8 +4,9 @@ import { accountBalanceAsOf } from '../../finance/netWorth';
 import { defaultGenId } from '../../finance/ids';
 import { formatMoneyMinor, parseMoneyInput } from '../../finance/money';
 import type { Account, AccountType } from '../../finance/types';
-import { AppButton, AppSwitch, Card, Chip, EmptyState, ErrorText, FAB, Field, Overline, ProgressBar, Row } from '../kit';
+import { AppButton, AppSwitch, Card, Chip, EmptyState, ErrorText, FAB, Field, Overline, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
+import { CreditUtilization } from './components/CreditUtilization';
 import { useFinanceData } from './FinanceDataContext';
 
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
@@ -77,30 +78,6 @@ function parseDebtFields(
   }
 
   return { fields: { interestRate, minimumPaymentMinor, dueDay } };
-}
-
-function CreditUtilization({
-  usedMinor,
-  limitMinor,
-  currency,
-}: {
-  usedMinor: number;
-  limitMinor: number;
-  currency: string;
-}) {
-  const t = useTheme();
-  const pct = limitMinor > 0 ? usedMinor / limitMinor : 0;
-  return (
-    <View style={{ gap: space.xs }}>
-      <Row style={{ justifyContent: 'space-between' }}>
-        <Text style={[type.caption, { color: t.muted }]}>
-          Used {formatMoneyMinor(usedMinor, currency)} of {formatMoneyMinor(limitMinor, currency)}
-        </Text>
-        <Text style={[type.caption, { color: pct > 0.8 ? t.danger : t.muted }]}>{Math.round(pct * 100)}%</Text>
-      </Row>
-      <ProgressBar pct={pct} color={pct > 0.8 ? t.danger : t.accent} />
-    </View>
-  );
 }
 
 export function AccountsScreen() {

@@ -1,4 +1,4 @@
-import { addMoney, formatMoneyMinor, parseMoneyInput, subtractMoney, sumMoney } from '../money';
+import { addMoney, formatMoneyCompact, formatMoneyMinor, parseMoneyInput, subtractMoney, sumMoney } from '../money';
 
 describe('formatMoneyMinor', () => {
   it('groups INR with Indian lakh/crore commas', () => {
@@ -45,5 +45,36 @@ describe('money arithmetic', () => {
   it('sums a list of minor-unit amounts', () => {
     expect(sumMoney([100, -30, 20])).toBe(90);
     expect(sumMoney([])).toBe(0);
+  });
+});
+
+describe('formatMoneyCompact', () => {
+  it('leaves sub-thousand amounts whole', () => {
+    expect(formatMoneyCompact(45000, 'INR')).toBe('₹450');
+    expect(formatMoneyCompact(0, 'INR')).toBe('₹0');
+  });
+
+  it('compacts thousands and drops a trailing tenth', () => {
+    expect(formatMoneyCompact(200000, 'INR')).toBe('₹2k'); // ₹2,000 exactly
+    expect(formatMoneyCompact(1240000, 'INR')).toBe('₹12.4k'); // ₹12,400
+  });
+
+  it('compacts INR to lakh and crore', () => {
+    expect(formatMoneyCompact(12400000, 'INR')).toBe('₹1.2L'); // ₹1,24,000
+    expect(formatMoneyCompact(150000000, 'INR')).toBe('₹15L'); // ₹15,00,000
+    expect(formatMoneyCompact(1000000000, 'INR')).toBe('₹1Cr'); // ₹1,00,00,000
+  });
+
+  it('compacts other currencies to k/M/B instead of lakh', () => {
+    expect(formatMoneyCompact(12400000, 'USD')).toBe('$124k');
+    expect(formatMoneyCompact(500000000, 'USD')).toBe('$5M');
+  });
+
+  it('puts the sign before the symbol', () => {
+    expect(formatMoneyCompact(-1240000, 'INR')).toBe('-₹12.4k');
+  });
+
+  it('falls back to a currency-code prefix for unknown currencies', () => {
+    expect(formatMoneyCompact(200000, 'JPY')).toBe('JPY 2k');
   });
 });

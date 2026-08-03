@@ -28,6 +28,7 @@ const EMPTY_FINANCE: AskCoachFinanceInputs = {
   financeGoals: [],
   budgets: [],
   categories: [],
+  recurringTransactions: [],
 };
 
 const EMPTY_GOALS: AskCoachGoalsInputs = { activeGoals: [], progressByGoalId: new Map() };
@@ -42,15 +43,20 @@ const EMPTY_GOALS: AskCoachGoalsInputs = { activeGoals: [], progressByGoalId: ne
  */
 async function fetchFinanceForCoach(): Promise<{ data: AskCoachFinanceInputs; failed: boolean }> {
   try {
-    const [accounts, transactions, valuations, financeGoals, budgets, categories] = await Promise.all([
-      financeApi.listAccounts(),
-      financeApi.listTransactions(),
-      financeApi.listValuations(),
-      financeApi.listGoals(),
-      financeApi.listBudgets(),
-      financeApi.listCategories(),
-    ]);
-    return { data: { accounts, transactions, valuations, financeGoals, budgets, categories }, failed: false };
+    const [accounts, transactions, valuations, financeGoals, budgets, categories, recurringTransactions] =
+      await Promise.all([
+        financeApi.listAccounts(),
+        financeApi.listTransactions(),
+        financeApi.listValuations(),
+        financeApi.listGoals(),
+        financeApi.listBudgets(),
+        financeApi.listCategories(),
+        financeApi.listRecurringTransactions(),
+      ]);
+    return {
+      data: { accounts, transactions, valuations, financeGoals, budgets, categories, recurringTransactions },
+      failed: false,
+    };
   } catch {
     return { data: EMPTY_FINANCE, failed: true };
   }

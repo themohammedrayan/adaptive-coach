@@ -7,7 +7,15 @@ import { buildAdherenceSummary } from '../dashboard/adherence';
 import type { DashboardStore } from '../dashboard/store';
 import type { IsoDate } from '../engine';
 import { assembleFinanceCoachPayload } from '../finance/coachPayload';
-import type { Account, AccountValuation, Budget, Category, FinanceGoal, Transaction } from '../finance/types';
+import type {
+  Account,
+  AccountValuation,
+  Budget,
+  Category,
+  FinanceGoal,
+  RecurringTransaction,
+  Transaction,
+} from '../finance/types';
 import { buildCoachGoalContext } from '../goals/coachSummary';
 import type { Goal, GoalProgress } from '../goals/types';
 import { assembleUnifiedCoachPayload } from './assemblePayload';
@@ -21,6 +29,7 @@ export interface AskCoachFinanceInputs {
   financeGoals: FinanceGoal[];
   budgets: Budget[];
   categories: Category[];
+  recurringTransactions: RecurringTransaction[];
 }
 
 export interface AskCoachGoalsInputs {
@@ -91,6 +100,7 @@ export async function askCoachQuestion(
     deps.finance.financeGoals,
     deps.finance.budgets,
     deps.finance.categories,
+    deps.finance.recurringTransactions,
     today,
   );
 

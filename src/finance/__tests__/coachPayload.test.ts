@@ -82,6 +82,7 @@ describe('assembleFinanceCoachPayload', () => {
       [goal],
       [budget],
       [category],
+      [],
       '2026-07-19',
     );
 
@@ -96,6 +97,14 @@ describe('assembleFinanceCoachPayload', () => {
     expect(payload.budgets).toEqual([{ categoryName: 'Food', budgetedMinor: 50_000, spentMinor: 10_000 }]);
     expect(payload.healthRead.status).toBeDefined();
     expect(payload.projection).toHaveLength(3);
+    // No recurring rules, so the balance never moves after today: the low point
+    // is the current ledger balance, on day one of the horizon.
+    expect(payload.cashflow).toEqual({
+      status: 'clear',
+      lowBalanceMinor: 490_000,
+      lowDate: '2026-07-19',
+      horizonDays: 30,
+    });
     expect(payload).not.toHaveProperty('transactions');
   });
 
@@ -109,6 +118,7 @@ describe('assembleFinanceCoachPayload', () => {
       [goal, archivedGoal],
       [],
       [category],
+      [],
       '2026-07-19',
     );
     expect(payload.accounts).toHaveLength(1);

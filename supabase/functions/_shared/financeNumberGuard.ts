@@ -16,6 +16,7 @@ export function collectAllowedNumbers(payload: FinanceCoachPayload): number[] {
   for (const g of payload.goals) nums.push(g.targetAmountMinor, g.savedMinor);
   for (const b of payload.budgets) nums.push(b.budgetedMinor, b.spentMinor);
   for (const p of payload.projection) nums.push(p.monthsAhead, p.projectedNetWorthMinor);
+  nums.push(payload.cashflow.lowBalanceMinor, payload.cashflow.horizonDays);
   return nums.filter((n): n is number => typeof n === 'number');
 }
 

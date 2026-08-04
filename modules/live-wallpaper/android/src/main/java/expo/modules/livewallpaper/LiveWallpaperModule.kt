@@ -30,6 +30,7 @@ class LiveWallpaperModule : Module() {
       } else {
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
       }
+      Unit
     }
   }
 }

@@ -34,6 +34,28 @@ src/
 
 Module folders are created when their module is built.
 
+## Finance module
+
+A personal-finance tracker bolted onto the weight/nutrition app, sharing
+`src/ui/kit.tsx` and `src/ui/theme.ts` but not part of the BRD build order
+above — no child BRD governs it. Route: `src/app/finance.tsx` →
+`src/ui/finance/FinanceApp.tsx` (6-tab shell: Accounts, Flow, Log, Budget,
+Debt, Reports). Domain logic is pure functions in `src/finance/*.ts` with
+tests in `src/finance/__tests__/`; screens live in `src/ui/finance/` and
+`src/ui/finance/components/`. Backend: Supabase tables `finance_*` (see
+`supabase/migrations/`), reached only through `src/finance/api.ts` — screens
+never call `supabase` directly. Offline writes queue through
+`src/finance/outbox.ts`/`cache.ts`; `FinanceDataContext.tsx` is the single
+data-access boundary all finance screens use.
+
+Treat `FinanceDataContext.tsx` and existing screens as the pattern reference
+for new work here — in particular the `entity: Entity | null` create/edit
+idiom (`category === null` means create) used by `CategoryEditorModal.tsx`
+and `RecurringModal.tsx`, and the `AppButton`/`Card`/`Chip`/`Field`/`Modal`
+primitives in `src/ui/kit.tsx`. Keep screens consistent with each other even
+though no BRD enforces it — the module drifted once already (missing edit
+flows, inconsistent field labeling) from not having one.
+
 ## Hard rules (from the BRDs)
 
 - The engine is **pure and deterministic**: time and data are parameters,

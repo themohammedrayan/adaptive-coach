@@ -11,6 +11,13 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   GBP: '£',
 };
 
+/** The currencies the account/amount pickers offer — kept in sync with `CURRENCY_SYMBOLS`. */
+export const CURRENCY_CODES = Object.keys(CURRENCY_SYMBOLS);
+
+export function currencySymbol(currency: string): string {
+  return CURRENCY_SYMBOLS[currency] ?? `${currency} `;
+}
+
 function groupIndian(digits: string): string {
   if (digits.length <= 3) return digits;
   const last3 = digits.slice(-3);
@@ -94,6 +101,29 @@ export function parseMoneyInput(text: string): number | null {
   const value = Number(trimmed);
   if (!Number.isFinite(value)) return null;
   return Math.round(value * 100);
+}
+
+/** Renders a stored minor-unit amount back into something `parseMoneyInput` accepts. */
+export function moneyInputValue(amountMinor: number | null): string {
+  return amountMinor === null ? '' : (amountMinor / 100).toFixed(2).replace(/\.00$/, '');
+}
+
+/** Groups the integer part of a typed amount for display on blur; leaves the decimal part alone. */
+export function formatAmountInputDisplay(text: string, currency: string): string {
+  const trimmed = text.trim();
+  const match = /^(-?)(\d+)(\.\d{0,2})?$/.exec(trimmed.replace(/,/g, ''));
+  if (match === null) return text;
+  const [, sign, digits, fraction] = match;
+  const grouped = currency === 'INR' ? groupIndian(digits) : groupWestern(digits);
+  return `${sign}${grouped}${fraction ?? ''}`;
+}
+
+/** A whole-number day-of-month (1-31), or null for "not set" / invalid. Shared by account due-day and recurring day-of-month fields. */
+export function parseDayOfMonth(input: string): number | null {
+  if (input.trim() === '') return null;
+  const parsed = Number(input.trim());
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 31) return null;
+  return parsed;
 }
 
 export function addMoney(a: number, b: number): number {

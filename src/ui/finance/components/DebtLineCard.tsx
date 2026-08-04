@@ -1,8 +1,9 @@
 import { Text, View } from 'react-native';
+import type { Account } from '../../../finance/types';
 import type { CycleStatus, DebtLine } from '../../../finance/debt';
 import { formatMoneyMinor } from '../../../finance/money';
 import { formatDayLabel } from '../../../finance/periods';
-import { Card, Row } from '../../kit';
+import { AppButton, Card, Row } from '../../kit';
 import { radius, space, type, useTheme, type Theme } from '../../theme';
 import { CreditUtilization } from './CreditUtilization';
 
@@ -20,7 +21,15 @@ function statusColor(t: Theme, status: CycleStatus): string {
   return t.muted;
 }
 
-export function DebtLineCard({ line, payFirst }: { line: DebtLine; payFirst: boolean }) {
+export function DebtLineCard({
+  line,
+  payFirst,
+  onLogPayment,
+}: {
+  line: DebtLine;
+  payFirst: boolean;
+  onLogPayment: (account: Account) => void;
+}) {
   const t = useTheme();
   const currency = line.account.currency;
   const cleared = line.balanceMinor <= 0;
@@ -62,6 +71,15 @@ export function DebtLineCard({ line, payFirst }: { line: DebtLine; payFirst: boo
         <Text style={[type.caption, { color: t.muted }]}>
           {formatMoneyMinor(line.paidThisCycleMinor, currency)} paid this cycle
         </Text>
+      )}
+
+      {!cleared && (
+        <AppButton
+          title={`Log payment to ${line.account.name}`}
+          onPress={() => onLogPayment(line.account)}
+          variant="secondary"
+          small
+        />
       )}
     </Card>
   );

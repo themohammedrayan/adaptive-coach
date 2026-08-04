@@ -370,6 +370,14 @@ export async function updateRecurringLastMaterializedDate(externalId: string, la
   if (error) throw new Error(error.message);
 }
 
+export async function deleteRecurringTransaction(externalId: string, deletedAtIso: string): Promise<void> {
+  const { error } = await supabase
+    .from('finance_recurring_transactions')
+    .update({ deleted_at: deletedAtIso })
+    .eq('external_id', externalId);
+  if (error) throw new Error(error.message);
+}
+
 /* --------------------------------------------------------------- goals */
 
 interface ServerGoalRow {

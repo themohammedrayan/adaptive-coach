@@ -51,6 +51,7 @@ const FINANCE: FinanceCoachPayload = {
   budgets: [],
   healthRead: { status: 'good', reasons: [] },
   projection: [],
+  cashflow: { status: 'clear', lowBalanceMinor: 0, lowDate: '2026-07-15', horizonDays: 30 },
 };
 
 function payload(): UnifiedCoachPayload {

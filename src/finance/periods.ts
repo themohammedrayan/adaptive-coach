@@ -85,3 +85,30 @@ export function formatPeriodLabel(value: string, granularity: Granularity): stri
   const monthIndex = Number(value.slice(5, 7)) - 1;
   return MONTH_ABBR[monthIndex] ?? value.slice(5);
 }
+
+/**
+ * Calendar-grid layout for a 'YYYY-MM' month. Monday-first, matching the
+ * Calendar module's week view. `leadingBlanks` is how many empty cells precede
+ * the 1st; trailing blanks are the caller's business (they depend on row count).
+ */
+export function monthGridDates(monthPrefix: string): { leadingBlanks: number; dates: IsoDate[] } {
+  const [y, m] = monthPrefix.split('-').map(Number);
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  // getUTCDay is Sunday-first (0); shift so Monday is 0.
+  const leadingBlanks = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
+  const dates: IsoDate[] = [];
+  for (let d = 1; d <= daysInMonth; d++) dates.push(`${monthPrefix}-${String(d).padStart(2, '0')}`);
+  return { leadingBlanks, dates };
+}
+
+/** 'Aug 6' — unpadded day label for the cash-flow banner. */
+export function formatDayLabel(date: IsoDate): string {
+  const monthIndex = Number(date.slice(5, 7)) - 1;
+  return `${MONTH_ABBR[monthIndex] ?? date.slice(5, 7)} ${Number(date.slice(8, 10))}`;
+}
+
+/** 'Aug 2026' — month-grid header. */
+export function formatMonthLabel(monthPrefix: string): string {
+  const monthIndex = Number(monthPrefix.slice(5, 7)) - 1;
+  return `${MONTH_ABBR[monthIndex] ?? monthPrefix.slice(5, 7)} ${monthPrefix.slice(0, 4)}`;
+}

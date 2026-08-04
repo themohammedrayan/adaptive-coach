@@ -9,6 +9,8 @@ import type {
   CategoryKind,
   FinanceGoal,
   FinanceGoalStatus,
+  Iou,
+  IouDirection,
   RecurrenceFrequency,
   RecurringTransaction,
   Transaction,
@@ -105,6 +107,7 @@ interface ServerCategoryRow {
   parent_external_id: string | null;
   is_system: boolean;
   color: string | null;
+  icon: string | null;
   updated_at?: string;
 }
 
@@ -116,6 +119,7 @@ function categoryToServer(c: Category) {
     parent_external_id: c.parentExternalId,
     is_system: c.isSystem,
     color: c.color,
+    icon: c.icon,
   };
 }
 
@@ -128,6 +132,8 @@ function categoryFromServer(r: ServerCategoryRow): Category {
     parentExternalId: r.parent_external_id,
     isSystem: r.is_system,
     color: r.color,
+    // Older rows predate the icon column; null just means "use the default".
+    icon: r.icon ?? null,
     updatedAt: r.updated_at ?? '',
   };
 }
@@ -373,6 +379,9 @@ interface ServerGoalRow {
   currency: string;
   linked_account_external_id: string;
   target_date: string | null;
+  contribution_amount_minor: number | null;
+  contribution_cadence: RecurrenceFrequency | null;
+  contribution_flexible: boolean | null;
   status: FinanceGoalStatus;
   archived_at: string | null;
   updated_at?: string;
@@ -386,6 +395,9 @@ function goalToServer(g: FinanceGoal) {
     currency: g.currency,
     linked_account_external_id: g.linkedAccountExternalId,
     target_date: g.targetDate,
+    contribution_amount_minor: g.contributionAmountMinor,
+    contribution_cadence: g.contributionCadence,
+    contribution_flexible: g.contributionFlexible,
     status: g.status,
     archived_at: g.archivedAt,
   };
@@ -400,6 +412,13 @@ function goalFromServer(r: ServerGoalRow): FinanceGoal {
     currency: r.currency,
     linkedAccountExternalId: r.linked_account_external_id,
     targetDate: r.target_date,
+    contributionAmountMinor:
+      r.contribution_amount_minor === null || r.contribution_amount_minor === undefined
+        ? null
+        : Number(r.contribution_amount_minor),
+    contributionCadence: r.contribution_cadence ?? null,
+    // Rows predating the column read as flexible, matching the DB default.
+    contributionFlexible: r.contribution_flexible ?? true,
     status: r.status,
     archivedAt: r.archived_at,
     updatedAt: r.updated_at ?? '',
@@ -477,6 +496,73 @@ export async function archiveBudget(externalId: string, archivedAtIso: string): 
   const { error } = await supabase
     .from('finance_budgets')
     .update({ archived_at: archivedAtIso })
+    .eq('external_id', externalId);
+  if (error) throw new Error(error.message);
+}
+
+/* ---------------------------------------------------------------- ious */
+
+interface ServerIouRow {
+  id: string;
+  external_id: string;
+  person_name: string;
+  direction: IouDirection;
+  amount_minor: number;
+  currency: string;
+  note: string | null;
+  incurred_date: string;
+  due_date: string | null;
+  settled_at: string | null;
+  updated_at: string | null;
+}
+
+function iouToServer(iou: Iou) {
+  return {
+    external_id: iou.externalId,
+    person_name: iou.personName,
+    direction: iou.direction,
+    amount_minor: iou.amountMinor,
+    currency: iou.currency,
+    note: iou.note,
+    incurred_date: iou.incurredDate,
+    due_date: iou.dueDate,
+    settled_at: iou.settledAt,
+  };
+}
+
+function iouFromServer(r: ServerIouRow): Iou {
+  return {
+    id: r.id,
+    externalId: r.external_id,
+    personName: r.person_name,
+    direction: r.direction,
+    amountMinor: Number(r.amount_minor),
+    currency: r.currency,
+    note: r.note,
+    incurredDate: r.incurred_date,
+    dueDate: r.due_date,
+    settledAt: r.settled_at,
+    updatedAt: r.updated_at ?? '',
+  };
+}
+
+export async function listIous(): Promise<Iou[]> {
+  const { data, error } = await supabase.from('finance_ious').select('*').is('deleted_at', null);
+  if (error) throw new Error(error.message);
+  return (data as ServerIouRow[]).map(iouFromServer);
+}
+
+export async function upsertIou(iou: Iou): Promise<void> {
+  const { error } = await supabase
+    .from('finance_ious')
+    .upsert(iouToServer(iou), { onConflict: 'user_id,external_id' });
+  if (error) throw new Error(error.message);
+}
+
+export async function settleIou(externalId: string, settledAtIso: string): Promise<void> {
+  const { error } = await supabase
+    .from('finance_ious')
+    .update({ settled_at: settledAtIso })
     .eq('external_id', externalId);
   if (error) throw new Error(error.message);
 }

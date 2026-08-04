@@ -10,7 +10,10 @@ const PALETTE_KEYS = ['protein', 'carb', 'fat', 'trend', 'goal', 'bodyFat'] as c
 export function CategoryBreakdownChart({ data, currency }: CategoryBreakdownChartProps) {
   const t = useTheme();
   const palette = PALETTE_KEYS.map((k) => t.chart[k]);
-  const pieData = data.map((d, i) => ({ value: d.totalMinor, color: palette[i % palette.length] }));
+  // A category's own colour wins so the chart, the budget rows and the
+  // transaction list all read as the same category.
+  const colorAt = (i: number) => data[i].color ?? palette[i % palette.length];
+  const pieData = data.map((d, i) => ({ value: d.totalMinor, color: colorAt(i) }));
 
   return (
     <View style={styles.container}>
@@ -20,7 +23,7 @@ export function CategoryBreakdownChart({ data, currency }: CategoryBreakdownChar
       <View style={{ gap: 6 }}>
         {data.map((d, i) => (
           <View key={d.categoryName} style={styles.legendRow}>
-            <Dot color={palette[i % palette.length]} />
+            <Dot color={colorAt(i)} />
             <Text style={[typeScale.caption, { color: t.ink, flex: 1 }]}>{d.categoryName}</Text>
             <Text style={[typeScale.caption, { color: t.muted }]}>{formatMoneyMinor(d.totalMinor, currency)}</Text>
           </View>

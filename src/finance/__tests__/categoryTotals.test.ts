@@ -21,9 +21,9 @@ function txn(overrides: Partial<Transaction>): Transaction {
 }
 
 const categories: Category[] = [
-  { id: 'c1', externalId: 'sys-exp-food', name: 'Food', kind: 'expense', parentExternalId: null, isSystem: true, color: null, updatedAt: '' },
-  { id: 'c2', externalId: 'sys-exp-transport', name: 'Transport', kind: 'expense', parentExternalId: null, isSystem: true, color: null, updatedAt: '' },
-  { id: 'c3', externalId: 'sys-inc-salary', name: 'Salary', kind: 'income', parentExternalId: null, isSystem: true, color: null, updatedAt: '' },
+  { id: 'c1', externalId: 'sys-exp-food', name: 'Food', kind: 'expense', parentExternalId: null, isSystem: true, color: null, icon: null, updatedAt: '' },
+  { id: 'c2', externalId: 'sys-exp-transport', name: 'Transport', kind: 'expense', parentExternalId: null, isSystem: true, color: null, icon: null, updatedAt: '' },
+  { id: 'c3', externalId: 'sys-inc-salary', name: 'Salary', kind: 'income', parentExternalId: null, isSystem: true, color: null, icon: null, updatedAt: '' },
 ];
 
 describe('categoryBreakdown', () => {
@@ -35,8 +35,8 @@ describe('categoryBreakdown', () => {
       txn({ id: '4', externalId: '4', categoryExternalId: 'sys-exp-food', amountMinor: 999, txnDate: '2026-06-30' }), // wrong month
     ];
     expect(categoryBreakdown(transactions, categories, '2026-07', 'expense')).toEqual([
-      { categoryExternalId: 'sys-exp-transport', categoryName: 'Transport', totalMinor: 1200 },
-      { categoryExternalId: 'sys-exp-food', categoryName: 'Food', totalMinor: 800 },
+      { categoryExternalId: 'sys-exp-transport', categoryName: 'Transport', totalMinor: 1200, icon: '🚗', color: '#3B82F6' },
+      { categoryExternalId: 'sys-exp-food', categoryName: 'Food', totalMinor: 800, icon: '🍔', color: '#E0A800' },
     ]);
   });
 

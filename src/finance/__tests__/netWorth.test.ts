@@ -1,4 +1,4 @@
-import { accountNetWorthContribution, netWorthAsOf, netWorthSeries } from '../netWorth';
+import { accountBalanceAsOf, accountNetWorthContribution, netWorthAsOf, netWorthSeries } from '../netWorth';
 import type { Account, AccountValuation, Transaction } from '../types';
 
 function account(overrides: Partial<Account>): Account {
@@ -87,5 +87,66 @@ describe('netWorthSeries', () => {
       { date: '2026-06-30', netWorthMinor: 1000 },
       { date: '2026-07-31', netWorthMinor: 1000 },
     ]);
+  });
+});
+
+describe('accountBalanceAsOf — ledger-mode liabilities', () => {
+  const card = account({
+    id: 'card',
+    externalId: 'card',
+    type: 'credit_card',
+    balanceMode: 'ledger',
+    isLiability: true,
+    openingBalanceMinor: 50000, // ₹500 already owed
+    creditLimitMinor: 1000000,
+  });
+
+  function cardTxn(overrides: Partial<Transaction>): Transaction {
+    return {
+      id: 't',
+      externalId: 't',
+      type: 'expense',
+      accountExternalId: 'card',
+      counterAccountExternalId: null,
+      categoryExternalId: 'sys-exp-food',
+      amountMinor: 10000,
+      currency: 'INR',
+      note: null,
+      txnDate: '2026-08-05',
+      source: 'manual',
+      recurrenceExternalId: null,
+      updatedAt: '2026-08-05T00:00:00.000Z',
+      ...overrides,
+    };
+  }
+
+  it('increases what you owe when you spend on the card', () => {
+    // 50,000 owed + 10,000 spent = 60,000 owed, reported positive.
+    expect(accountBalanceAsOf(card, [cardTxn({})], [], '2026-08-31')).toBe(60000);
+  });
+
+  it('reduces what you owe when a payment transfers in', () => {
+    const payment = cardTxn({
+      externalId: 'pay',
+      type: 'transfer',
+      categoryExternalId: null,
+      accountExternalId: 'bank',
+      counterAccountExternalId: 'card',
+      amountMinor: 20000,
+    });
+    // 50,000 owed − 20,000 paid = 30,000.
+    expect(accountBalanceAsOf(card, [payment], [], '2026-08-31')).toBe(30000);
+  });
+
+  it('drives net worth down as card debt grows', () => {
+    const bare = account({ id: 'c2', externalId: 'c2', type: 'credit_card', balanceMode: 'ledger', isLiability: true, openingBalanceMinor: 0 });
+    const spend = cardTxn({ accountExternalId: 'c2', amountMinor: 30000 });
+    expect(netWorthAsOf([bare], [spend], [], '2026-08-31')).toBe(-30000);
+  });
+
+  it('leaves asset ledger accounts untouched', () => {
+    const bank = account({ id: 'b', externalId: 'b', type: 'bank', isLiability: false, openingBalanceMinor: 100000 });
+    const spend = cardTxn({ accountExternalId: 'b', amountMinor: 30000 });
+    expect(accountBalanceAsOf(bank, [spend], [], '2026-08-31')).toBe(70000);
   });
 });

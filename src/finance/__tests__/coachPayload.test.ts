@@ -28,6 +28,7 @@ const category: Category = {
   parentExternalId: null,
   isSystem: true,
   color: null,
+  icon: null,
   updatedAt: '',
 };
 
@@ -58,6 +59,9 @@ const goal: FinanceGoal = {
   currency: 'INR',
   linkedAccountExternalId: 'acc-bank',
   targetDate: '2027-01-01',
+  contributionAmountMinor: null,
+  contributionCadence: null,
+  contributionFlexible: true,
   status: 'active',
   archivedAt: null,
   updatedAt: '2026-07-01T00:00:00.000Z',
@@ -82,6 +86,7 @@ describe('assembleFinanceCoachPayload', () => {
       [goal],
       [budget],
       [category],
+      [],
       '2026-07-19',
     );
 
@@ -96,6 +101,14 @@ describe('assembleFinanceCoachPayload', () => {
     expect(payload.budgets).toEqual([{ categoryName: 'Food', budgetedMinor: 50_000, spentMinor: 10_000 }]);
     expect(payload.healthRead.status).toBeDefined();
     expect(payload.projection).toHaveLength(3);
+    // No recurring rules, so the balance never moves after today: the low point
+    // is the current ledger balance, on day one of the horizon.
+    expect(payload.cashflow).toEqual({
+      status: 'clear',
+      lowBalanceMinor: 490_000,
+      lowDate: '2026-07-19',
+      horizonDays: 30,
+    });
     expect(payload).not.toHaveProperty('transactions');
   });
 
@@ -109,6 +122,7 @@ describe('assembleFinanceCoachPayload', () => {
       [goal, archivedGoal],
       [],
       [category],
+      [],
       '2026-07-19',
     );
     expect(payload.accounts).toHaveLength(1);

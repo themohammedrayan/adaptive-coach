@@ -3,6 +3,7 @@ import { diffDays } from '../../engine';
 import type { Goal, GoalType } from '../../goals/types';
 import { Card, EmptyState, FAB, ProgressBar, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
+import { GoalRingStrip } from './GoalRingStrip';
 import { useGoalsData } from './GoalsDataContext';
 
 const TYPE_LABEL: Record<GoalType, string> = {
@@ -43,6 +44,9 @@ export function GoalListScreen({ onSelectGoal, onCreate }: { onSelectGoal: (goal
         data={active}
         keyExtractor={(g) => g.id}
         contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          <GoalRingStrip goals={active} progressByGoalId={progressByGoalId} today={today} onSelect={(g) => onSelectGoal(g.id)} />
+        }
         ListEmptyComponent={
           loading ? (
             <EmptyState message="Loading your goals…" />

@@ -6,5 +6,7 @@ export * from './valuations';
 export * from './netWorth';
 export * from './categoryTotals';
 export * from './recurrence';
+export * from './recurrenceDates';
+export * from './cashflow';
 export * from './presetCategories';
 export * from './coachPayload';

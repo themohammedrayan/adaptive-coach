@@ -2,7 +2,8 @@ import type { Granularity } from '../../../finance/periods';
 
 /** Finance Reports — literal component signatures, shared by native + web variants. */
 export interface CategoryBreakdownChartProps {
-  data: { categoryName: string; totalMinor: number }[];
+  /** `color` is the category's own colour when it has one; null falls back to the positional palette. */
+  data: { categoryName: string; totalMinor: number; color: string | null }[];
   currency: string;
 }
 

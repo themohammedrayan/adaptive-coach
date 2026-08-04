@@ -38,6 +38,16 @@ export interface FinanceProjectionPoint {
   projectedNetWorthMinor: number;
 }
 
+export type CashflowStatus = 'clear' | 'tight' | 'shortfall';
+
+/** Mirrors CashflowOutlook in src/finance/cashflow.ts. */
+export interface CashflowOutlook {
+  status: CashflowStatus;
+  lowBalanceMinor: number;
+  lowDate: IsoDate;
+  horizonDays: number;
+}
+
 export interface FinanceCoachPayload {
   today: IsoDate;
   currency: string;
@@ -49,6 +59,7 @@ export interface FinanceCoachPayload {
   budgets: FinanceBudgetSummary[];
   healthRead: FinanceHealthReadSummary;
   projection: FinanceProjectionPoint[];
+  cashflow: CashflowOutlook;
 }
 
 export interface FinanceCoachChatTurn {

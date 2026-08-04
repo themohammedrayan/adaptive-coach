@@ -35,6 +35,7 @@ const FINANCE: FinanceCoachPayload = {
   budgets: [],
   healthRead: { status: 'good', reasons: [] },
   projection: [],
+  cashflow: { status: 'clear', lowBalanceMinor: 490_000, lowDate: '2026-07-15', horizonDays: 30 },
 };
 
 function payload(overrides: Partial<UnifiedCoachPayload> = {}): UnifiedCoachPayload {

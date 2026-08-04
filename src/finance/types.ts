@@ -40,7 +40,10 @@ export interface Category {
   kind: CategoryKind;
   parentExternalId: string | null;
   isSystem: boolean;
+  /** Hex colour, or null to fall back to the seeded default for this externalId. */
   color: string | null;
+  /** Emoji, or null to fall back to the seeded default for this externalId. */
+  icon: string | null;
   updatedAt: string;
 }
 
@@ -111,6 +114,28 @@ export interface Budget {
   updatedAt: string;
 }
 
+export type IouDirection = 'owed_to_me' | 'i_owe';
+
+/**
+ * An informal person-to-person debt. Deliberately outside net worth — see the
+ * migration comment. `settledAt` is the lifecycle field; a settled IOU stays
+ * for history but drops out of the net position.
+ */
+export interface Iou {
+  id: string;
+  externalId: string;
+  personName: string;
+  direction: IouDirection;
+  /** Always positive; `direction` carries the sign. */
+  amountMinor: MoneyMinor;
+  currency: CurrencyCode;
+  note: string | null;
+  incurredDate: IsoDate;
+  dueDate: IsoDate | null;
+  settledAt: string | null;
+  updatedAt: string;
+}
+
 export type FinanceGoalStatus = 'active' | 'completed' | 'archived';
 
 /** A savings goal ("save for a house") — progress tracks a linked account's live balance, never a manual check-in. */
@@ -122,6 +147,12 @@ export interface FinanceGoal {
   currency: CurrencyCode;
   linkedAccountExternalId: string;
   targetDate: IsoDate | null;
+  /** Planned contribution per `contributionCadence`. Null means no plan is set. */
+  contributionAmountMinor: MoneyMinor | null;
+  /** Always null exactly when `contributionAmountMinor` is — the two are only meaningful together. */
+  contributionCadence: RecurrenceFrequency | null;
+  /** A flexible plan is a intention, not a commitment; it only softens the wording. */
+  contributionFlexible: boolean;
   status: FinanceGoalStatus;
   archivedAt: string | null;
   updatedAt: string;

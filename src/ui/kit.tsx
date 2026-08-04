@@ -342,6 +342,80 @@ export function Dot({ color, size = 8 }: { color: string; size?: number }) {
   return <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />;
 }
 
+/**
+ * A single arc of progress, drawn from twelve o'clock clockwise.
+ *
+ * Bare `<Circle>` rather than its own `<Svg>` so callers can stack concentric
+ * rings in one canvas — that's what MacroRings needs. For a standalone ring
+ * use `ProgressRing`, which wraps this with a track.
+ */
+export function RingArc({
+  cx,
+  cy,
+  radius: r,
+  strokeWidth,
+  pct,
+  color,
+}: {
+  cx: number;
+  cy: number;
+  radius: number;
+  strokeWidth: number;
+  pct: number;
+  color: string;
+}) {
+  const circumference = 2 * Math.PI * r;
+  const clamped = Math.max(0, Math.min(1, pct));
+  return (
+    <Circle
+      cx={cx}
+      cy={cy}
+      r={r}
+      stroke={color}
+      strokeWidth={strokeWidth}
+      strokeDasharray={`${circumference * clamped} ${circumference}`}
+      strokeLinecap="round"
+      fill="none"
+      transform={`rotate(-90 ${cx} ${cy})`}
+    />
+  );
+}
+
+/** A standalone progress ring: track plus arc, with room for content in the middle. */
+export function ProgressRing({
+  size,
+  strokeWidth = 4,
+  pct,
+  color,
+  trackColor,
+  children,
+}: {
+  size: number;
+  strokeWidth?: number;
+  pct: number;
+  color?: string;
+  trackColor?: string;
+  children?: ReactNode;
+}) {
+  const t = useTheme();
+  const center = size / 2;
+  const r = center - strokeWidth / 2;
+  return (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size}>
+        <Circle cx={center} cy={center} r={r} stroke={trackColor ?? t.wash} strokeWidth={strokeWidth} fill="none" />
+        <RingArc cx={center} cy={center} radius={r} strokeWidth={strokeWidth} pct={pct} color={color ?? t.accent} />
+      </Svg>
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}
+      >
+        {children}
+      </View>
+    </View>
+  );
+}
+
 /* ---------------------------------------------------------------- tab icons */
 
 export type TabIconName =
@@ -357,7 +431,9 @@ export type TabIconName =
   | 'reports'
   | 'goals'
   | 'calendar'
-  | 'medications';
+  | 'medications'
+  | 'debt'
+  | 'budget';
 
 /**
  * Hand-drawn 24px line icons — no icon font is installed (expo-symbols is
@@ -415,6 +491,19 @@ export function TabIcon({ name, color, size = 24 }: { name: TabIconName; color: 
           <Path d="M3.5 7V6a2 2 0 0 1 2-2h9" {...p} />
           <Rect x={3.5} y={7} width={17} height={11} rx={2} {...p} />
           <Rect x={14.5} y={11} width={5} height={4} rx={1} {...p} />
+        </>
+      )}
+      {name === 'budget' && (
+        <>
+          <Rect x={3} y={5.5} width={18} height={13} rx={2} {...p} />
+          <Path d="M3 7.5l9 6 9-6" {...p} />
+        </>
+      )}
+      {name === 'debt' && (
+        <>
+          <Rect x={2.5} y={5.5} width={19} height={13} rx={2} {...p} />
+          <Path d="M2.5 10h19" {...p} />
+          <Path d="M6 14.5h4" {...p} />
         </>
       )}
       {name === 'reports' && (

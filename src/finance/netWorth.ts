@@ -4,7 +4,17 @@ import { sumMoney } from './money';
 import type { Account, AccountValuation, Transaction } from './types';
 import { latestValuationAsOf } from './valuations';
 
-/** Resolves an account's balance as of a date, branching on how it derives its balance. Null if a valuation account has no entry yet. */
+/**
+ * Resolves an account's balance as of a date, branching on how it derives its
+ * balance. Null if a valuation account has no entry yet.
+ *
+ * Liability balances are always returned as a **positive amount owed**, which is
+ * what `accountNetWorthContribution` and credit-utilization both expect. For a
+ * ledger-mode liability that means the transaction effects run the other way:
+ * an expense on a credit card increases what you owe, and a transfer into it
+ * (a payment) reduces it. Only the effects flip — the opening balance is
+ * already entered as an amount owed.
+ */
 export function accountBalanceAsOf(
   account: Account,
   transactions: Transaction[],
@@ -12,7 +22,11 @@ export function accountBalanceAsOf(
   asOfDate: IsoDate,
 ): number | null {
   if (account.balanceMode === 'ledger') {
-    return ledgerBalanceAsOf(account.openingBalanceMinor, account.externalId, transactions, asOfDate);
+    if (!account.isLiability) {
+      return ledgerBalanceAsOf(account.openingBalanceMinor, account.externalId, transactions, asOfDate);
+    }
+    const effectsMinor = ledgerBalanceAsOf(0, account.externalId, transactions, asOfDate);
+    return account.openingBalanceMinor - effectsMinor;
   }
   return latestValuationAsOf(valuations, account.externalId, asOfDate);
 }

@@ -9,14 +9,19 @@ const PALETTE_KEYS = ['protein', 'carb', 'fat', 'trend', 'goal', 'bodyFat'] as c
 export function CategoryBreakdownChart({ data, currency }: CategoryBreakdownChartProps) {
   const t = useTheme();
   const palette = PALETTE_KEYS.map((k) => t.chart[k]);
-  const chartData = data.map((d) => ({ name: d.categoryName, value: d.totalMinor }));
+  // Mirrors the native variant: a category's own colour wins over the palette.
+  const chartData = data.map((d, i) => ({
+    name: d.categoryName,
+    value: d.totalMinor,
+    color: d.color ?? palette[i % palette.length],
+  }));
 
   return (
     <ResponsiveContainer width="100%" height={220}>
       <RPieChart>
         <Pie data={chartData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80}>
-          {chartData.map((entry, i) => (
-            <Cell key={entry.name} fill={palette[i % palette.length]} />
+          {chartData.map((entry) => (
+            <Cell key={entry.name} fill={entry.color} />
           ))}
         </Pie>
         <Tooltip formatter={(value) => formatMoneyMinor(Number(value), currency)} />

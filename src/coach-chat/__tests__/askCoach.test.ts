@@ -43,6 +43,7 @@ const EMPTY_FINANCE: AskCoachFinanceInputs = {
   financeGoals: [],
   budgets: [],
   categories: [],
+  recurringTransactions: [],
 };
 
 const EMPTY_GOALS: AskCoachGoalsInputs = { activeGoals: [], progressByGoalId: new Map() };

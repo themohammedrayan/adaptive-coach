@@ -1,9 +1,14 @@
+import { categoryAppearance } from './presetCategories';
 import type { Category, CategoryKind, Transaction } from './types';
 
 export interface CategoryTotal {
   categoryExternalId: string;
   categoryName: string;
   totalMinor: number;
+  /** Resolved emoji — the category's own, else the seeded default. */
+  icon: string;
+  /** Resolved colour, or null when neither the row nor the seed has an opinion. */
+  color: string | null;
 }
 
 /** Totals by category for one kind within a given period (day/month/year prefix), sorted largest first. Transfers/adjustments are never `kind`, so they're excluded automatically. */
@@ -20,11 +25,17 @@ export function categoryBreakdown(
     totals.set(t.categoryExternalId, (totals.get(t.categoryExternalId) ?? 0) + t.amountMinor);
   }
   return Array.from(totals.entries())
-    .map(([categoryExternalId, totalMinor]) => ({
-      categoryExternalId,
-      categoryName: categoryByExternalId.get(categoryExternalId)?.name ?? 'Unknown',
-      totalMinor,
-    }))
+    .map(([categoryExternalId, totalMinor]) => {
+      const category = categoryByExternalId.get(categoryExternalId);
+      const appearance = categoryAppearance(categoryExternalId, category?.icon ?? null, category?.color ?? null);
+      return {
+        categoryExternalId,
+        categoryName: category?.name ?? 'Unknown',
+        totalMinor,
+        icon: appearance.icon,
+        color: appearance.color,
+      };
+    })
     .sort((a, b) => b.totalMinor - a.totalMinor);
 }
 

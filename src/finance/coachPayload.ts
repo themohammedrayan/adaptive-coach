@@ -1,12 +1,21 @@
-import type { IsoDate } from '../engine';
+import { addDays, type IsoDate } from '../engine';
 import { budgetProgress } from './budget';
+import { assessCashflow, DEFAULT_HORIZON_DAYS, projectCashflow, type CashflowOutlook } from './cashflow';
 import { categoryBreakdown, incomeVsExpense } from './categoryTotals';
 import { financeGoalProgress } from './goals';
 import { assessFinancialHealth, computeFinancialHealthInputs, type FinancialHealthStatus } from './health';
 import { accountBalanceAsOf, netWorthAsOf, netWorthSeries } from './netWorth';
 import { lastNMonthPrefixes, monthEndDatesForPrefixes } from './periods';
 import { projectNetWorth } from './projection';
-import type { Account, AccountValuation, Budget, Category, FinanceGoal, Transaction } from './types';
+import type {
+  Account,
+  AccountValuation,
+  Budget,
+  Category,
+  FinanceGoal,
+  RecurringTransaction,
+  Transaction,
+} from './types';
 
 const DEFAULT_CURRENCY = 'INR';
 
@@ -53,6 +62,8 @@ export interface FinanceCoachPayload {
   budgets: FinanceBudgetSummary[];
   healthRead: FinanceHealthReadSummary;
   projection: FinanceProjectionPoint[];
+  /** Forward cash-flow read over the next `horizonDays` — the coach words it, never recomputes it. */
+  cashflow: CashflowOutlook;
 }
 
 /** Pure aggregation only, mirroring assembleCoachPayload's contract for the health coach — never invents a number. */
@@ -63,6 +74,7 @@ export function assembleFinanceCoachPayload(
   goals: FinanceGoal[],
   budgets: Budget[],
   categories: Category[],
+  recurringTransactions: RecurringTransaction[],
   today: IsoDate,
 ): FinanceCoachPayload {
   const activeAccounts = accounts.filter((a) => a.archivedAt === null);
@@ -116,6 +128,17 @@ export function assembleFinanceCoachPayload(
   );
   const projection = projectNetWorth(projectionHistory, [3, 6, 12]);
 
+  const cashflow = assessCashflow(
+    projectCashflow({
+      accounts,
+      transactions,
+      recurringTransactions,
+      today,
+      startDate: today,
+      endDate: addDays(today, DEFAULT_HORIZON_DAYS - 1),
+    }),
+  );
+
   return {
     today,
     currency,
@@ -127,5 +150,6 @@ export function assembleFinanceCoachPayload(
     budgets: budgetSummaries,
     healthRead,
     projection,
+    cashflow,
   };
 }

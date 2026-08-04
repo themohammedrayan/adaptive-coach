@@ -107,6 +107,7 @@ interface ServerCategoryRow {
   parent_external_id: string | null;
   is_system: boolean;
   color: string | null;
+  icon: string | null;
   updated_at?: string;
 }
 
@@ -118,6 +119,7 @@ function categoryToServer(c: Category) {
     parent_external_id: c.parentExternalId,
     is_system: c.isSystem,
     color: c.color,
+    icon: c.icon,
   };
 }
 
@@ -130,6 +132,8 @@ function categoryFromServer(r: ServerCategoryRow): Category {
     parentExternalId: r.parent_external_id,
     isSystem: r.is_system,
     color: r.color,
+    // Older rows predate the icon column; null just means "use the default".
+    icon: r.icon ?? null,
     updatedAt: r.updated_at ?? '',
   };
 }

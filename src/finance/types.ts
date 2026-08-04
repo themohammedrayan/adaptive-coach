@@ -40,7 +40,10 @@ export interface Category {
   kind: CategoryKind;
   parentExternalId: string | null;
   isSystem: boolean;
+  /** Hex colour, or null to fall back to the seeded default for this externalId. */
   color: string | null;
+  /** Emoji, or null to fall back to the seeded default for this externalId. */
+  icon: string | null;
   updatedAt: string;
 }
 

@@ -28,6 +28,7 @@ const category: Category = {
   parentExternalId: null,
   isSystem: true,
   color: null,
+  icon: null,
   updatedAt: '',
 };
 

@@ -13,6 +13,7 @@ import type {
 } from '../../finance/types';
 import { AppButton, AppSwitch, Card, Chip, EmptyState, ErrorText, FAB, Field, Overline, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
+import { CategoryEditorModal } from './components/CategoryEditorModal';
 import { useFinanceData } from './FinanceDataContext';
 
 const KIND_OPTIONS: { value: TransactionType; label: string }[] = [
@@ -130,8 +131,7 @@ export function AddTransactionModal({ visible, onClose }: { visible: boolean; on
     lastTxn?.categoryExternalId ?? UNCATEGORISED_EXTERNAL_ID.expense,
   );
   const [note, setNote] = useState('');
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [addingCategory, setAddingCategory] = useState(false);
+  const [categoryEditorOpen, setCategoryEditorOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const categoriesForKind = categories.filter((c) => c.kind === (kind === 'income' ? 'income' : 'expense'));
@@ -145,23 +145,6 @@ export function AddTransactionModal({ visible, onClose }: { visible: boolean; on
     }
   };
 
-  const addCategory = async () => {
-    if (newCategoryName.trim() === '' || (kind !== 'expense' && kind !== 'income')) return;
-    const externalId = defaultGenId();
-    await saveCategory({
-      id: externalId,
-      externalId,
-      name: newCategoryName.trim(),
-      kind,
-      parentExternalId: null,
-      isSystem: false,
-      color: null,
-      updatedAt: new Date().toISOString(),
-    });
-    setCategoryExternalId(externalId);
-    setNewCategoryName('');
-    setAddingCategory(false);
-  };
 
   const submit = async () => {
     setError(null);
@@ -258,19 +241,15 @@ export function AddTransactionModal({ visible, onClose }: { visible: boolean; on
                         onPress={() => setCategoryExternalId(c.externalId)}
                       />
                     ))}
-                    <Chip label="+ New" active={addingCategory} onPress={() => setAddingCategory(!addingCategory)} />
+                    <Chip label="+ New" active={false} onPress={() => setCategoryEditorOpen(true)} />
                   </Row>
-                  {addingCategory && (
-                    <Row gap={space.m}>
-                      <Field
-                        placeholder="New category name"
-                        value={newCategoryName}
-                        onChangeText={setNewCategoryName}
-                        style={{ flex: 1 }}
-                      />
-                      <AppButton title="Add" onPress={addCategory} small />
-                    </Row>
-                  )}
+                  <CategoryEditorModal
+                    visible={categoryEditorOpen}
+                    onClose={() => setCategoryEditorOpen(false)}
+                    category={null}
+                    kind={kind}
+                    onSaved={(c) => setCategoryExternalId(c.externalId)}
+                  />
                 </>
               )}
 

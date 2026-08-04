@@ -34,8 +34,8 @@ function budget(overrides: Partial<Budget>): Budget {
 }
 
 const categories: Category[] = [
-  { id: 'c1', externalId: 'sys-exp-food', name: 'Food', kind: 'expense', parentExternalId: null, isSystem: true, color: null, updatedAt: '' },
-  { id: 'c2', externalId: 'sys-exp-transport', name: 'Transport', kind: 'expense', parentExternalId: null, isSystem: true, color: null, updatedAt: '' },
+  { id: 'c1', externalId: 'sys-exp-food', name: 'Food', kind: 'expense', parentExternalId: null, isSystem: true, color: null, icon: null, updatedAt: '' },
+  { id: 'c2', externalId: 'sys-exp-transport', name: 'Transport', kind: 'expense', parentExternalId: null, isSystem: true, color: null, icon: null, updatedAt: '' },
 ];
 
 describe('budgetProgress', () => {

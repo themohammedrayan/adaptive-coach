@@ -147,6 +147,12 @@ export interface FinanceGoal {
   currency: CurrencyCode;
   linkedAccountExternalId: string;
   targetDate: IsoDate | null;
+  /** Planned contribution per `contributionCadence`. Null means no plan is set. */
+  contributionAmountMinor: MoneyMinor | null;
+  /** Always null exactly when `contributionAmountMinor` is — the two are only meaningful together. */
+  contributionCadence: RecurrenceFrequency | null;
+  /** A flexible plan is a intention, not a commitment; it only softens the wording. */
+  contributionFlexible: boolean;
   status: FinanceGoalStatus;
   archivedAt: string | null;
   updatedAt: string;

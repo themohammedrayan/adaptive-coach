@@ -1,6 +1,6 @@
 import { addDays, computeTrend, DEFAULT_CONFIG, diffDays, trendAt } from '../engine';
 import type { IsoDate } from '../engine';
-import { financeGoalProgress } from '../finance/goals';
+import { contributionOutlook, financeGoalProgress } from '../finance/goals';
 import type { Goal, GoalProgress, ProgressStatus, ResolverContext } from './types';
 
 const EPSILON = 0.001;
@@ -100,9 +100,15 @@ async function resolveFundGoal(goal: Goal, ctx: ResolverContext): Promise<GoalPr
   if (balance === null) return noData(ctx.today);
 
   const { pct, savedMinor, remainingMinor } = financeGoalProgress(financeGoal, balance);
+  const outlook = contributionOutlook(financeGoal, savedMinor, ctx.today);
 
+  // With a contribution plan, "behind" means behind the schedule the user
+  // actually set. Without one there's nothing but elapsed calendar time to
+  // measure against.
   let status: ProgressStatus = 'on_track';
-  if (goal.targetDate !== null) {
+  if (outlook !== null && outlook.onTrackForTargetDate !== null) {
+    status = outlook.onTrackForTargetDate ? 'on_track' : 'behind';
+  } else if (goal.targetDate !== null) {
     const expected = expectedPctByNow(goal.createdAt.slice(0, 10), goal.targetDate, ctx.today);
     status = pct < expected - EPSILON ? 'behind' : pct > expected + EPSILON ? 'ahead' : 'on_track';
   }
@@ -114,7 +120,11 @@ async function resolveFundGoal(goal: Goal, ctx: ResolverContext): Promise<GoalPr
     numerator: savedMinor,
     denominator: financeGoal.targetAmountMinor,
     asOf: ctx.today,
-    detail: { remainingMinor },
+    detail: {
+      remainingMinor,
+      paymentsLeft: outlook?.paymentsLeft ?? null,
+      projectedCompletionDate: outlook?.projectedCompletionDate ?? null,
+    },
   };
 }
 

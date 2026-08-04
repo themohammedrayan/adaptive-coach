@@ -379,6 +379,9 @@ interface ServerGoalRow {
   currency: string;
   linked_account_external_id: string;
   target_date: string | null;
+  contribution_amount_minor: number | null;
+  contribution_cadence: RecurrenceFrequency | null;
+  contribution_flexible: boolean | null;
   status: FinanceGoalStatus;
   archived_at: string | null;
   updated_at?: string;
@@ -392,6 +395,9 @@ function goalToServer(g: FinanceGoal) {
     currency: g.currency,
     linked_account_external_id: g.linkedAccountExternalId,
     target_date: g.targetDate,
+    contribution_amount_minor: g.contributionAmountMinor,
+    contribution_cadence: g.contributionCadence,
+    contribution_flexible: g.contributionFlexible,
     status: g.status,
     archived_at: g.archivedAt,
   };
@@ -406,6 +412,13 @@ function goalFromServer(r: ServerGoalRow): FinanceGoal {
     currency: r.currency,
     linkedAccountExternalId: r.linked_account_external_id,
     targetDate: r.target_date,
+    contributionAmountMinor:
+      r.contribution_amount_minor === null || r.contribution_amount_minor === undefined
+        ? null
+        : Number(r.contribution_amount_minor),
+    contributionCadence: r.contribution_cadence ?? null,
+    // Rows predating the column read as flexible, matching the DB default.
+    contributionFlexible: r.contribution_flexible ?? true,
     status: r.status,
     archivedAt: r.archived_at,
     updatedAt: r.updated_at ?? '',

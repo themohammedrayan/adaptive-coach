@@ -17,6 +17,7 @@ import { ChallengeCard } from '../../dashboard/components/ChallengeCard';
 import { getDashboardRuntime } from '../../dashboard/runtime';
 import { addDays, computeTrend, DEFAULT_CONFIG, diffDays, trendAt } from '../../engine';
 import * as financeApi from '../../finance/api';
+import { contributionOutlook } from '../../finance/goals';
 import { formatMoneyMinor } from '../../finance/money';
 import type { Account, FinanceGoal } from '../../finance/types';
 import { buildMilestoneItem } from '../../goals/crud';
@@ -295,6 +296,13 @@ function FundDetail({
   const pct = progress?.pct ?? 0;
   const savedMinor = typeof progress?.numerator === 'number' ? progress.numerator : 0;
   const daysLeft = targetDate !== null ? diffDays(targetDate, today) : null;
+  const outlook = contributionOutlook(financeGoal, savedMinor, today);
+  const cadenceNoun =
+    financeGoal.contributionCadence === 'daily'
+      ? 'day'
+      : financeGoal.contributionCadence === 'weekly'
+        ? 'week'
+        : 'month';
 
   return (
     <Card style={{ gap: space.m }}>
@@ -307,6 +315,15 @@ function FundDetail({
         <Text style={[type.caption, { color: t.secondary }]}>{formatMoneyMinor(savedMinor, financeGoal.currency)} saved</Text>
         <Text style={[type.caption, { color: t.secondary }]}>Target {formatMoneyMinor(financeGoal.targetAmountMinor, financeGoal.currency)}</Text>
       </Row>
+      {outlook !== null && financeGoal.contributionAmountMinor !== null && (
+        <Text style={[type.caption, { color: t.muted }]}>
+          {formatMoneyMinor(financeGoal.contributionAmountMinor, financeGoal.currency)} / {cadenceNoun}
+          {outlook.paymentsLeft === 0
+            ? ' · fully funded'
+            : ` · ${outlook.paymentsLeft} ${outlook.paymentsLeft === 1 ? 'payment' : 'payments'} left, done by ${outlook.projectedCompletionDate}`}
+          {outlook.onTrackForTargetDate === false ? ' — later than your target date' : ''}
+        </Text>
+      )}
     </Card>
   );
 }

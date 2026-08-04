@@ -5,7 +5,7 @@ import { getDataSyncRuntime } from '../../data-sync/runtime';
 import * as financeApi from '../../finance/api';
 import { defaultGenId } from '../../finance/ids';
 import { parseMoneyInput } from '../../finance/money';
-import type { Account } from '../../finance/types';
+import type { Account, RecurrenceFrequency } from '../../finance/types';
 import { buildGoal, buildHabit } from '../../goals/crud';
 import type { GoalType } from '../../goals/types';
 import { AppButton, Card, Chip, ErrorText, Field, Row } from '../kit';
@@ -101,11 +101,19 @@ function MetricForm({ onDone }: { onDone: () => void }) {
   );
 }
 
+const CONTRIBUTION_CADENCES: { value: RecurrenceFrequency; label: string }[] = [
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
+];
+
 function FundForm({ onDone }: { onDone: () => void }) {
   const { saveGoal } = useGoalsData();
   const [name, setName] = useState('');
   const [targetAmountInput, setTargetAmountInput] = useState('');
   const [targetDate, setTargetDate] = useState('');
+  const [contributionInput, setContributionInput] = useState('');
+  const [contributionCadence, setContributionCadence] = useState<RecurrenceFrequency>('monthly');
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [linkedAccountExternalId, setLinkedAccountExternalId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -125,6 +133,11 @@ function FundForm({ onDone }: { onDone: () => void }) {
     if (name.trim() === '') return setError('Enter a goal name.');
     if (targetAmountMinor === null || targetAmountMinor <= 0) return setError('Enter a target amount.');
     if (linkedAccountExternalId === null) return setError('Add an account first to link this goal to it.');
+    // Blank means "no plan", which is fine; a non-blank must still be valid.
+    const contributionAmountMinor = contributionInput.trim() === '' ? null : parseMoneyInput(contributionInput);
+    if (contributionInput.trim() !== '' && (contributionAmountMinor === null || contributionAmountMinor <= 0)) {
+      return setError('Enter a contribution greater than zero, or leave it blank.');
+    }
 
     setBusy(true);
     try {
@@ -139,6 +152,9 @@ function FundForm({ onDone }: { onDone: () => void }) {
         currency: account?.currency ?? 'INR',
         linkedAccountExternalId,
         targetDate: targetDate.trim() === '' ? null : targetDate.trim(),
+        contributionAmountMinor,
+        contributionCadence: contributionAmountMinor === null ? null : contributionCadence,
+        contributionFlexible: true,
         status: 'active',
         archivedAt: null,
         updatedAt: nowIso,
@@ -176,6 +192,22 @@ function FundForm({ onDone }: { onDone: () => void }) {
         </Row>
       )}
       <Field placeholder="Target date (YYYY-MM-DD, optional)" value={targetDate} onChangeText={setTargetDate} />
+      <Field
+        placeholder="Contribution per period (optional)"
+        keyboardType="decimal-pad"
+        value={contributionInput}
+        onChangeText={setContributionInput}
+      />
+      <Row style={styles.wrap} gap={space.s}>
+        {CONTRIBUTION_CADENCES.map((c) => (
+          <Chip
+            key={c.value}
+            label={c.label}
+            active={contributionCadence === c.value}
+            onPress={() => setContributionCadence(c.value)}
+          />
+        ))}
+      </Row>
     </FormShell>
   );
 }

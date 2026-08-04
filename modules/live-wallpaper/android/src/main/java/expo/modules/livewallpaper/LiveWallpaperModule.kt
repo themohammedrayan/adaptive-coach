@@ -19,7 +19,7 @@ class LiveWallpaperModule : Module() {
     }
 
     Function("openWallpaperChooser") {
-      val context = appContext.reactContext ?: return@Function
+      val context = appContext.reactContext ?: return@Function Unit
       val componentName = ComponentName(context.packageName, LiveWallpaperService::class.java.name)
       val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER)
         .putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT, componentName)
@@ -30,7 +30,6 @@ class LiveWallpaperModule : Module() {
       } else {
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
       }
-      Unit
     }
   }
 }

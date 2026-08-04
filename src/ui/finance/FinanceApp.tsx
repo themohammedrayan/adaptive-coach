@@ -2,26 +2,28 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AccountsScreen } from './AccountsScreen';
+import { BudgetScreen } from './BudgetScreen';
 import { CashflowScreen } from './CashflowScreen';
 import { DebtScreen } from './DebtScreen';
 import { FinanceDataProvider } from './FinanceDataContext';
-import { OverviewScreen } from './OverviewScreen';
 import { ReportsScreen } from './ReportsScreen';
 import { TransactionsScreen } from './TransactionsScreen';
 import { AppButton, BottomTabBar, type TabIconName } from '../kit';
 import { space, type, useTheme } from '../theme';
 
-export type FinanceTab = 'overview' | 'cashflow' | 'transactions' | 'accounts' | 'debt' | 'reports';
+export type FinanceTab = 'accounts' | 'cashflow' | 'transactions' | 'budget' | 'debt' | 'reports';
 
-// Fund goals live in the app-wide Goals module (src/ui/goals/), which owns
-// creating, listing and archiving them — Finance no longer mirrors them
-// read-only, freeing this slot for Debt.
+// Six tabs share the bar at flex:1 with an 11pt label, so labels stay short.
+//
+// Two slots were freed rather than added: fund goals live in the app-wide Goals
+// module (src/ui/goals/), and the old Overview tab was a digest of the others —
+// its account list duplicated Accounts and its recent list duplicated Log, so
+// its net-worth and health cards moved to the top of Accounts.
 const TABS: { key: FinanceTab; label: string; icon: TabIconName; title: string }[] = [
-  { key: 'overview', label: 'Overview', icon: 'overview', title: 'Net worth' },
-  // Label kept short: six tabs share the bar at flex:1 with an 11pt label.
+  { key: 'accounts', label: 'Accounts', icon: 'accounts', title: 'Net worth' },
   { key: 'cashflow', label: 'Flow', icon: 'calendar', title: 'Cash flow' },
   { key: 'transactions', label: 'Log', icon: 'transactions', title: 'Transactions' },
-  { key: 'accounts', label: 'Accounts', icon: 'accounts', title: 'Accounts' },
+  { key: 'budget', label: 'Budget', icon: 'budget', title: 'Budget' },
   { key: 'debt', label: 'Debt', icon: 'debt', title: 'Debt' },
   { key: 'reports', label: 'Reports', icon: 'reports', title: 'Reports' },
 ];
@@ -29,7 +31,7 @@ const TABS: { key: FinanceTab; label: string; icon: TabIconName; title: string }
 export function FinanceApp() {
   const t = useTheme();
   const router = useRouter();
-  const [tab, setTab] = useState<FinanceTab>('overview');
+  const [tab, setTab] = useState<FinanceTab>('accounts');
   const active = TABS.find((x) => x.key === tab)!;
 
   return (
@@ -41,10 +43,10 @@ export function FinanceApp() {
       </View>
 
       <View style={styles.content}>
-        {tab === 'overview' && <OverviewScreen />}
         {tab === 'cashflow' && <CashflowScreen />}
         {tab === 'transactions' && <TransactionsScreen />}
         {tab === 'accounts' && <AccountsScreen />}
+        {tab === 'budget' && <BudgetScreen />}
         {tab === 'debt' && <DebtScreen />}
         {tab === 'reports' && <ReportsScreen />}
       </View>

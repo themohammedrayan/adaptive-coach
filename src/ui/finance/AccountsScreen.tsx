@@ -7,6 +7,7 @@ import type { Account, AccountType } from '../../finance/types';
 import { AppButton, AppSwitch, Card, Chip, EmptyState, ErrorText, FAB, Field, Overline, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { CreditUtilization } from './components/CreditUtilization';
+import { NetWorthHeader } from './components/NetWorthHeader';
 import { useFinanceData } from './FinanceDataContext';
 
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
@@ -180,6 +181,8 @@ export function AccountsScreen() {
     <View style={styles.flex}>
       <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <ScrollView contentContainerStyle={styles.list}>
+      <NetWorthHeader />
+
       {activeAccounts.length === 0 && (
         <EmptyState message="Add a bank, cash, credit card, investment, or loan account to get started." />
       )}

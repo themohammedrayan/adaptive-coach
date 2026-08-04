@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import type { Macros } from '../../engine';
+import { RingArc } from '../../ui/kit';
 import { useTheme, type Theme } from '../../ui/theme';
 import { isEmptyConsumption } from '../adapters';
 
@@ -18,24 +19,6 @@ const MACRO_STROKE = 9;
 
 function kcalOf(m: Macros): number {
   return 4 * m.proteinG + 4 * m.carbG + 9 * m.fatG;
-}
-
-function Ring({ pct, color, radius, strokeWidth }: { pct: number; color: string; radius: number; strokeWidth: number }) {
-  const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(1, pct));
-  return (
-    <Circle
-      cx={CENTER}
-      cy={CENTER}
-      r={radius}
-      stroke={color}
-      strokeWidth={strokeWidth}
-      strokeDasharray={`${circumference * clamped} ${circumference}`}
-      strokeLinecap="round"
-      fill="none"
-      transform={`rotate(-90 ${CENTER} ${CENTER})`}
-    />
-  );
 }
 
 /**
@@ -66,7 +49,9 @@ export function MacroRings({ target, consumed }: MacroRingsProps) {
       <View style={styles.ringWrap}>
         <Svg width={SIZE} height={SIZE}>
           <Circle cx={CENTER} cy={CENTER} r={KCAL_RADIUS} stroke={t.chart.track} strokeWidth={KCAL_STROKE} fill="none" />
-          <Ring
+          <RingArc
+            cx={CENTER}
+            cy={CENTER}
             pct={kcalPct}
             color={empty ? t.chart.track : over ? t.warning : t.chart.trend}
             radius={KCAL_RADIUS}
@@ -76,8 +61,10 @@ export function MacroRings({ target, consumed }: MacroRingsProps) {
             <Circle key={`${r.key}-track`} cx={CENTER} cy={CENTER} r={r.radius} stroke={t.chart.track} strokeWidth={MACRO_STROKE} fill="none" />
           ))}
           {rings.map((r) => (
-            <Ring
+            <RingArc
               key={r.key}
+              cx={CENTER}
+              cy={CENTER}
               pct={empty || r.targetG <= 0 ? 0 : r.consumedG / r.targetG}
               color={empty ? t.chart.track : ringColor[r.key]}
               radius={r.radius}

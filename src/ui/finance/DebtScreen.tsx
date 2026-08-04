@@ -3,7 +3,8 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { buildDebtOverview, iouPosition, simulatePayoff, type PayoffStrategy } from '../../finance/debt';
 import { formatMoneyMinor, parseMoneyInput } from '../../finance/money';
 import { formatDayLabel } from '../../finance/periods';
-import { Card, EmptyState, FAB, Field, Overline, Row, SegmentedControl } from '../kit';
+import type { Account } from '../../finance/types';
+import { AppButton, Card, EmptyState, Field, Overline, Row, SegmentedControl } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { DebtLineCard } from './components/DebtLineCard';
 import { IouSection } from './components/IouSection';
@@ -47,13 +48,13 @@ function Tile({ label, value, tone }: { label: string; value: string; tone?: str
  * so it can never disagree with the ledger — the same transfer that marks a
  * card paid here shows on the Cash flow calendar as money leaving.
  */
-export function DebtScreen() {
+export function DebtScreen({ onNavigateToAccounts }: { onNavigateToAccounts: () => void }) {
   const t = useTheme();
   const { accounts, transactions, valuations, ious, today, loading } = useFinanceData();
   const [lens, setLens] = useState<DebtLens>('cards');
   const [strategy, setStrategy] = useState<PayoffStrategy>('avalanche');
   const [budgetInput, setBudgetInput] = useState('');
-  const [addOpen, setAddOpen] = useState(false);
+  const [payingAccount, setPayingAccount] = useState<Account | null>(null);
 
   const overview = useMemo(
     () => buildDebtOverview(accounts, transactions, valuations, today, strategy),
@@ -142,11 +143,16 @@ export function DebtScreen() {
                       </Text>
                     </>
                   ) : (
-                    <Text style={[type.caption, { color: t.muted }]}>
-                      {overview.lines.some((l) => l.balanceMinor > 0 && l.aprPct === null)
-                        ? 'Set an APR on every debt to project a payoff date.'
-                        : 'Enter a monthly payment above the minimums to project a payoff date.'}
-                    </Text>
+                    <>
+                      <Text style={[type.caption, { color: t.muted }]}>
+                        {overview.lines.some((l) => l.balanceMinor > 0 && l.aprPct === null)
+                          ? 'Set an APR on every debt to project a payoff date.'
+                          : 'Enter a monthly payment above the minimums to project a payoff date.'}
+                      </Text>
+                      {overview.lines.some((l) => l.balanceMinor > 0 && l.aprPct === null) && (
+                        <AppButton title="Set APR" onPress={onNavigateToAccounts} variant="secondary" small />
+                      )}
+                    </>
                   )}
                 </Card>
 
@@ -159,6 +165,7 @@ export function DebtScreen() {
                     key={line.account.id}
                     line={line}
                     payFirst={line.account.externalId === payFirstId}
+                    onLogPayment={setPayingAccount}
                   />
                 ))}
               </>
@@ -167,8 +174,19 @@ export function DebtScreen() {
         )}
       </ScrollView>
 
-      <FAB icon="plus" accessibilityLabel="Log a payment" onPress={() => setAddOpen(true)} />
-      <AddTransactionModal visible={addOpen} onClose={() => setAddOpen(false)} />
+      <AddTransactionModal
+        visible={payingAccount !== null}
+        onClose={() => setPayingAccount(null)}
+        context={
+          payingAccount === null
+            ? undefined
+            : {
+                lockKind: 'transfer',
+                toAccountExternalId: payingAccount.externalId,
+                title: `Pay ${payingAccount.name}`,
+              }
+        }
+      />
     </View>
   );
 }

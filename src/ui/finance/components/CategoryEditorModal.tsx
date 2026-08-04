@@ -111,6 +111,9 @@ export function CategoryEditorModal({
                     <Pressable
                       key={choice}
                       onPress={() => setIcon(choice)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Icon ${choice}`}
+                      accessibilityState={{ selected: icon === choice }}
                       style={[
                         styles.swatch,
                         {
@@ -132,7 +135,9 @@ export function CategoryEditorModal({
                   <Pressable
                     key={choice}
                     onPress={() => setColor(choice)}
+                    accessibilityRole="button"
                     accessibilityLabel={`Colour ${choice}`}
+                    accessibilityState={{ selected: color === choice }}
                     style={[
                       styles.colorSwatch,
                       { backgroundColor: choice, borderColor: color === choice ? t.ink : 'transparent' },

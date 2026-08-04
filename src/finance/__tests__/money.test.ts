@@ -1,4 +1,15 @@
-import { addMoney, formatMoneyCompact, formatMoneyMinor, parseMoneyInput, subtractMoney, sumMoney } from '../money';
+import {
+  addMoney,
+  currencySymbol,
+  formatAmountInputDisplay,
+  formatMoneyCompact,
+  formatMoneyMinor,
+  moneyInputValue,
+  parseDayOfMonth,
+  parseMoneyInput,
+  subtractMoney,
+  sumMoney,
+} from '../money';
 
 describe('formatMoneyMinor', () => {
   it('groups INR with Indian lakh/crore commas', () => {
@@ -76,5 +87,68 @@ describe('formatMoneyCompact', () => {
 
   it('falls back to a currency-code prefix for unknown currencies', () => {
     expect(formatMoneyCompact(200000, 'JPY')).toBe('JPY 2k');
+  });
+});
+
+describe('currencySymbol', () => {
+  it('returns the known symbol for a supported currency', () => {
+    expect(currencySymbol('INR')).toBe('₹');
+    expect(currencySymbol('USD')).toBe('$');
+  });
+
+  it('falls back to the code with a trailing space for an unknown currency', () => {
+    expect(currencySymbol('JPY')).toBe('JPY ');
+  });
+});
+
+describe('moneyInputValue', () => {
+  it('renders a whole-rupee amount without trailing zero cents', () => {
+    expect(moneyInputValue(50000)).toBe('500');
+  });
+
+  it('keeps fractional cents', () => {
+    expect(moneyInputValue(150050)).toBe('1500.50');
+  });
+
+  it('renders null as an empty string', () => {
+    expect(moneyInputValue(null)).toBe('');
+  });
+});
+
+describe('formatAmountInputDisplay', () => {
+  it('groups the integer part of a typed INR amount', () => {
+    expect(formatAmountInputDisplay('1234567', 'INR')).toBe('12,34,567');
+  });
+
+  it('groups the integer part of a typed USD amount using Western commas', () => {
+    expect(formatAmountInputDisplay('1234567', 'USD')).toBe('1,234,567');
+  });
+
+  it('leaves the decimal part untouched', () => {
+    expect(formatAmountInputDisplay('1234.5', 'INR')).toBe('1,234.5');
+  });
+
+  it('returns the original text unchanged when it does not look like an amount', () => {
+    expect(formatAmountInputDisplay('abc', 'INR')).toBe('abc');
+  });
+});
+
+describe('parseDayOfMonth', () => {
+  it('parses a valid day', () => {
+    expect(parseDayOfMonth('15')).toBe(15);
+    expect(parseDayOfMonth('1')).toBe(1);
+    expect(parseDayOfMonth('31')).toBe(31);
+  });
+
+  it('rejects out-of-range or non-integer input', () => {
+    expect(parseDayOfMonth('0')).toBeNull();
+    expect(parseDayOfMonth('32')).toBeNull();
+    expect(parseDayOfMonth('15.5')).toBeNull();
+    expect(parseDayOfMonth('abc')).toBeNull();
+  });
+
+  it('treats blank input as "not set"', () => {
+    expect(parseDayOfMonth('')).toBeNull();
+    expect(parseDayOfMonth('   ')).toBeNull();
   });
 });

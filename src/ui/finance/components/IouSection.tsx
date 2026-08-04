@@ -1,8 +1,9 @@
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { iouPosition } from '../../../finance/debt';
 import { defaultGenId } from '../../../finance/ids';
-import { formatMoneyMinor, parseMoneyInput } from '../../../finance/money';
+import { currencySymbol, formatMoneyMinor, parseMoneyInput } from '../../../finance/money';
 import { formatDayLabel } from '../../../finance/periods';
 import type { Iou, IouDirection } from '../../../finance/types';
 import { AppButton, Card, Chip, EmptyState, ErrorText, Field, Overline, Row } from '../../kit';
@@ -91,10 +92,13 @@ function AddIouModal({
   currency: string;
   today: string;
 }) {
+  const t = useTheme();
   const { saveIou } = useFinanceData();
   const [personName, setPersonName] = useState('');
   const [direction, setDirection] = useState<IouDirection>('owed_to_me');
   const [amountInput, setAmountInput] = useState('');
+  const [dueDate, setDueDate] = useState<string | null>(null);
+  const [showDuePicker, setShowDuePicker] = useState(false);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +107,7 @@ function AddIouModal({
     if (personName.trim() === '') return setError('Whose IOU is this?');
     const amountMinor = parseMoneyInput(amountInput);
     if (amountMinor === null || amountMinor <= 0) return setError('Enter an amount greater than zero.');
+    if (dueDate !== null && dueDate < today) return setError('Due date is before today — leave it blank if this is already overdue, or pick a later date.');
     try {
       await saveIou({
         id: defaultGenId(),
@@ -113,12 +118,13 @@ function AddIouModal({
         currency,
         note: note.trim() === '' ? null : note.trim(),
         incurredDate: today,
-        dueDate: null,
+        dueDate,
         settledAt: null,
         updatedAt: new Date().toISOString(),
       });
       setPersonName('');
       setAmountInput('');
+      setDueDate(null);
       setNote('');
       setDirection('owed_to_me');
       onClose();
@@ -134,7 +140,7 @@ function AddIouModal({
           <Pressable style={styles.sheetWrap} onPress={() => {}}>
             <Card style={{ gap: space.m }}>
               <Overline>Add an IOU</Overline>
-              <Field placeholder="Person" value={personName} onChangeText={setPersonName} autoFocus />
+              <Field label="Person" value={personName} onChangeText={setPersonName} autoFocus />
               <Row gap={space.s}>
                 {DIRECTIONS.map((opt) => (
                   <Chip
@@ -146,12 +152,38 @@ function AddIouModal({
                 ))}
               </Row>
               <Field
-                placeholder={`Amount (${currency})`}
+                label="Amount"
+                prefix={currencySymbol(currency)}
+                placeholder="0.00"
                 keyboardType="decimal-pad"
                 value={amountInput}
                 onChangeText={setAmountInput}
               />
-              <Field placeholder="What for? (optional)" value={note} onChangeText={setNote} />
+              <Row style={{ justifyContent: 'space-between' }}>
+                <Text style={[type.body, { color: t.ink }]}>Due date</Text>
+                <Chip label="No due date" active={dueDate === null} onPress={() => setDueDate(dueDate === null ? today : null)} />
+              </Row>
+              {dueDate !== null && (
+                <>
+                  <Pressable onPress={() => setShowDuePicker(true)}>
+                    <Text style={[type.body, { color: t.accent }]}>
+                      {new Date(`${dueDate}T00:00:00`).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}
+                    </Text>
+                  </Pressable>
+                  {showDuePicker && (
+                    <DateTimePicker
+                      value={new Date(`${dueDate}T00:00:00`)}
+                      mode="date"
+                      display="default"
+                      onChange={(_event, selected) => {
+                        setShowDuePicker(false);
+                        if (selected) setDueDate(selected.toISOString().slice(0, 10));
+                      }}
+                    />
+                  )}
+                </>
+              )}
+              <Field label="What for?" placeholder="Optional" value={note} onChangeText={setNote} />
               {error !== null && <ErrorText>{error}</ErrorText>}
               <AppButton title="Add IOU" onPress={submit} />
             </Card>

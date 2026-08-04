@@ -5,10 +5,10 @@ import { AccountsScreen } from './AccountsScreen';
 import { BudgetScreen } from './BudgetScreen';
 import { CashflowScreen } from './CashflowScreen';
 import { DebtScreen } from './DebtScreen';
-import { FinanceDataProvider } from './FinanceDataContext';
+import { FinanceDataProvider, useFinanceData } from './FinanceDataContext';
 import { ReportsScreen } from './ReportsScreen';
 import { TransactionsScreen } from './TransactionsScreen';
-import { AppButton, BottomTabBar, type TabIconName } from '../kit';
+import { AppButton, BottomTabBar, Dot, Row, type TabIconName } from '../kit';
 import { space, type, useTheme } from '../theme';
 
 export type FinanceTab = 'accounts' | 'cashflow' | 'transactions' | 'budget' | 'debt' | 'reports';
@@ -29,30 +29,49 @@ const TABS: { key: FinanceTab; label: string; icon: TabIconName; title: string }
 ];
 
 export function FinanceApp() {
-  const t = useTheme();
-  const router = useRouter();
   const [tab, setTab] = useState<FinanceTab>('accounts');
-  const active = TABS.find((x) => x.key === tab)!;
 
   return (
     <FinanceDataProvider>
+      <FinanceAppBody tab={tab} onChangeTab={setTab} />
+    </FinanceDataProvider>
+  );
+}
+
+function FinanceAppBody({ tab, onChangeTab }: { tab: FinanceTab; onChangeTab: (tab: FinanceTab) => void }) {
+  const t = useTheme();
+  const router = useRouter();
+  const { pendingOutboxCount } = useFinanceData();
+  const active = TABS.find((x) => x.key === tab)!;
+
+  return (
+    <>
       <View style={styles.header}>
         <AppButton title="← Back" onPress={() => router.back()} variant="ghost" small />
         <Text style={[type.title, { color: t.ink, flex: 1 }]}>{active.title}</Text>
         <AppButton title="Ask coach" onPress={() => router.push('/coach-chat')} variant="ghost" small />
       </View>
 
+      {pendingOutboxCount > 0 && (
+        <Row style={styles.syncBanner} gap={space.s}>
+          <Dot color={t.warning} />
+          <Text style={[type.caption, { color: t.muted }]}>
+            {pendingOutboxCount} change{pendingOutboxCount === 1 ? '' : 's'} not yet synced
+          </Text>
+        </Row>
+      )}
+
       <View style={styles.content}>
         {tab === 'cashflow' && <CashflowScreen />}
         {tab === 'transactions' && <TransactionsScreen />}
         {tab === 'accounts' && <AccountsScreen />}
         {tab === 'budget' && <BudgetScreen />}
-        {tab === 'debt' && <DebtScreen />}
+        {tab === 'debt' && <DebtScreen onNavigateToAccounts={() => onChangeTab('accounts')} />}
         {tab === 'reports' && <ReportsScreen />}
       </View>
 
-      <BottomTabBar tabs={TABS} active={tab} onChange={setTab} />
-    </FinanceDataProvider>
+      <BottomTabBar tabs={TABS} active={tab} onChange={onChangeTab} />
+    </>
   );
 }
 
@@ -67,4 +86,5 @@ const styles = StyleSheet.create({
     gap: space.m,
   },
   content: { flex: 1 },
+  syncBanner: { paddingHorizontal: space.l, paddingBottom: space.s },
 });

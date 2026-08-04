@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { accountBalanceAsOf } from '../../finance/netWorth';
 import { defaultGenId } from '../../finance/ids';
-import { formatMoneyMinor, parseMoneyInput } from '../../finance/money';
-import type { Account, AccountType } from '../../finance/types';
+import { CURRENCY_CODES, currencySymbol, formatMoneyMinor, moneyInputValue, parseMoneyInput } from '../../finance/money';
+import type { Account, AccountType, CurrencyCode } from '../../finance/types';
 import { AppButton, AppSwitch, Card, Chip, EmptyState, ErrorText, FAB, Field, Overline, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { CreditUtilization } from './components/CreditUtilization';
@@ -36,11 +36,6 @@ interface DebtFields {
   interestRate: number | null;
   minimumPaymentMinor: number | null;
   dueDay: number | null;
-}
-
-/** Renders a stored minor-unit amount back into something `parseMoneyInput` accepts. */
-function moneyInputValue(amountMinor: number | null): string {
-  return amountMinor === null ? '' : (amountMinor / 100).toFixed(2).replace(/\.00$/, '');
 }
 
 /**
@@ -98,13 +93,23 @@ export function AccountsScreen() {
 
   const balanceFor = (account: Account) => accountBalanceAsOf(account, transactions, valuations, today);
 
-  /** Seeds the debt inputs from the account being opened — only one row is ever expanded. */
-  const toggleExpanded = (account: Account) => {
-    setExpandedId((prev) => (prev === account.externalId ? null : account.externalId));
+  const seedDebtInputs = (account: Account) => {
     setInlineError(null);
     setAprInput(account.interestRate === null ? '' : String(account.interestRate));
     setMinimumInput(moneyInputValue(account.minimumPaymentMinor));
     setDueDayInput(account.dueDay === null ? '' : String(account.dueDay));
+  };
+
+  /** Seeds the debt inputs from the account being opened — only one row is ever expanded. */
+  const toggleExpanded = (account: Account) => {
+    setExpandedId((prev) => (prev === account.externalId ? null : account.externalId));
+    seedDebtInputs(account);
+  };
+
+  /** After creating an account, land the user straight in its own editor rather than a second "just created" form — resolves the create-time vs. inline-editor duplication for debt fields. */
+  const openJustCreated = (account: Account) => {
+    setExpandedId(account.externalId);
+    seedDebtInputs(account);
   };
 
   const submitDebtFields = async (account: Account) => {
@@ -216,7 +221,9 @@ export function AccountsScreen() {
                 {account.balanceMode === 'valuation' && (
                   <Row gap={space.m}>
                     <Field
-                      placeholder={`Current value (${account.currency})`}
+                      label={`Current value (${account.currency})`}
+                      prefix={currencySymbol(account.currency)}
+                      placeholder="0.00"
                       keyboardType="decimal-pad"
                       value={valuationInput}
                       onChangeText={setValuationInput}
@@ -232,7 +239,9 @@ export function AccountsScreen() {
                     </Text>
                     <Row gap={space.m}>
                       <Field
-                        placeholder={`Actual balance (${account.currency})`}
+                        label={`Actual balance (${account.currency})`}
+                        prefix={currencySymbol(account.currency)}
+                        placeholder="0.00"
                         keyboardType="decimal-pad"
                         value={correctionInput}
                         onChangeText={setCorrectionInput}
@@ -288,7 +297,13 @@ export function AccountsScreen() {
 
       <FAB icon="plus" accessibilityLabel="Add account" onPress={() => setAddOpen(true)} />
 
-      <AddAccountModal visible={addOpen} onClose={() => setAddOpen(false)} onSave={saveAccount} today={today} />
+      <AddAccountModal
+        visible={addOpen}
+        onClose={() => setAddOpen(false)}
+        onSave={saveAccount}
+        onCreated={openJustCreated}
+        today={today}
+      />
     </View>
   );
 }
@@ -297,16 +312,19 @@ function AddAccountModal({
   visible,
   onClose,
   onSave,
+  onCreated,
   today,
 }: {
   visible: boolean;
   onClose: () => void;
   onSave: (account: Account) => Promise<void>;
+  onCreated: (account: Account) => void;
   today: string;
 }) {
   const t = useTheme();
   const [name, setName] = useState('');
   const [accountType, setAccountType] = useState<AccountType>('bank');
+  const [currency, setCurrency] = useState<CurrencyCode>('INR');
   const [openingBalanceInput, setOpeningBalanceInput] = useState('');
   const [isLiability, setIsLiability] = useState(defaultIsLiability('bank'));
   const [creditLimitInput, setCreditLimitInput] = useState('');
@@ -332,32 +350,35 @@ function AddAccountModal({
       : { fields: { interestRate: null, minimumPaymentMinor: null, dueDay: null } };
     if ('error' in parsedDebt) return setError(parsedDebt.error);
     const nowIso = new Date().toISOString();
+    const account: Account = {
+      id: defaultGenId(),
+      externalId: defaultGenId(),
+      name: name.trim(),
+      type: accountType,
+      balanceMode,
+      isLiability,
+      currency,
+      openingBalanceMinor,
+      openingDate: balanceMode === 'ledger' ? today : null,
+      ...parsedDebt.fields,
+      creditLimitMinor,
+      source: 'manual',
+      archivedAt: null,
+      updatedAt: nowIso,
+    };
     try {
-      await onSave({
-        id: defaultGenId(),
-        externalId: defaultGenId(),
-        name: name.trim(),
-        type: accountType,
-        balanceMode,
-        isLiability,
-        currency: 'INR',
-        openingBalanceMinor,
-        openingDate: balanceMode === 'ledger' ? today : null,
-        ...parsedDebt.fields,
-        creditLimitMinor,
-        source: 'manual',
-        archivedAt: null,
-        updatedAt: nowIso,
-      });
+      await onSave(account);
       setName('');
       setOpeningBalanceInput('');
       setAccountType('bank');
+      setCurrency('INR');
       setIsLiability(defaultIsLiability('bank'));
       setCreditLimitInput('');
       setAprInput('');
       setMinimumInput('');
       setDueDayInput('');
       onClose();
+      onCreated(account);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -370,15 +391,23 @@ function AddAccountModal({
           <Pressable style={styles.sheetWrap} onPress={() => {}}>
             <Card style={{ gap: space.m }}>
               <Overline>Add account</Overline>
-              <Field placeholder="Account name" value={name} onChangeText={setName} autoFocus />
+              <Field label="Account name" value={name} onChangeText={setName} autoFocus />
               <Row style={{ flexWrap: 'wrap' }} gap={space.s}>
                 {ACCOUNT_TYPES.map((opt) => (
                   <Chip key={opt.value} label={opt.label} active={accountType === opt.value} onPress={() => selectType(opt.value)} />
                 ))}
               </Row>
+              <Text style={[type.caption, { color: t.secondary }]}>Currency</Text>
+              <Row gap={space.s}>
+                {CURRENCY_CODES.map((code) => (
+                  <Chip key={code} label={code} active={currency === code} onPress={() => setCurrency(code)} />
+                ))}
+              </Row>
               {balanceMode === 'ledger' && (
                 <Field
-                  placeholder="Opening balance"
+                  label="Opening balance"
+                  prefix={currencySymbol(currency)}
+                  placeholder="0.00"
                   keyboardType="decimal-pad"
                   value={openingBalanceInput}
                   onChangeText={setOpeningBalanceInput}
@@ -391,7 +420,9 @@ function AddAccountModal({
               )}
               {accountType === 'credit_card' && (
                 <Field
-                  placeholder="Credit limit (optional)"
+                  label="Credit limit (optional)"
+                  prefix={currencySymbol(currency)}
+                  placeholder="0.00"
                   keyboardType="decimal-pad"
                   value={creditLimitInput}
                   onChangeText={setCreditLimitInput}

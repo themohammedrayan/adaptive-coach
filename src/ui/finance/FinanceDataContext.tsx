@@ -13,7 +13,7 @@ import type {
   RecurringTransaction,
   Transaction,
 } from '../../finance/types';
-import { enqueueOutbox, flushOutbox } from '../../finance/outbox';
+import { enqueueOutbox, flushOutbox, readOutbox } from '../../finance/outbox';
 import { deviceLocalDate } from '../../lib/dates';
 
 interface FinanceData {
@@ -41,6 +41,8 @@ const EMPTY_DATA: FinanceData = {
 interface FinanceDataValue extends FinanceData {
   loading: boolean;
   today: string;
+  /** Queued writes waiting to sync — surfaced as a small banner so a stuck offline write isn't invisible. */
+  pendingOutboxCount: number;
   refresh: () => Promise<void>;
   saveAccount: (account: Account) => Promise<void>;
   archiveAccount: (externalId: string) => Promise<void>;
@@ -49,6 +51,7 @@ interface FinanceDataValue extends FinanceData {
   saveTransaction: (txn: Transaction) => Promise<void>;
   deleteTransaction: (externalId: string) => Promise<void>;
   saveRecurringTransaction: (rule: RecurringTransaction) => Promise<void>;
+  deleteRecurringTransaction: (externalId: string) => Promise<void>;
   saveBudget: (budget: Budget) => Promise<void>;
   archiveBudget: (externalId: string) => Promise<void>;
   saveIou: (iou: Iou) => Promise<void>;
@@ -66,6 +69,7 @@ export function useFinanceData(): FinanceDataValue {
 export function FinanceDataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<FinanceData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
+  const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
   const today = deviceLocalDate(new Date().toISOString());
 
   const applyAndCache = useCallback((updater: (prev: FinanceData) => FinanceData) => {
@@ -75,6 +79,20 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  const refreshOutboxCount = useCallback(async () => {
+    const entries = await readOutbox();
+    setPendingOutboxCount(entries.length);
+  }, []);
+
+  /** Every mutation's failure path queues through here instead of calling enqueueOutbox directly, so the pending-count banner never drifts from the real queue. */
+  const enqueue = useCallback(
+    async (entry: Parameters<typeof enqueueOutbox>[0]) => {
+      await enqueueOutbox(entry);
+      await refreshOutboxCount();
+    },
+    [refreshOutboxCount],
+  );
 
   const materializeRecurring = useCallback(async (rules: RecurringTransaction[], asOfToday: string) => {
     const { drafts, updatedLastMaterializedDate } = materializeDueRecurrences(rules, asOfToday);
@@ -101,7 +119,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       try {
         await api.upsertTransaction(txn);
       } catch {
-        await enqueueOutbox({ entityType: 'transaction', externalId: txn.externalId, payload: txn, queuedAt: nowIso });
+        await enqueue({ entityType: 'transaction', externalId: txn.externalId, payload: txn, queuedAt: nowIso });
       }
     }
     const updatedRules = rules.map((r) =>
@@ -115,17 +133,18 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       try {
         await api.updateRecurringLastMaterializedDate(rule.externalId, newDate);
       } catch {
-        await enqueueOutbox({ entityType: 'recurringTransaction', externalId: rule.externalId, payload: rule, queuedAt: nowIso });
+        await enqueue({ entityType: 'recurringTransaction', externalId: rule.externalId, payload: rule, queuedAt: nowIso });
       }
     }
     return { transactions: materialized, rules: updatedRules };
-  }, []);
+  }, [enqueue]);
 
   const load = useCallback(async () => {
     const cached = await readFinanceCache();
     if (cached !== null) setData(cached);
     try {
       await flushOutbox();
+      await refreshOutboxCount();
       const [accounts, categories, transactions, valuations, recurringTransactions, goals, budgets, ious] =
         await Promise.all([
           api.listAccounts(),
@@ -157,7 +176,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }, [applyAndCache, materializeRecurring]);
+  }, [applyAndCache, materializeRecurring, refreshOutboxCount]);
 
   useEffect(() => {
     void load();
@@ -172,7 +191,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       try {
         await api.upsertAccount(account);
       } catch {
-        await enqueueOutbox({
+        await enqueue({
           entityType: 'account',
           externalId: account.externalId,
           payload: account,
@@ -180,7 +199,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [applyAndCache],
+    [applyAndCache, enqueue],
   );
 
   const archiveAccount = useCallback(
@@ -195,7 +214,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       } catch {
         const account = data.accounts.find((a) => a.externalId === externalId);
         if (account !== undefined) {
-          await enqueueOutbox({
+          await enqueue({
             entityType: 'account',
             externalId,
             payload: { ...account, archivedAt: nowIso },
@@ -204,7 +223,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [applyAndCache, data.accounts],
+    [applyAndCache, data.accounts, enqueue],
   );
 
   const saveCategory = useCallback(
@@ -216,7 +235,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       try {
         await api.upsertCategory(category);
       } catch {
-        await enqueueOutbox({
+        await enqueue({
           entityType: 'category',
           externalId: category.externalId,
           payload: category,
@@ -224,7 +243,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [applyAndCache],
+    [applyAndCache, enqueue],
   );
 
   const saveValuation = useCallback(
@@ -241,7 +260,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       try {
         await api.upsertValuation(valuation);
       } catch {
-        await enqueueOutbox({
+        await enqueue({
           entityType: 'valuation',
           externalId: valuation.externalId,
           payload: valuation,
@@ -249,7 +268,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [applyAndCache],
+    [applyAndCache, enqueue],
   );
 
   const saveTransaction = useCallback(
@@ -261,7 +280,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       try {
         await api.upsertTransaction(txn);
       } catch {
-        await enqueueOutbox({
+        await enqueue({
           entityType: 'transaction',
           externalId: txn.externalId,
           payload: txn,
@@ -269,7 +288,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [applyAndCache],
+    [applyAndCache, enqueue],
   );
 
   const deleteTransaction = useCallback(
@@ -284,7 +303,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         await api.deleteTransaction(externalId, nowIso);
       } catch {
         if (txn !== undefined) {
-          await enqueueOutbox({
+          await enqueue({
             entityType: 'transaction',
             externalId,
             payload: txn,
@@ -294,7 +313,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [applyAndCache, data.transactions],
+    [applyAndCache, data.transactions, enqueue],
   );
 
   const saveRecurringTransaction = useCallback(
@@ -309,7 +328,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       try {
         await api.upsertRecurringTransaction(rule);
       } catch {
-        await enqueueOutbox({
+        await enqueue({
           entityType: 'recurringTransaction',
           externalId: rule.externalId,
           payload: rule,
@@ -317,7 +336,32 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [applyAndCache],
+    [applyAndCache, enqueue],
+  );
+
+  const deleteRecurringTransaction = useCallback(
+    async (externalId: string) => {
+      const nowIso = new Date().toISOString();
+      const rule = data.recurringTransactions.find((r) => r.externalId === externalId);
+      applyAndCache((prev) => ({
+        ...prev,
+        recurringTransactions: prev.recurringTransactions.filter((r) => r.externalId !== externalId),
+      }));
+      try {
+        await api.deleteRecurringTransaction(externalId, nowIso);
+      } catch {
+        if (rule !== undefined) {
+          await enqueue({
+            entityType: 'recurringTransaction',
+            externalId,
+            payload: rule,
+            queuedAt: nowIso,
+            deletedAtIso: nowIso,
+          });
+        }
+      }
+    },
+    [applyAndCache, data.recurringTransactions, enqueue],
   );
 
   const saveBudget = useCallback(
@@ -329,7 +373,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       try {
         await api.upsertBudget(budget);
       } catch {
-        await enqueueOutbox({
+        await enqueue({
           entityType: 'budget',
           externalId: budget.externalId,
           payload: budget,
@@ -337,7 +381,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [applyAndCache],
+    [applyAndCache, enqueue],
   );
 
   const archiveBudget = useCallback(
@@ -352,7 +396,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       } catch {
         const budget = data.budgets.find((b) => b.externalId === externalId);
         if (budget !== undefined) {
-          await enqueueOutbox({
+          await enqueue({
             entityType: 'budget',
             externalId,
             payload: { ...budget, archivedAt: nowIso },
@@ -361,7 +405,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [applyAndCache, data.budgets],
+    [applyAndCache, data.budgets, enqueue],
   );
 
   const saveIou = useCallback(
@@ -373,7 +417,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       try {
         await api.upsertIou(iou);
       } catch {
-        await enqueueOutbox({
+        await enqueue({
           entityType: 'iou',
           externalId: iou.externalId,
           payload: iou,
@@ -381,7 +425,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         });
       }
     },
-    [applyAndCache],
+    [applyAndCache, enqueue],
   );
 
   const settleIou = useCallback(
@@ -396,7 +440,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       } catch {
         const iou = data.ious.find((i) => i.externalId === externalId);
         if (iou !== undefined) {
-          await enqueueOutbox({
+          await enqueue({
             entityType: 'iou',
             externalId,
             payload: { ...iou, settledAt: nowIso },
@@ -405,13 +449,14 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [applyAndCache, data.ious],
+    [applyAndCache, data.ious, enqueue],
   );
 
   const value: FinanceDataValue = {
     ...data,
     loading,
     today,
+    pendingOutboxCount,
     refresh: load,
     saveAccount,
     archiveAccount,
@@ -420,6 +465,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     saveTransaction,
     deleteTransaction,
     saveRecurringTransaction,
+    deleteRecurringTransaction,
     saveBudget,
     archiveBudget,
     saveIou,

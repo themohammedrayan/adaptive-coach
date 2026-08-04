@@ -78,6 +78,9 @@ export function AppButton({
     <Pressable
       onPress={onPress}
       disabled={off}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: off, busy }}
       style={({ pressed }) => ({
         backgroundColor: bg,
         borderRadius: radius.control,
@@ -154,38 +157,51 @@ export function FAB({
 
 export function Field({
   label,
+  prefix,
   style,
   ...inputProps
-}: TextInputProps & { label?: string; style?: StyleProp<ViewStyle> }) {
+}: TextInputProps & { label?: string; prefix?: string; style?: StyleProp<ViewStyle> }) {
   const t = useTheme();
   const [focused, setFocused] = useState(false);
+  const handleFocus: TextInputProps['onFocus'] = (e) => {
+    setFocused(true);
+    inputProps.onFocus?.(e);
+  };
+  const handleBlur: TextInputProps['onBlur'] = (e) => {
+    setFocused(false);
+    inputProps.onBlur?.(e);
+  };
+  const containerStyle = {
+    backgroundColor: t.dark ? t.wash : t.card,
+    borderWidth: focused ? 1.5 : StyleSheet.hairlineWidth,
+    borderColor: focused ? t.accent : t.hairline,
+    borderRadius: radius.control,
+  };
   return (
     <View style={[{ gap: 6 }, style]}>
       {label !== undefined && (
         <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>{label}</Text>
       )}
-      <TextInput
-        {...inputProps}
-        onFocus={(e) => {
-          setFocused(true);
-          inputProps.onFocus?.(e);
-        }}
-        onBlur={(e) => {
-          setFocused(false);
-          inputProps.onBlur?.(e);
-        }}
-        placeholderTextColor={t.muted}
-        style={{
-          backgroundColor: t.dark ? t.wash : t.card,
-          borderWidth: focused ? 1.5 : StyleSheet.hairlineWidth,
-          borderColor: focused ? t.accent : t.hairline,
-          borderRadius: radius.control,
-          paddingHorizontal: space.l,
-          paddingVertical: 12,
-          fontSize: 15,
-          color: t.ink,
-        }}
-      />
+      {prefix === undefined ? (
+        <TextInput
+          {...inputProps}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholderTextColor={t.muted}
+          style={[containerStyle, { paddingHorizontal: space.l, paddingVertical: 12, fontSize: 15, color: t.ink }]}
+        />
+      ) : (
+        <View style={[containerStyle, { flexDirection: 'row', alignItems: 'center', paddingLeft: space.l }]}>
+          <Text style={{ fontSize: 15, color: t.muted }}>{prefix}</Text>
+          <TextInput
+            {...inputProps}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            placeholderTextColor={t.muted}
+            style={{ flex: 1, paddingHorizontal: space.s, paddingVertical: 12, fontSize: 15, color: t.ink }}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -203,6 +219,8 @@ export function Chip({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
       style={({ pressed }) => ({
         backgroundColor: active ? t.accentSoft : t.wash,
         borderWidth: 1,
@@ -284,6 +302,8 @@ export function SegmentedControl<T extends string>({
           <Pressable
             key={o.value}
             onPress={() => onChange(o.value)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
             style={{
               flex: 1,
               paddingVertical: 8,
@@ -560,6 +580,9 @@ export function BottomTabBar<T extends string>({
           <Pressable
             key={key}
             onPress={() => onChange(key)}
+            accessibilityRole="tab"
+            accessibilityLabel={label}
+            accessibilityState={{ selected: isActive }}
             style={({ pressed }) => [tabBarStyles.item, { opacity: pressed ? 0.6 : 1 }]}
           >
             <TabIcon name={icon} color={color} />

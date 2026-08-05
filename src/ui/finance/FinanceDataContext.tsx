@@ -46,6 +46,7 @@ interface FinanceDataValue extends FinanceData {
   refresh: () => Promise<void>;
   saveAccount: (account: Account) => Promise<void>;
   archiveAccount: (externalId: string) => Promise<void>;
+  deleteAccount: (externalId: string) => Promise<void>;
   saveCategory: (category: Category) => Promise<void>;
   saveValuation: (valuation: AccountValuation) => Promise<void>;
   saveTransaction: (txn: Transaction) => Promise<void>;
@@ -219,6 +220,31 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
             externalId,
             payload: { ...account, archivedAt: nowIso },
             queuedAt: nowIso,
+          });
+        }
+      }
+    },
+    [applyAndCache, data.accounts, enqueue],
+  );
+
+  const deleteAccount = useCallback(
+    async (externalId: string) => {
+      const nowIso = new Date().toISOString();
+      const account = data.accounts.find((a) => a.externalId === externalId);
+      applyAndCache((prev) => ({
+        ...prev,
+        accounts: prev.accounts.filter((a) => a.externalId !== externalId),
+      }));
+      try {
+        await api.deleteAccount(externalId, nowIso);
+      } catch {
+        if (account !== undefined) {
+          await enqueue({
+            entityType: 'account',
+            externalId,
+            payload: account,
+            queuedAt: nowIso,
+            deletedAtIso: nowIso,
           });
         }
       }
@@ -460,6 +486,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     refresh: load,
     saveAccount,
     archiveAccount,
+    deleteAccount,
     saveCategory,
     saveValuation,
     saveTransaction,

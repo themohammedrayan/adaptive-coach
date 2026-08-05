@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
+  deleteAccount,
   deleteRecurringTransaction,
   deleteTransaction,
   upsertAccount,
@@ -94,6 +95,9 @@ async function replayEntry(entry: OutboxEntry): Promise<void> {
   }
   if (entry.deletedAtIso !== undefined && entry.entityType === 'recurringTransaction') {
     return deleteRecurringTransaction(entry.externalId, entry.deletedAtIso);
+  }
+  if (entry.deletedAtIso !== undefined && entry.entityType === 'account') {
+    return deleteAccount(entry.externalId, entry.deletedAtIso);
   }
   switch (entry.entityType) {
     case 'account':

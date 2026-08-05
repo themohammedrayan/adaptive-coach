@@ -98,6 +98,15 @@ export async function archiveAccount(externalId: string, archivedAtIso: string):
   if (error) throw new Error(error.message);
 }
 
+/** Permanent delete — for accounts created by mistake. Prefer archiveAccount when history matters. */
+export async function deleteAccount(externalId: string, deletedAtIso: string): Promise<void> {
+  const { error } = await supabase
+    .from('finance_accounts')
+    .update({ deleted_at: deletedAtIso })
+    .eq('external_id', externalId);
+  if (error) throw new Error(error.message);
+}
+
 /* ------------------------------------------------------------ categories */
 
 interface ServerCategoryRow {

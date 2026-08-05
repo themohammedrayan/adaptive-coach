@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import type { CreateFoodInput, Food, FoodSource, Unit } from '../../food-log';
+import { inferDefaultUnitId, type CreateFoodInput, type Food, type FoodSource, type Unit } from '../../food-log';
 import { AppButton, Chip, Field, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { FOOD_PHOTO_BUCKET, useFoodData, type PickedPhoto } from './FoodDataContext';
@@ -54,6 +54,11 @@ export function CreateFoodForm({
 }: {
   /** null = create a new catalog food; otherwise edit (or fork) this one. */
   food?: Food | null;
+  /**
+   * Which unit to select *initially*. The user picks the final one below — this
+   * used to be applied straight to the saved food with no way to change it,
+   * which meant every food created here defaulted to grams.
+   */
   defaultUnitId: string;
   units: Unit[];
   initialValues?: CreateFoodFormInitialValues;
@@ -74,8 +79,22 @@ export function CreateFoodForm({
   const [fat, setFat] = useState(fieldString(iv.fatPer100g));
   const [fiber, setFiber] = useState(fieldString(iv.fiberPer100g));
   const [kcal, setKcal] = useState(fieldString(iv.kcalPer100g));
+  const [unitId, setUnitId] = useState(defaultUnitId);
+  // Once the user picks a unit themselves, name-based inference stops fighting them.
+  const [unitTouched, setUnitTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Suggest a unit from the name while creating: "Egg" → egg, "Milk" → ml.
+  // Never on edit — an existing food's unit is the user's own earlier choice,
+  // and re-inferring it would quietly change what their next log resolves to.
+  const isCreate = food === null;
+  useEffect(() => {
+    if (!isCreate || unitTouched) return;
+    setUnitId(inferDefaultUnitId(name, units));
+  }, [name, units, isCreate, unitTouched]);
+
+  const selectedUnit = units.find((u) => u.id === unitId) ?? null;
 
   // Seeded through an effect rather than useState so that a caller handing over
   // the estimate's photo doesn't clobber one the user picks afterwards.
@@ -104,7 +123,7 @@ export function CreateFoodForm({
         fatPer100g: null,
         fiberPer100g: fiberN,
         kcalPer100g: kcalN,
-        defaultUnitId,
+        defaultUnitId: unitId,
         source,
       };
     } else {
@@ -120,7 +139,7 @@ export function CreateFoodForm({
         carbPer100g: carbN,
         fatPer100g: fatN,
         fiberPer100g: fiberN,
-        defaultUnitId,
+        defaultUnitId: unitId,
         source,
       };
     }
@@ -186,9 +205,30 @@ export function CreateFoodForm({
       )}
       <Field label="Fiber g (optional)" placeholder="0" keyboardType="decimal-pad" value={fiber} onChangeText={setFiber} />
       {units.length > 0 && (
-        <Text style={[type.caption, { color: t.muted }]}>
-          Default unit: {units.find((u) => u.id === defaultUnitId)?.name}
-        </Text>
+        <View style={{ gap: 6 }}>
+          <Text style={[type.caption, { color: t.secondary, fontWeight: '500' }]}>
+            Default unit
+          </Text>
+          <Row style={styles.wrap} gap={6}>
+            {units.map((u) => (
+              <Chip
+                key={u.id}
+                label={u.name}
+                active={unitId === u.id}
+                onPress={() => {
+                  setUnitTouched(true);
+                  setUnitId(u.id);
+                }}
+              />
+            ))}
+          </Row>
+          <Text style={[type.caption, { color: t.muted }]}>
+            {selectedUnit === null
+              ? 'Portions are logged in this unit.'
+              : `Portions default to this — 1 ${selectedUnit.name} ≈ ${selectedUnit.defaultGrams} g. ` +
+                'You can correct the grams per unit for this food when you log it.'}
+          </Text>
+        </View>
       )}
       {error !== null && <Text style={[type.caption, { color: t.danger }]}>{error}</Text>}
       <AppButton title={submitTitle ?? (isEdit ? 'Save changes' : 'Save food')} onPress={save} busy={busy} />
@@ -201,4 +241,5 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   sheetBody: { padding: space.l, gap: space.m },
   photoActions: { flex: 1, gap: space.s, justifyContent: 'center' },
+  wrap: { flexWrap: 'wrap' },
 });

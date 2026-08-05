@@ -78,8 +78,17 @@ function parseDebtFields(
 
 export function AccountsScreen() {
   const t = useTheme();
-  const { accounts, transactions, valuations, today, saveAccount, archiveAccount, saveValuation, saveTransaction } =
-    useFinanceData();
+  const {
+    accounts,
+    transactions,
+    valuations,
+    today,
+    saveAccount,
+    archiveAccount,
+    deleteAccount,
+    saveValuation,
+    saveTransaction,
+  } = useFinanceData();
   const [addOpen, setAddOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [valuationInput, setValuationInput] = useState('');
@@ -152,6 +161,12 @@ export function AccountsScreen() {
     const currentMinor = balanceFor(account) ?? 0;
     const deltaMinor = enteredMinor - currentMinor;
     if (deltaMinor === 0) return setInlineError('That already matches the current balance.');
+    // accountBalanceAsOf derives a liability's owed amount as opening minus
+    // effects (netWorth.ts), but ledgerBalanceAsOf applies an adjustment's
+    // amountMinor to effects unflipped — so on a liability account the effect
+    // has to be negated, or the correction moves the owed balance the wrong
+    // way (and by 2x the intended distance).
+    const effectMinor = account.isLiability ? -deltaMinor : deltaMinor;
     try {
       await saveTransaction({
         id: defaultGenId(),
@@ -160,7 +175,7 @@ export function AccountsScreen() {
         accountExternalId: account.externalId,
         counterAccountExternalId: null,
         categoryExternalId: null,
-        amountMinor: deltaMinor,
+        amountMinor: effectMinor,
         currency: account.currency,
         note: 'Balance correction',
         txnDate: today,
@@ -179,6 +194,21 @@ export function AccountsScreen() {
     Alert.alert('Archive account?', `"${account.name}" will be hidden but kept for historical reports.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Archive', style: 'destructive', onPress: () => void archiveAccount(account.externalId) },
+    ]);
+  };
+
+  /** For accounts created by mistake (typo'd name, duplicate) — unlike archive, this removes it and its transaction history entirely. */
+  const confirmDelete = (account: Account) => {
+    const historyCount = transactions.filter(
+      (tx) => tx.accountExternalId === account.externalId || tx.counterAccountExternalId === account.externalId,
+    ).length;
+    const message =
+      historyCount > 0
+        ? `"${account.name}" and its ${historyCount} logged transaction${historyCount === 1 ? '' : 's'} will be permanently deleted, including from past reports. This can't be undone. If you want to keep the history, use Archive instead.`
+        : `"${account.name}" will be permanently deleted. This can't be undone.`;
+    Alert.alert('Delete account?', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void deleteAccount(account.externalId) },
     ]);
   };
 
@@ -286,7 +316,14 @@ export function AccountsScreen() {
                   </View>
                 )}
                 {inlineError !== null && <ErrorText>{inlineError}</ErrorText>}
-                <AppButton title="Archive account" onPress={() => confirmArchive(account)} variant="ghost" small />
+                <Row gap={space.m}>
+                  <View style={{ flex: 1 }}>
+                    <AppButton title="Archive account" onPress={() => confirmArchive(account)} variant="ghost" small />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <AppButton title="Delete account" onPress={() => confirmDelete(account)} variant="danger" small />
+                  </View>
+                </Row>
               </View>
             )}
           </Card>

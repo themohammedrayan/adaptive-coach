@@ -46,6 +46,7 @@ interface FinanceDataValue extends FinanceData {
   refresh: () => Promise<void>;
   saveAccount: (account: Account) => Promise<void>;
   archiveAccount: (externalId: string) => Promise<void>;
+  deleteAccount: (externalId: string) => Promise<void>;
   saveCategory: (category: Category) => Promise<void>;
   saveValuation: (valuation: AccountValuation) => Promise<void>;
   saveTransaction: (txn: Transaction) => Promise<void>;
@@ -224,6 +225,73 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       }
     },
     [applyAndCache, data.accounts, enqueue],
+  );
+
+  /**
+   * Deleting an account also removes every transaction that touches it (either
+   * side of a transfer) and any recurring rule that would keep generating new
+   * ones — otherwise the rule silently resurrects "Unknown account" entries on
+   * the next materialization run.
+   */
+  const deleteAccount = useCallback(
+    async (externalId: string) => {
+      const nowIso = new Date().toISOString();
+      const touchesAccount = (accountExternalId: string, counterAccountExternalId: string | null) =>
+        accountExternalId === externalId || counterAccountExternalId === externalId;
+
+      const account = data.accounts.find((a) => a.externalId === externalId);
+      const orphanedTxns = data.transactions.filter((tx) =>
+        touchesAccount(tx.accountExternalId, tx.counterAccountExternalId),
+      );
+      const orphanedRules = data.recurringTransactions.filter((r) =>
+        touchesAccount(r.accountExternalId, r.counterAccountExternalId),
+      );
+
+      applyAndCache((prev) => ({
+        ...prev,
+        accounts: prev.accounts.filter((a) => a.externalId !== externalId),
+        transactions: prev.transactions.filter((tx) => !touchesAccount(tx.accountExternalId, tx.counterAccountExternalId)),
+        recurringTransactions: prev.recurringTransactions.filter(
+          (r) => !touchesAccount(r.accountExternalId, r.counterAccountExternalId),
+        ),
+      }));
+
+      for (const tx of orphanedTxns) {
+        try {
+          await api.deleteTransaction(tx.externalId, nowIso);
+        } catch {
+          await enqueue({ entityType: 'transaction', externalId: tx.externalId, payload: tx, queuedAt: nowIso, deletedAtIso: nowIso });
+        }
+      }
+      for (const rule of orphanedRules) {
+        try {
+          await api.deleteRecurringTransaction(rule.externalId, nowIso);
+        } catch {
+          await enqueue({
+            entityType: 'recurringTransaction',
+            externalId: rule.externalId,
+            payload: rule,
+            queuedAt: nowIso,
+            deletedAtIso: nowIso,
+          });
+        }
+      }
+
+      try {
+        await api.deleteAccount(externalId, nowIso);
+      } catch {
+        if (account !== undefined) {
+          await enqueue({
+            entityType: 'account',
+            externalId,
+            payload: account,
+            queuedAt: nowIso,
+            deletedAtIso: nowIso,
+          });
+        }
+      }
+    },
+    [applyAndCache, data.accounts, data.transactions, data.recurringTransactions, enqueue],
   );
 
   const saveCategory = useCallback(
@@ -460,6 +528,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     refresh: load,
     saveAccount,
     archiveAccount,
+    deleteAccount,
     saveCategory,
     saveValuation,
     saveTransaction,

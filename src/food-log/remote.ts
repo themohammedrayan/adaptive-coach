@@ -1,10 +1,20 @@
 import { supabase } from '../lib/supabase';
-import type { Favorite, Food, LogEntry, Meal } from './types';
+import { normalizeFoodName } from './foods';
+import { overrideExternalId } from './store';
+import type { Favorite, Food, FoodSource, FoodUnitOverride, LogEntry, Meal } from './types';
 
-/** Server column mapping for public.foods (user_id defaults to auth.uid()). */
+/**
+ * Server column mapping for public.food_catalog — the shared, append-only food
+ * library. Note what is absent: no `user_id`, and no `archived_at`. Ownership
+ * lives in `created_by` and is provenance only, and archiving is a purely local
+ * "hide from my list" that must never propagate (it would hide the food for
+ * everyone).
+ */
 interface ServerFoodRow {
-  external_id: string;
+  catalog_id: string;
+  created_by?: string | null;
   name: string;
+  name_normalized: string;
   protein_per_100g: number | null;
   carb_per_100g: number | null;
   fat_per_100g: number | null;
@@ -12,8 +22,9 @@ interface ServerFoodRow {
   kcal_per_100g: number;
   default_unit_id: string;
   macros_complete: boolean;
+  photo_path: string | null;
+  source: string;
   created_at_utc: string;
-  archived_at: string | null;
   updated_at?: string;
 }
 
@@ -31,6 +42,7 @@ interface ServerLogEntryRow {
   carb: number | null;
   fat: number | null;
   fiber: number | null;
+  photo_path: string | null;
   deleted_at: string | null;
   updated_at?: string;
 }
@@ -43,10 +55,20 @@ interface ServerFavoriteRow {
   updated_at?: string;
 }
 
+interface ServerOverrideRow {
+  external_id: string;
+  food_catalog_id: string;
+  unit_id: string;
+  grams: number;
+  deleted_at: string | null;
+  updated_at?: string;
+}
+
 function foodToServer(f: Food): ServerFoodRow {
   return {
-    external_id: f.id,
+    catalog_id: f.id,
     name: f.name,
+    name_normalized: normalizeFoodName(f.name),
     protein_per_100g: f.proteinPer100g,
     carb_per_100g: f.carbPer100g,
     fat_per_100g: f.fatPer100g,
@@ -54,14 +76,15 @@ function foodToServer(f: Food): ServerFoodRow {
     kcal_per_100g: f.kcalPer100g,
     default_unit_id: f.defaultUnitId,
     macros_complete: f.macrosComplete,
+    photo_path: f.photoPath,
+    source: f.source,
     created_at_utc: f.createdAt,
-    archived_at: f.archivedAt,
   };
 }
 
 function foodFromServer(r: ServerFoodRow): Food {
   return {
-    id: r.external_id,
+    id: r.catalog_id,
     name: r.name,
     proteinPer100g: r.protein_per_100g,
     carbPer100g: r.carb_per_100g,
@@ -70,9 +93,14 @@ function foodFromServer(r: ServerFoodRow): Food {
     kcalPer100g: Number(r.kcal_per_100g),
     defaultUnitId: r.default_unit_id,
     macrosComplete: r.macros_complete,
-    isCustom: true,
+    source: (r.source as FoodSource) ?? 'manual',
+    createdBy: r.created_by ?? null,
+    photoPath: r.photo_path,
+    photoLocalUri: null,
     createdAt: r.created_at_utc,
-    archivedAt: r.archived_at,
+    // Server-side has no archived_at. sync.ts preserves whatever the local row
+    // says so a pull can't un-hide a food you archived.
+    archivedAt: null,
     updatedAt: r.updated_at ?? r.created_at_utc,
     pendingPush: false,
   };
@@ -93,6 +121,7 @@ function entryToServer(e: LogEntry): ServerLogEntryRow {
     carb: e.carb,
     fat: e.fat,
     fiber: e.fiber,
+    photo_path: e.photoPath,
     deleted_at: e.deletedAt,
   };
 }
@@ -112,6 +141,8 @@ function entryFromServer(r: ServerLogEntryRow): LogEntry {
     carb: r.carb === null ? null : Number(r.carb),
     fat: r.fat === null ? null : Number(r.fat),
     fiber: r.fiber === null ? null : Number(r.fiber),
+    photoPath: r.photo_path ?? null,
+    photoLocalUri: null,
     deletedAt: r.deleted_at,
     updatedAt: r.updated_at ?? r.logged_at,
     pendingPush: false,
@@ -138,29 +169,76 @@ function favoriteFromServer(r: ServerFavoriteRow): Favorite {
   };
 }
 
-/** Supabase push/pull for the three food-log tables; faked in tests. */
+function overrideToServer(o: FoodUnitOverride): ServerOverrideRow {
+  return {
+    external_id: overrideExternalId(o.foodId, o.unitId),
+    food_catalog_id: o.foodId,
+    unit_id: o.unitId,
+    grams: o.grams,
+    deleted_at: o.deletedAt,
+  };
+}
+
+function overrideFromServer(r: ServerOverrideRow): FoodUnitOverride {
+  return {
+    foodId: r.food_catalog_id,
+    unitId: r.unit_id,
+    grams: Number(r.grams),
+    deletedAt: r.deleted_at,
+    updatedAt: r.updated_at ?? '1970-01-01T00:00:00.000Z',
+    pendingPush: false,
+  };
+}
+
+/** Supabase push/pull for the food-log tables; faked in tests. */
 export interface FoodLogRemoteStore {
-  pushFoods(rows: Food[]): Promise<void>;
+  /**
+   * Upserts catalog rows. `myUserId` is the authenticated user; rows authored by
+   * anyone else are skipped rather than attempted, because the server's
+   * `catalog update own` policy would reject them and the resulting error would
+   * wedge pendingPush forever.
+   */
+  pushFoods(rows: Food[], myUserId: string | null): Promise<void>;
   pullFoodsSince(sinceIso: string | null): Promise<Food[]>;
   pushEntries(rows: LogEntry[]): Promise<void>;
   pullEntriesSince(sinceIso: string | null): Promise<LogEntry[]>;
   pushFavorites(rows: Favorite[]): Promise<void>;
   pullFavoritesSince(sinceIso: string | null): Promise<Favorite[]>;
+  pushOverrides(rows: FoodUnitOverride[]): Promise<void>;
+  pullOverridesSince(sinceIso: string | null): Promise<FoodUnitOverride[]>;
+  /** auth.uid(), or null when signed out. */
+  currentUserId(): Promise<string | null>;
 }
 
+/** One pull page. Large enough that a personal catalog arrives in a single sync. */
+const PULL_PAGE_SIZE = 1000;
+
 export class SupabaseRemote implements FoodLogRemoteStore {
-  async pushFoods(rows: Food[]): Promise<void> {
-    if (rows.length === 0) return;
+  async currentUserId(): Promise<string | null> {
+    const { data, error } = await supabase.auth.getUser();
+    if (error) return null;
+    return data.user?.id ?? null;
+  }
+
+  async pushFoods(rows: Food[], myUserId: string | null): Promise<void> {
+    const mine = rows.filter((f) => f.createdBy === null || f.createdBy === myUserId);
+    if (mine.length === 0) return;
     const { error } = await supabase
-      .from('foods')
-      .upsert(rows.map(foodToServer), { onConflict: 'user_id,external_id' });
+      .from('food_catalog')
+      .upsert(mine.map(foodToServer), { onConflict: 'catalog_id' });
     if (error) throw new Error(error.message);
   }
 
+  /**
+   * No user filter — this omission is what makes the catalog universal: every
+   * food anyone has contributed arrives here. Ordered and paged so that a
+   * catalog larger than one page still drains, one sync at a time, as the caller
+   * advances the cursor to the last row's updated_at.
+   */
   async pullFoodsSince(sinceIso: string | null): Promise<Food[]> {
-    let query = supabase.from('foods').select('*');
+    let query = supabase.from('food_catalog').select('*');
     if (sinceIso !== null) query = query.gt('updated_at', sinceIso);
-    const { data, error } = await query;
+    const { data, error } = await query.order('updated_at', { ascending: true }).limit(PULL_PAGE_SIZE);
     if (error) throw new Error(error.message);
     return (data as ServerFoodRow[]).map(foodFromServer);
   }
@@ -195,5 +273,21 @@ export class SupabaseRemote implements FoodLogRemoteStore {
     const { data, error } = await query;
     if (error) throw new Error(error.message);
     return (data as ServerFavoriteRow[]).map(favoriteFromServer);
+  }
+
+  async pushOverrides(rows: FoodUnitOverride[]): Promise<void> {
+    if (rows.length === 0) return;
+    const { error } = await supabase
+      .from('food_unit_overrides')
+      .upsert(rows.map(overrideToServer), { onConflict: 'user_id,external_id' });
+    if (error) throw new Error(error.message);
+  }
+
+  async pullOverridesSince(sinceIso: string | null): Promise<FoodUnitOverride[]> {
+    let query = supabase.from('food_unit_overrides').select('*');
+    if (sinceIso !== null) query = query.gt('updated_at', sinceIso);
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+    return (data as ServerOverrideRow[]).map(overrideFromServer);
   }
 }

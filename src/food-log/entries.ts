@@ -16,6 +16,10 @@ export interface AddLogEntryInput {
   quantity: number;
   unitId: string;
   loggedAt: string;
+  /** Path in the private `meal-photos` bucket, when the photo is already uploaded. */
+  photoPath?: string | null;
+  /** Device-local image URI, when the upload hasn't landed yet. */
+  photoLocalUri?: string | null;
 }
 
 /**
@@ -45,6 +49,8 @@ export async function addLogEntry(
     loggedAt: input.loggedAt,
     localDate: toLocalDate(input.loggedAt),
     ...macros,
+    photoPath: input.photoPath ?? null,
+    photoLocalUri: input.photoLocalUri ?? null,
     deletedAt: null,
     updatedAt: input.loggedAt,
     pendingPush: true,

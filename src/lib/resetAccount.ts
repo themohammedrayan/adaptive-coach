@@ -4,11 +4,24 @@ import type { ReminderKind } from '../dashboard/types';
 import { KV, type BodyMetricsStore } from '../data-sync/store';
 import type { FoodLogStore } from '../food-log/store';
 
-/** Every table that carries a user_id column for this user's data (Master BRD — single user, full wipe on reset). */
+/**
+ * Every table that carries a user_id column for this user's data (Master BRD —
+ * single user, full wipe on reset).
+ *
+ * `food_catalog` is deliberately absent and must stay that way. Catalog rows are
+ * not owned by the user who created them — they are the shared, append-only food
+ * library, and a reset is meant to clear *your* log and library links, never the
+ * definitions everyone reads. The table has no client DELETE policy either, so
+ * adding it here would only make reset fail. See
+ * supabase/migrations/20260805090000_create_food_catalog.sql.
+ */
 export const RESET_REMOTE_TABLES = [
   'log_entries',
+  // Deprecated per-user food table, superseded by food_catalog. Still wiped so a
+  // reset leaves nothing behind; nothing reads or writes it any more.
   'foods',
   'favorites',
+  'food_unit_overrides',
   'body_metrics',
   'coach_chat_turns',
   'coach_notes',

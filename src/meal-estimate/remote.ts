@@ -1,6 +1,6 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import type { EstimateMealInput, MealEstimate } from './types';
+import type { EstimateMealInput, LogMealInput, MealEstimate, MealLogResult } from './types';
 
 /**
  * v2 — distinguishable from a transport failure so the UI can branch to
@@ -33,4 +33,28 @@ export async function estimateMeal(input: EstimateMealInput): Promise<MealEstima
   }
   if (!data) throw new Error('estimate-meal: empty response');
   return data.estimate;
+}
+
+/**
+ * Calls the log-meal Edge Function — the conversational sibling of
+ * estimateMeal. Same 422 contract: an implausible or unparseable response is an
+ * expected outcome, not a bug, and surfaces as EstimateUnavailableError so the
+ * caller can send the user to manual entry instead of showing a generic error.
+ *
+ * `catalog` is what lets the model match against foods the user already has
+ * rather than proposing duplicates.
+ */
+export async function logMeal(input: LogMealInput): Promise<MealLogResult> {
+  const { data, error } = await supabase.functions.invoke<{ result: MealLogResult }>('log-meal', {
+    body: input,
+  });
+  if (error) {
+    if (error instanceof FunctionsHttpError) {
+      const body = await error.context.json().catch(() => null);
+      if (body?.error === 'estimate_unavailable') throw new EstimateUnavailableError();
+    }
+    throw error;
+  }
+  if (!data) throw new Error('log-meal: empty response');
+  return data.result;
 }

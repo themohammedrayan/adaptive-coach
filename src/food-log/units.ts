@@ -11,7 +11,9 @@ export async function resolveGrams(
   const unit = await store.getUnit(unitId);
   if (unit === null) throw new Error(`Unknown unit: ${unitId}`);
   const override = await store.getOverride(foodId, unitId);
-  return computeGrams(unit, quantity, override);
+  // getOverride returns soft-deleted rows too (sync needs them); a deleted
+  // override must fall back to the unit's default gram weight.
+  return computeGrams(unit, quantity, override?.deletedAt === null ? override : null);
 }
 
 export async function setFoodUnitOverride(
@@ -19,6 +21,14 @@ export async function setFoodUnitOverride(
   foodId: string,
   unitId: string,
   grams: number,
+  nowUtc: string = new Date().toISOString(),
 ): Promise<void> {
-  await store.upsertOverride({ foodId, unitId, grams });
+  await store.upsertOverride({
+    foodId,
+    unitId,
+    grams,
+    deletedAt: null,
+    updatedAt: nowUtc,
+    pendingPush: true,
+  });
 }

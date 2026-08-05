@@ -51,6 +51,10 @@ async function copyEntries(
     id: genId(),
     loggedAt: nowUtc,
     localDate: toDate,
+    // Deliberately not copied: the photo belongs to the meal that was actually
+    // eaten that day, not to a repeat of it on another day.
+    photoPath: null,
+    photoLocalUri: null,
     deletedAt: null,
     updatedAt: nowUtc,
     pendingPush: true,

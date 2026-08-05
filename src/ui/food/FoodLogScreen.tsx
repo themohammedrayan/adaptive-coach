@@ -12,7 +12,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { searchFoods, sumEntryMacros, type Food, type LogEntry, type Meal, type Unit } from '../../food-log';
+import {
+  inferDefaultUnitId,
+  searchFoods,
+  sumEntryMacros,
+  type Food,
+  type LogEntry,
+  type Meal,
+  type Unit,
+} from '../../food-log';
 import { getFoodLogRuntime } from '../../food-log/runtime';
 import { AppButton, Card, Chip, Dot, EmptyState, Field, Row } from '../kit';
 import { radius, space, type, useTheme, type Theme } from '../theme';
@@ -299,7 +307,7 @@ function AddSheet({
             </View>
           ) : showCreate ? (
             <CreateFoodForm
-              defaultUnitId={units[0]?.id ?? ''}
+              defaultUnitId={inferDefaultUnitId(query, units)}
               units={units}
               initialValues={{ name: query }}
               onDone={(food) => {
@@ -352,6 +360,12 @@ function AddSheet({
                   </>
                 )}
               </ScrollView>
+              <AppButton
+                title="Manage my foods →"
+                onPress={() => router.push('/foods')}
+                variant="secondary"
+                small
+              />
               <AppButton
                 title="Tell the coach what you ate →"
                 onPress={() => router.push({ pathname: '/coach-log', params: { meal } })}
@@ -614,6 +628,11 @@ function FoodRow({
       <TouchableOpacity style={styles.flex} onPress={() => onPick(food)} onLongPress={() => onEdit(food)}>
         <Text style={[type.body, { color: t.ink, fontWeight: '500' }]}>{food.name}</Text>
         <Text style={[type.caption, { color: t.muted }]}>{Math.round(food.kcalPer100g)} kcal/100g</Text>
+      </TouchableOpacity>
+      {/* Long-press still works, but it was the *only* way in — undiscoverable
+          for the one action people go looking for. */}
+      <TouchableOpacity onPress={() => onEdit(food)} hitSlop={8}>
+        <Text style={[type.caption, { color: t.muted }]}>Edit</Text>
       </TouchableOpacity>
       <TouchableOpacity onPress={() => onToggleFavorite(food.id)} hitSlop={8}>
         <Text style={{ fontSize: 20, color: isFavorite ? t.accent : t.muted }}>

@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { Food, Meal } from '../../food-log';
+import { inferDefaultUnitId, type Food, type Meal } from '../../food-log';
 import {
   EstimateUnavailableError,
   estimateMeal,
@@ -51,7 +51,10 @@ export function EstimateMealScreen({ meal }: { meal: Meal | null }) {
 
   const targetMeal: Meal = meal ?? 'snack';
   const mealLabel = MEAL_LABELS[targetMeal];
-  const defaultUnitId = units[0]?.id ?? '';
+  // Seeded from the estimated food's name rather than always units[0] (gram),
+  // so a saved "Boiled egg" defaults to eggs and "Milk" to ml next time it is
+  // logged. CreateFoodForm still shows this as an editable choice.
+  const defaultUnitId = inferDefaultUnitId(estimate?.name ?? description, units);
 
   const runEstimate = async () => {
     if (description.trim() === '' && image.photo === null) return;

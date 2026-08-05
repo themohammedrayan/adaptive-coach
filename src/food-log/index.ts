@@ -2,6 +2,7 @@ export * from './types';
 export { DEFAULT_RECENTS_LIMIT, DEFAULT_UNITS } from './constants';
 export { deviceLocalDate, offsetLocalDate, type InstantToLocalDate } from './dates';
 export { computeGrams } from './grams';
+export { inferDefaultUnitId } from './defaultUnit';
 export { computeEntryMacros, deriveKcalPer100g, sumEntryMacros } from './macros';
 export { toDayLog } from './dayLog';
 export { KV, overrideExternalId, parseOverrideExternalId } from './store';

@@ -2,7 +2,17 @@ import type { IsoDate } from '../engine';
 
 export type Meal = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 
-/** A reusable custom food. Nutrition is gram-canonical (per 100g). Food-Log BRD §2. */
+/** How a catalog entry came into existence. Provenance only — never affects the math. */
+export type FoodSource = 'manual' | 'estimate' | 'coach';
+
+/**
+ * A reusable food. Nutrition is gram-canonical (per 100g). Food-Log BRD §2.
+ *
+ * Backed by `public.food_catalog`, which is **shared and append-only**: a food is
+ * visible to every user regardless of who created it, and no client can delete
+ * one. `archivedAt` therefore means "hidden from my list", not "gone" — the
+ * definition survives log deletion and account reset alike.
+ */
 export interface Food {
   id: string;
   name: string;
@@ -17,8 +27,15 @@ export interface Food {
   defaultUnitId: string;
   /** False for kcal-only quick entries — protein/carb/fat are unknown, not zero. */
   macrosComplete: boolean;
-  isCustom: true;
+  source: FoodSource;
+  /** auth.uid() of the author. Null on rows created before the catalog, or offline. */
+  createdBy: string | null;
+  /** Path in the shared `food-photos` bucket; null when no thumbnail. */
+  photoPath: string | null;
+  /** Device-local image URI held until the upload succeeds; retried by sync. */
+  photoLocalUri: string | null;
   createdAt: string;
+  /** Local-only hide. The catalog row is never touched — see the type docstring. */
   archivedAt: string | null;
   /** Last local write; used for the Supabase pull's last-write-wins merge. */
   updatedAt: string;
@@ -33,11 +50,21 @@ export interface Unit {
   defaultGrams: number;
 }
 
-/** Per-food override of a unit's gram weight (a katori of dal ≠ a katori of rice). */
+/**
+ * Per-food override of a unit's gram weight (a katori of dal ≠ a katori of rice).
+ * Genuinely personal — it records how big *your* katori is — so unlike Food this
+ * syncs to a per-user table rather than the shared catalog.
+ */
 export interface FoodUnitOverride {
   foodId: string;
   unitId: string;
   grams: number;
+  /** Soft delete — deleted rows stay for sync. */
+  deletedAt: string | null;
+  /** Last local write; used for the Supabase pull's last-write-wins merge. */
+  updatedAt: string;
+  /** Outbox flag: row not yet upserted to Supabase. */
+  pendingPush: boolean;
 }
 
 /** Macros resolved for a given gram amount. Null fields mean "unknown", never zero. */
@@ -60,6 +87,10 @@ export interface LogEntry extends EntryMacros {
   grams: number;
   loggedAt: string;
   localDate: IsoDate;
+  /** Path in the private `meal-photos` bucket; null when logged without a photo. */
+  photoPath: string | null;
+  /** Device-local image URI held until the upload succeeds; retried by sync. */
+  photoLocalUri: string | null;
   /** Soft delete — deleted rows stay for sync (mirrors data-sync's BodyMetricRow). */
   deletedAt: string | null;
   /** Last local write; used for the Supabase pull's last-write-wins merge. */

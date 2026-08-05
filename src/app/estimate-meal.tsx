@@ -1,8 +1,13 @@
 import { useLocalSearchParams } from 'expo-router';
 import type { Meal } from '../food-log';
-import { EstimateMealScreen } from '../ui/EstimateMealScreen';
+import { FoodDataProvider } from '../ui/food/FoodDataContext';
+import { EstimateMealScreen } from '../ui/food/EstimateMealScreen';
 
 export default function EstimateMealRoute() {
   const { meal } = useLocalSearchParams<{ meal?: Meal }>();
-  return <EstimateMealScreen meal={meal ?? null} />;
+  return (
+    <FoodDataProvider>
+      <EstimateMealScreen meal={meal ?? null} />
+    </FoodDataProvider>
+  );
 }

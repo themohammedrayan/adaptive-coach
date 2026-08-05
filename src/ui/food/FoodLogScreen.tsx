@@ -12,27 +12,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { addDays } from '../engine';
-import {
-  addFavorite,
-  addLogEntry,
-  copyDay,
-  editLogEntry,
-  listFavorites,
-  removeFavorite,
-  searchFoods,
-  setFoodUnitOverride,
-  sumEntryMacros,
-  type Favorite,
-  type Food,
-  type LogEntry,
-  type Meal,
-  type Unit,
-} from '../food-log';
-import { getFoodLogRuntime } from '../food-log/runtime';
+import { searchFoods, sumEntryMacros, type Food, type LogEntry, type Meal, type Unit } from '../../food-log';
+import { getFoodLogRuntime } from '../../food-log/runtime';
+import { AppButton, Card, Chip, Dot, EmptyState, Field, Row } from '../kit';
+import { radius, space, type, useTheme, type Theme } from '../theme';
 import { CreateFoodForm } from './CreateFoodForm';
-import { AppButton, Card, Chip, Dot, EmptyState, Field, Row } from './kit';
-import { radius, space, type, useTheme, type Theme } from './theme';
+import { FOOD_PHOTO_BUCKET, MEAL_PHOTO_BUCKET, useFoodData } from './FoodDataContext';
+import { FoodEditorModal } from './components/FoodEditorModal';
+import { FoodPhoto } from './components/FoodPhoto';
+import { useImagePick } from './useImagePick';
 
 const MEALS: { key: Meal; label: string }[] = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -43,52 +31,21 @@ const MEALS: { key: Meal; label: string }[] = [
 
 export function FoodLogScreen() {
   const t = useTheme();
-  const [today, setToday] = useState<string | null>(null);
-  const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [units, setUnits] = useState<Unit[]>([]);
-  const [foodNames, setFoodNames] = useState<Map<string, string>>(new Map());
-  const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
+  const { entries, units, foodsById, unitNames, favoriteIds, error, refresh, copyYesterday, toggleFavorite } =
+    useFoodData();
+
   const [activeMeal, setActiveMeal] = useState<Meal | null>(null);
   const [actionEntry, setActionEntry] = useState<LogEntry | null>(null);
+  const [editingFood, setEditingFood] = useState<Food | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    try {
-      const rt = await getFoodLogRuntime();
-      const localDate = rt.toLocalDate(rt.nowUtc());
-      setToday(localDate);
-      setEntries(await rt.store.listEntriesByDate(localDate));
-      setUnits(await rt.store.listUnits());
-      // Include archived so historical entries still resolve to a name.
-      const foods = await rt.store.listFoods(true);
-      setFoodNames(new Map(foods.map((f: Food) => [f.id, f.name])));
-      const favs = await rt.store.listFavorites();
-      setFavoriteIds(new Set(favs.map((f: Favorite) => f.foodId)));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const rt = await getFoodLogRuntime();
-        await rt.sync(false); // sync-on-open, mirrors data-sync's WeightScreen convention
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-      await refresh();
-    })();
-  }, [refresh]);
-
-  const unitNames = useMemo(() => new Map(units.map((u) => [u.id, u.name])), [units]);
+  // Picks up whatever /estimate-meal or /coach-log logged while we were away.
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
 
   const sections = useMemo(
     () =>
@@ -102,15 +59,11 @@ export function FoodLogScreen() {
 
   const dayTotal = useMemo(() => sumEntryMacros(entries), [entries]);
 
-  const copyYesterday = async () => {
-    if (today === null) return;
+  const onCopyYesterday = async () => {
     setBusy(true);
     setCopyError(null);
     try {
-      const rt = await getFoodLogRuntime();
-      await copyDay(rt.store, addDays(today, -1), today, rt.nowUtc());
-      await refresh();
-      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+      await copyYesterday();
     } catch (e) {
       setCopyError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -118,16 +71,9 @@ export function FoodLogScreen() {
     }
   };
 
-  const toggleFavorite = async (foodId: string) => {
+  const onToggleFavorite = async (foodId: string) => {
     try {
-      const rt = await getFoodLogRuntime();
-      if (favoriteIds.has(foodId)) {
-        await removeFavorite(rt.store, foodId, rt.nowUtc());
-      } else {
-        await addFavorite(rt.store, foodId, activeMeal, rt.nowUtc());
-      }
-      await refresh();
-      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+      await toggleFavorite(foodId, activeMeal);
     } catch (e) {
       Alert.alert('Couldn’t update favorite', e instanceof Error ? e.message : String(e));
     }
@@ -149,7 +95,7 @@ export function FoodLogScreen() {
               </Text>
               <AppButton
                 title="Copy yesterday"
-                onPress={copyYesterday}
+                onPress={onCopyYesterday}
                 variant="secondary"
                 small
                 busy={busy}
@@ -182,22 +128,33 @@ export function FoodLogScreen() {
             <AppButton title="+ Add" onPress={() => setActiveMeal(section.meal)} variant="ghost" small />
           </Row>
         )}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.entryRow, { backgroundColor: t.card, borderColor: t.hairline }]}
-            onPress={() => setActionEntry(item)}
-          >
-            <View style={styles.flex}>
-              <Text style={[type.body, { color: t.ink, fontWeight: '500' }]} numberOfLines={1}>
-                {foodNames.get(item.foodId) ?? 'Food'}
-              </Text>
-              <Text style={[type.caption, { color: t.muted }]}>
-                {item.quantity} × {unitNames.get(item.unitId) ?? item.unitId} · {Math.round(item.grams)}g
-              </Text>
-            </View>
-            <Text style={[type.body, { color: t.secondary }]}>{Math.round(item.kcal)} kcal</Text>
-          </TouchableOpacity>
-        )}
+        renderItem={({ item }) => {
+          const food = foodsById.get(item.foodId);
+          const ownPhoto = item.photoPath !== null || item.photoLocalUri !== null;
+          return (
+            <TouchableOpacity
+              style={[styles.entryRow, { backgroundColor: t.card, borderColor: t.hairline }]}
+              onPress={() => setActionEntry(item)}
+            >
+              {/* The meal's own photo when there is one, else the catalog thumbnail. */}
+              <FoodPhoto
+                bucket={ownPhoto ? MEAL_PHOTO_BUCKET : FOOD_PHOTO_BUCKET}
+                photoPath={ownPhoto ? item.photoPath : (food?.photoPath ?? null)}
+                photoLocalUri={ownPhoto ? item.photoLocalUri : (food?.photoLocalUri ?? null)}
+                size={40}
+              />
+              <View style={styles.entryText}>
+                <Text style={[type.body, { color: t.ink, fontWeight: '500' }]} numberOfLines={1}>
+                  {food?.name ?? 'Food'}
+                </Text>
+                <Text style={[type.caption, { color: t.muted }]}>
+                  {item.quantity} × {unitNames.get(item.unitId) ?? item.unitId} · {Math.round(item.grams)}g
+                </Text>
+              </View>
+              <Text style={[type.body, { color: t.secondary }]}>{Math.round(item.kcal)} kcal</Text>
+            </TouchableOpacity>
+          );
+        }}
         ListEmptyComponent={<EmptyState message={error ?? 'Nothing logged today yet.'} />}
       />
 
@@ -206,22 +163,30 @@ export function FoodLogScreen() {
           meal={activeMeal}
           units={units}
           favoriteIds={favoriteIds}
-          onToggleFavorite={toggleFavorite}
+          onToggleFavorite={onToggleFavorite}
+          onEditFood={(food) => {
+            setActiveMeal(null);
+            setEditingFood(food);
+          }}
           onClose={() => setActiveMeal(null)}
-          onLogged={refresh}
         />
       )}
 
       {actionEntry !== null && (
         <EntryActionSheet
           entry={actionEntry}
-          foodName={foodNames.get(actionEntry.foodId) ?? 'Food'}
+          foodName={foodsById.get(actionEntry.foodId)?.name ?? 'Food'}
           unitName={unitNames.get(actionEntry.unitId) ?? actionEntry.unitId}
           units={units}
           onClose={() => setActionEntry(null)}
-          onChanged={refresh}
         />
       )}
+
+      <FoodEditorModal
+        visible={editingFood !== null}
+        food={editingFood}
+        onClose={() => setEditingFood(null)}
+      />
     </View>
   );
 }
@@ -240,74 +205,64 @@ function AddSheet({
   units,
   favoriteIds,
   onToggleFavorite,
+  onEditFood,
   onClose,
-  onLogged,
 }: {
   meal: Meal;
   units: Unit[];
   favoriteIds: Set<string>;
   onToggleFavorite: (foodId: string) => void;
+  onEditFood: (food: Food) => void;
   onClose: () => void;
-  onLogged: () => void;
 }) {
   const t = useTheme();
   const router = useRouter();
+  const { foods, foodsById, favorites, logEntry } = useFoodData();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Food[]>([]);
-  const [favorites, setFavorites] = useState<Food[]>([]);
   const [selected, setSelected] = useState<Food | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [logError, setLogError] = useState<string | null>(null);
 
-  const loadFavorites = useCallback(async () => {
-    try {
-      const rt = await getFoodLogRuntime();
-      setFavorites(await listFavorites(rt.store));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadFavorites();
-  }, [loadFavorites]);
-
-  // Refresh on return from /estimate-meal (v2) — a food created there is
-  // favorited so it shows up here without the user having to re-search.
-  useFocusEffect(
-    useCallback(() => {
-      void loadFavorites();
-    }, [loadFavorites]),
+  const favoriteFoods = useMemo(
+    () =>
+      favorites
+        .map((f) => foodsById.get(f.foodId))
+        .filter((f): f is Food => f !== undefined && f.archivedAt === null),
+    [favorites, foodsById],
   );
 
-  const runSearch = useCallback(async (q: string) => {
-    setQuery(q);
-    try {
-      const rt = await getFoodLogRuntime();
-      setResults(q.trim() === '' ? [] : await searchFoods(rt.store, q));
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
-  }, []);
-
-  const pickFood = (food: Food) => setSelected(food);
+  // `foods` is a dependency so a food created mid-sheet lands in the results.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      if (query.trim() === '') {
+        if (alive) setResults([]);
+        return;
+      }
+      try {
+        const rt = await getFoodLogRuntime();
+        const found = await searchFoods(rt.store, query);
+        if (alive) {
+          setResults(found);
+          setError(null);
+        }
+      } catch (e) {
+        if (alive) setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [query, foods]);
 
   const logSelected = async (quantity: number, unitId: string) => {
     if (selected === null) return;
     try {
-      const rt = await getFoodLogRuntime();
-      await addLogEntry(
-        rt.store,
-        { foodId: selected.id, meal, quantity, unitId, loggedAt: rt.nowUtc() },
-        rt.toLocalDate,
-      );
+      await logEntry({ foodId: selected.id, meal, quantity, unitId });
       setSelected(null);
       onClose();
-      onLogged();
-      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
     } catch (e) {
       setLogError(e instanceof Error ? e.message : String(e));
     }
@@ -349,7 +304,7 @@ function AddSheet({
               initialValues={{ name: query }}
               onDone={(food) => {
                 setShowCreate(false);
-                pickFood(food);
+                setSelected(food);
               }}
               onCancel={() => setShowCreate(false)}
             />
@@ -357,13 +312,21 @@ function AddSheet({
             <View style={styles.sheetBody}>
               <Text style={[type.heading, { color: t.ink }]}>Add to {mealLabel}</Text>
               {error !== null && <Text style={[type.caption, { color: t.danger }]}>{error}</Text>}
-              <Field placeholder="Search your foods…" value={query} onChangeText={runSearch} autoFocus />
+              <Field placeholder="Search foods…" value={query} onChangeText={setQuery} autoFocus />
               <ScrollView style={styles.resultList} keyboardShouldPersistTaps="handled">
-                {query.trim() === '' && favorites.length > 0 && (
+                {query.trim() === '' && favoriteFoods.length > 0 && (
                   <>
                     <Text style={[type.overline, { color: t.muted, marginBottom: space.s }]}>Favorites</Text>
-                    {favorites.map((f) => (
-                      <FoodRow key={f.id} food={f} isFavorite onToggleFavorite={onToggleFavorite} onPick={pickFood} t={t} />
+                    {favoriteFoods.map((f) => (
+                      <FoodRow
+                        key={f.id}
+                        food={f}
+                        isFavorite
+                        onToggleFavorite={onToggleFavorite}
+                        onPick={setSelected}
+                        onEdit={onEditFood}
+                        t={t}
+                      />
                     ))}
                   </>
                 )}
@@ -375,7 +338,8 @@ function AddSheet({
                         food={f}
                         isFavorite={favoriteIds.has(f.id)}
                         onToggleFavorite={onToggleFavorite}
-                        onPick={pickFood}
+                        onPick={setSelected}
+                        onEdit={onEditFood}
                         t={t}
                       />
                     ))}
@@ -388,6 +352,12 @@ function AddSheet({
                   </>
                 )}
               </ScrollView>
+              <AppButton
+                title="Tell the coach what you ate →"
+                onPress={() => router.push({ pathname: '/coach-log', params: { meal } })}
+                variant="secondary"
+                small
+              />
               <AppButton
                 title="Estimate from photo/text →"
                 onPress={() => router.push({ pathname: '/estimate-meal', params: { meal } })}
@@ -408,7 +378,7 @@ function AddSheet({
  * per-food unit override (Food-Log BRD §3) before submit, so the entry resolves
  * with it and it sticks for next time. Hidden for the gram unit (1g is 1g).
  */
-function PortionForm({
+export function PortionForm({
   foodId,
   units,
   initialQuantity,
@@ -428,38 +398,34 @@ function PortionForm({
   onCancel: () => void;
 }) {
   const t = useTheme();
+  const { units: allUnits, getOverrideGrams, setUnitOverride } = useFoodData();
   const [quantity, setQuantity] = useState(initialQuantity);
   const [unitId, setUnitId] = useState(initialUnitId);
   const [perUnitGrams, setPerUnitGrams] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const unitDefault = allUnits.find((u) => u.id === unitId)?.defaultGrams;
+  const currentPerUnit = getOverrideGrams(foodId, unitId) ?? unitDefault;
 
   useEffect(() => {
-    let alive = true;
-    void (async () => {
-      const rt = await getFoodLogRuntime();
-      const override = await rt.store.getOverride(foodId, unitId);
-      const unit = await rt.store.getUnit(unitId);
-      if (alive) setPerUnitGrams(String(override?.grams ?? unit?.defaultGrams ?? ''));
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [foodId, unitId]);
+    setPerUnitGrams(String(currentPerUnit ?? ''));
+  }, [currentPerUnit]);
 
   const submit = async () => {
     const qty = Number(quantity);
     if (!Number.isFinite(qty) || qty <= 0) return;
-    if (unitId !== 'gram') {
-      const per = Number(perUnitGrams);
-      if (Number.isFinite(per) && per > 0) {
-        const rt = await getFoodLogRuntime();
-        const override = await rt.store.getOverride(foodId, unitId);
-        const unit = await rt.store.getUnit(unitId);
-        if (per !== (override?.grams ?? unit?.defaultGrams)) {
-          await setFoodUnitOverride(rt.store, foodId, unitId, per);
+    setBusy(true);
+    try {
+      if (unitId !== 'gram') {
+        const per = Number(perUnitGrams);
+        if (Number.isFinite(per) && per > 0 && per !== currentPerUnit) {
+          await setUnitOverride(foodId, unitId, per);
         }
       }
+      await onSubmit(qty, unitId);
+    } finally {
+      setBusy(false);
     }
-    await onSubmit(qty, unitId);
   };
 
   return (
@@ -490,7 +456,7 @@ function PortionForm({
           ))}
         </Row>
       </View>
-      <AppButton title={submitTitle} onPress={submit} />
+      <AppButton title={submitTitle} onPress={submit} busy={busy} />
       <AppButton title={cancelTitle} onPress={onCancel} variant="ghost" />
     </>
   );
@@ -503,18 +469,32 @@ function EntryActionSheet({
   unitName,
   units,
   onClose,
-  onChanged,
 }: {
   entry: LogEntry;
   foodName: string;
   unitName: string;
   units: Unit[];
   onClose: () => void;
-  onChanged: () => void;
 }) {
   const t = useTheme();
+  const { editEntry, deleteEntry, setEntryPhoto } = useFoodData();
+  const image = useImagePick();
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+
+  const hasPhoto = entry.photoPath !== null || entry.photoLocalUri !== null;
+
+  // The picker is async and lands its result in `image.photo`; upload as soon as
+  // one arrives rather than making the user confirm a second time.
+  const picked = image.photo;
+  useEffect(() => {
+    if (picked === null) return;
+    image.clear();
+    void setEntryPhoto(entry, picked).catch((e: unknown) =>
+      setEditError(e instanceof Error ? e.message : String(e)),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [picked]);
 
   const confirmDelete = () => {
     Alert.alert('Delete entry?', `${foodName} · ${Math.round(entry.kcal)} kcal`, [
@@ -525,11 +505,8 @@ function EntryActionSheet({
         onPress: () => {
           void (async () => {
             try {
-              const rt = await getFoodLogRuntime();
-              await rt.store.deleteEntry(entry.id, rt.nowUtc());
+              await deleteEntry(entry.id);
               onClose();
-              onChanged();
-              void rt.sync(true); // opportunistic push; propagates the soft-delete
             } catch (e) {
               Alert.alert('Delete failed', e instanceof Error ? e.message : String(e));
             }
@@ -545,11 +522,23 @@ function EntryActionSheet({
         <Pressable style={styles.backdrop} onPress={onClose} />
         <View style={[styles.sheet, { backgroundColor: t.card, borderColor: t.hairline }]}>
           <View style={[styles.handle, { backgroundColor: t.wash }]} />
-          <View style={styles.sheetBody}>
+          <ScrollView contentContainerStyle={styles.sheetBody} keyboardShouldPersistTaps="handled">
             <Text style={[type.title, { color: t.ink }]}>{foodName}</Text>
             <Text style={[type.caption, { color: t.muted }]}>
               {entry.quantity} × {unitName} · {Math.round(entry.grams)}g · {Math.round(entry.kcal)} kcal
             </Text>
+            {hasPhoto && (
+              <FoodPhoto
+                bucket={MEAL_PHOTO_BUCKET}
+                photoPath={entry.photoPath}
+                photoLocalUri={entry.photoLocalUri}
+              />
+            )}
+            {entry.photoLocalUri !== null && entry.photoPath === null && (
+              <Text style={[type.caption, { color: t.warning }]}>
+                Photo is on this device only — the upload didn’t go through. Replace it to try again.
+              </Text>
+            )}
             {editing ? (
               <>
                 <PortionForm
@@ -561,11 +550,8 @@ function EntryActionSheet({
                   cancelTitle="Back"
                   onSubmit={async (quantity, unitId) => {
                     try {
-                      const rt = await getFoodLogRuntime();
-                      await editLogEntry(rt.store, entry, { quantity, unitId }, rt.nowUtc());
+                      await editEntry(entry, { quantity, unitId });
                       onClose();
-                      onChanged();
-                      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
                     } catch (e) {
                       setEditError(e instanceof Error ? e.message : String(e));
                     }
@@ -579,11 +565,23 @@ function EntryActionSheet({
             ) : (
               <>
                 <AppButton title="Edit" onPress={() => setEditing(true)} />
+                <Row gap={space.s}>
+                  <AppButton
+                    title={hasPhoto ? 'Replace photo' : 'Add photo'}
+                    onPress={() => void image.pick('camera')}
+                    variant="secondary"
+                    small
+                  />
+                  <AppButton title="Choose" onPress={() => void image.pick('library')} variant="secondary" small />
+                </Row>
+                {(editError ?? image.error) !== null && (
+                  <Text style={[type.caption, { color: t.danger }]}>{editError ?? image.error}</Text>
+                )}
                 <AppButton title="Delete" onPress={confirmDelete} variant="danger" />
                 <AppButton title="Cancel" onPress={onClose} variant="ghost" />
               </>
             )}
-          </View>
+          </ScrollView>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -595,17 +593,25 @@ function FoodRow({
   isFavorite,
   onToggleFavorite,
   onPick,
+  onEdit,
   t,
 }: {
   food: Food;
   isFavorite: boolean;
   onToggleFavorite: (foodId: string) => void;
   onPick: (food: Food) => void;
+  onEdit: (food: Food) => void;
   t: Theme;
 }) {
   return (
-    <Row style={styles.foodRow}>
-      <TouchableOpacity style={styles.flex} onPress={() => onPick(food)}>
+    <Row style={styles.foodRow} gap={space.m}>
+      <FoodPhoto
+        bucket={FOOD_PHOTO_BUCKET}
+        photoPath={food.photoPath}
+        photoLocalUri={food.photoLocalUri}
+        size={36}
+      />
+      <TouchableOpacity style={styles.flex} onPress={() => onPick(food)} onLongPress={() => onEdit(food)}>
         <Text style={[type.body, { color: t.ink, fontWeight: '500' }]}>{food.name}</Text>
         <Text style={[type.caption, { color: t.muted }]}>{Math.round(food.kcalPer100g)} kcal/100g</Text>
       </TouchableOpacity>
@@ -628,12 +634,14 @@ const styles = StyleSheet.create({
   entryRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: space.m,
     padding: space.m,
     paddingHorizontal: space.l,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.control,
     marginBottom: 6,
   },
+  entryText: { flex: 1 },
   backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   sheet: {
     borderTopLeftRadius: 24,

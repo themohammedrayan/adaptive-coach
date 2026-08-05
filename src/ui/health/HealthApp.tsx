@@ -2,7 +2,8 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { CoachNotesFeed } from '../CoachNotesFeed';
-import { FoodLogScreen } from '../FoodLogScreen';
+import { FoodDataProvider } from '../food/FoodDataContext';
+import { FoodLogScreen } from '../food/FoodLogScreen';
 import { AppButton, BottomTabBar, type TabIconName } from '../kit';
 import { MedicationsDataProvider } from '../medications/MedicationsDataContext';
 import { MedicationsScreen } from '../medications/MedicationsScreen';
@@ -39,7 +40,11 @@ export function HealthApp({ initialTab }: { initialTab?: Tab }) {
       </View>
 
       <View style={styles.content}>
-        {tab === 'food' && <FoodLogScreen />}
+        {tab === 'food' && (
+          <FoodDataProvider>
+            <FoodLogScreen />
+          </FoodDataProvider>
+        )}
         {tab === 'weight' && <WeightScreen />}
         {tab === 'medications' && (
           <MedicationsDataProvider>

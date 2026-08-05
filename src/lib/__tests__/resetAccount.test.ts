@@ -45,6 +45,21 @@ function stores() {
   };
 }
 
+describe('RESET_REMOTE_TABLES', () => {
+  // The whole shared-catalog feature rests on this: catalog rows are not owned
+  // by their creator and must survive an account wipe. The table also has no
+  // client DELETE policy, so adding it here would make reset fail outright.
+  it('never includes food_catalog — the shared library outlives any one account', () => {
+    expect(RESET_REMOTE_TABLES).not.toContain('food_catalog');
+  });
+
+  it('includes the per-user food tables, which are personal and should be wiped', () => {
+    expect(RESET_REMOTE_TABLES).toContain('log_entries');
+    expect(RESET_REMOTE_TABLES).toContain('favorites');
+    expect(RESET_REMOTE_TABLES).toContain('food_unit_overrides');
+  });
+});
+
 describe('resetUserDataCore', () => {
   it('throws and touches nothing when no user is signed in', async () => {
     const auth = new FakeAuth(null);
@@ -78,7 +93,10 @@ describe('resetUserDataCore', () => {
       kcalPer100g: 130,
       defaultUnitId: 'g',
       macrosComplete: true,
-      isCustom: true,
+      source: 'manual',
+      createdBy: null,
+      photoPath: null,
+      photoLocalUri: null,
       createdAt: '2026-07-01T00:00:00.000Z',
       archivedAt: null,
       updatedAt: '2026-07-01T00:00:00.000Z',

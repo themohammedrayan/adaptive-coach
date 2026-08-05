@@ -4,6 +4,7 @@ import type { FoodUnitOverride, Unit } from '../types';
 import { resolveGrams, setFoodUnitOverride } from '../units';
 
 const katori: Unit = { id: 'katori', name: 'katori', defaultGrams: 150 };
+const NOW = '2026-07-01T00:00:00.000Z';
 
 describe('computeGrams — Food-Log BRD §10 AT2', () => {
   it('uses the unit default when there is no override', () => {
@@ -11,12 +12,26 @@ describe('computeGrams — Food-Log BRD §10 AT2', () => {
   });
 
   it('1 katori dal, override 120g → resolves from the override, not the default', () => {
-    const override: FoodUnitOverride = { foodId: 'dal', unitId: 'katori', grams: 120 };
+    const override: FoodUnitOverride = {
+      foodId: 'dal',
+      unitId: 'katori',
+      grams: 120,
+      deletedAt: null,
+      updatedAt: NOW,
+      pendingPush: false,
+    };
     expect(computeGrams(katori, 1, override)).toBe(120);
   });
 
   it('scales linearly with quantity', () => {
-    const override: FoodUnitOverride = { foodId: 'dal', unitId: 'katori', grams: 120 };
+    const override: FoodUnitOverride = {
+      foodId: 'dal',
+      unitId: 'katori',
+      grams: 120,
+      deletedAt: null,
+      updatedAt: NOW,
+      pendingPush: false,
+    };
     expect(computeGrams(katori, 2, override)).toBe(240);
   });
 });

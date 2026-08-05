@@ -1,8 +1,13 @@
 import * as SQLite from 'expo-sqlite';
 import type { IsoDate } from '../engine';
 import { DEFAULT_UNITS } from './constants';
-import type { FoodLogStore, PendingPush } from './store';
-import type { Favorite, Food, FoodUnitOverride, LogEntry, Meal, Unit } from './types';
+import {
+  parseOverrideExternalId,
+  type FoodLogStore,
+  type PendingPush,
+  type PendingPushKind,
+} from './store';
+import type { Favorite, Food, FoodSource, FoodUnitOverride, LogEntry, Meal, Unit } from './types';
 
 interface FoodRow {
   id: string;
@@ -14,7 +19,10 @@ interface FoodRow {
   kcal_per_100g: number;
   default_unit_id: string;
   macros_complete: number;
-  is_custom: number;
+  source: string | null;
+  created_by: string | null;
+  photo_path: string | null;
+  photo_local_uri: string | null;
   created_at: string;
   archived_at: string | null;
   updated_at: string;
@@ -32,7 +40,10 @@ function foodFromDb(r: FoodRow): Food {
     kcalPer100g: r.kcal_per_100g,
     defaultUnitId: r.default_unit_id,
     macrosComplete: r.macros_complete === 1,
-    isCustom: true,
+    source: (r.source as FoodSource | null) ?? 'manual',
+    createdBy: r.created_by,
+    photoPath: r.photo_path,
+    photoLocalUri: r.photo_local_uri,
     createdAt: r.created_at,
     archivedAt: r.archived_at,
     updatedAt: r.updated_at,
@@ -54,6 +65,8 @@ interface EntryRow {
   carb: number | null;
   fat: number | null;
   fiber: number | null;
+  photo_path: string | null;
+  photo_local_uri: string | null;
   deleted_at: string | null;
   updated_at: string;
   pending_push: number;
@@ -74,6 +87,28 @@ function entryFromDb(r: EntryRow): LogEntry {
     carb: r.carb,
     fat: r.fat,
     fiber: r.fiber,
+    photoPath: r.photo_path,
+    photoLocalUri: r.photo_local_uri,
+    deletedAt: r.deleted_at,
+    updatedAt: r.updated_at,
+    pendingPush: r.pending_push === 1,
+  };
+}
+
+interface OverrideRow {
+  food_id: string;
+  unit_id: string;
+  grams: number;
+  deleted_at: string | null;
+  updated_at: string;
+  pending_push: number;
+}
+
+function overrideFromDb(r: OverrideRow): FoodUnitOverride {
+  return {
+    foodId: r.food_id,
+    unitId: r.unit_id,
+    grams: r.grams,
     deletedAt: r.deleted_at,
     updatedAt: r.updated_at,
     pendingPush: r.pending_push === 1,
@@ -135,6 +170,10 @@ export class SQLiteStore implements FoodLogStore {
         default_unit_id text not null references units(id),
         macros_complete integer not null default 1,
         is_custom integer not null default 1,
+        source text not null default 'manual',
+        created_by text,
+        photo_path text,
+        photo_local_uri text,
         created_at text not null,
         archived_at text,
         updated_at text not null default '1970-01-01T00:00:00.000Z',
@@ -146,6 +185,9 @@ export class SQLiteStore implements FoodLogStore {
         food_id text not null references foods(id),
         unit_id text not null references units(id),
         grams real not null,
+        deleted_at text,
+        updated_at text not null default '1970-01-01T00:00:00.000Z',
+        pending_push integer not null default 1,
         primary key (food_id, unit_id)
       );
 
@@ -163,6 +205,8 @@ export class SQLiteStore implements FoodLogStore {
         carb real,
         fat real,
         fiber real,
+        photo_path text,
+        photo_local_uri text,
         deleted_at text,
         updated_at text not null default '1970-01-01T00:00:00.000Z',
         pending_push integer not null default 1
@@ -195,6 +239,23 @@ export class SQLiteStore implements FoodLogStore {
     await addColumnIfMissing(db, 'favorites', 'deleted_at text');
     await addColumnIfMissing(db, 'favorites', "updated_at text not null default '1970-01-01T00:00:00.000Z'");
     await addColumnIfMissing(db, 'favorites', 'pending_push integer not null default 1');
+    // Shared-catalog + photo columns.
+    await addColumnIfMissing(db, 'foods', "source text not null default 'manual'");
+    await addColumnIfMissing(db, 'foods', 'created_by text');
+    await addColumnIfMissing(db, 'foods', 'photo_path text');
+    await addColumnIfMissing(db, 'foods', 'photo_local_uri text');
+    await addColumnIfMissing(db, 'log_entries', 'photo_path text');
+    await addColumnIfMissing(db, 'log_entries', 'photo_local_uri text');
+    // Overrides used to be local-only, so pre-existing rows have no sync columns.
+    // pending_push defaults to 1 so overrides recorded before this release are
+    // pushed once and stop being lost on reinstall.
+    await addColumnIfMissing(db, 'food_unit_overrides', 'deleted_at text');
+    await addColumnIfMissing(
+      db,
+      'food_unit_overrides',
+      "updated_at text not null default '1970-01-01T00:00:00.000Z'",
+    );
+    await addColumnIfMissing(db, 'food_unit_overrides', 'pending_push integer not null default 1');
 
     const store = new SQLiteStore(db);
     await store.seedUnits();
@@ -216,9 +277,9 @@ export class SQLiteStore implements FoodLogStore {
     await this.db.runAsync(
       `insert into foods
          (id, name, protein_per_100g, carb_per_100g, fat_per_100g, fiber_per_100g,
-          kcal_per_100g, default_unit_id, macros_complete, is_custom, created_at, archived_at,
-          updated_at, pending_push)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          kcal_per_100g, default_unit_id, macros_complete, source, created_by, photo_path,
+          photo_local_uri, created_at, archived_at, updated_at, pending_push)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict (id) do update set
          name = excluded.name,
          protein_per_100g = excluded.protein_per_100g,
@@ -228,6 +289,10 @@ export class SQLiteStore implements FoodLogStore {
          kcal_per_100g = excluded.kcal_per_100g,
          default_unit_id = excluded.default_unit_id,
          macros_complete = excluded.macros_complete,
+         source = excluded.source,
+         created_by = excluded.created_by,
+         photo_path = excluded.photo_path,
+         photo_local_uri = excluded.photo_local_uri,
          archived_at = excluded.archived_at,
          updated_at = excluded.updated_at,
          pending_push = excluded.pending_push`,
@@ -240,7 +305,10 @@ export class SQLiteStore implements FoodLogStore {
       food.kcalPer100g,
       food.defaultUnitId,
       food.macrosComplete ? 1 : 0,
-      food.isCustom ? 1 : 0,
+      food.source,
+      food.createdBy,
+      food.photoPath,
+      food.photoLocalUri,
       food.createdAt,
       food.archivedAt,
       food.updatedAt,
@@ -279,29 +347,44 @@ export class SQLiteStore implements FoodLogStore {
 
   async upsertOverride(o: FoodUnitOverride): Promise<void> {
     await this.db.runAsync(
-      `insert into food_unit_overrides (food_id, unit_id, grams) values (?, ?, ?)
-       on conflict (food_id, unit_id) do update set grams = excluded.grams`,
+      `insert into food_unit_overrides (food_id, unit_id, grams, deleted_at, updated_at, pending_push)
+       values (?, ?, ?, ?, ?, ?)
+       on conflict (food_id, unit_id) do update set
+         grams = excluded.grams,
+         deleted_at = excluded.deleted_at,
+         updated_at = excluded.updated_at,
+         pending_push = excluded.pending_push`,
       o.foodId,
       o.unitId,
       o.grams,
+      o.deletedAt,
+      o.updatedAt,
+      o.pendingPush ? 1 : 0,
     );
   }
 
   async getOverride(foodId: string, unitId: string): Promise<FoodUnitOverride | null> {
-    const r = await this.db.getFirstAsync<{ food_id: string; unit_id: string; grams: number }>(
+    const r = await this.db.getFirstAsync<OverrideRow>(
       'select * from food_unit_overrides where food_id = ? and unit_id = ?',
       foodId,
       unitId,
     );
-    return r ? { foodId: r.food_id, unitId: r.unit_id, grams: r.grams } : null;
+    return r ? overrideFromDb(r) : null;
+  }
+
+  async listOverrides(): Promise<FoodUnitOverride[]> {
+    const rows = await this.db.getAllAsync<OverrideRow>(
+      'select * from food_unit_overrides where deleted_at is null',
+    );
+    return rows.map(overrideFromDb);
   }
 
   async upsertEntry(entry: LogEntry): Promise<void> {
     await this.db.runAsync(
       `insert into log_entries
          (id, food_id, meal, quantity, unit_id, grams, logged_at, local_date, kcal, protein, carb, fat, fiber,
-          deleted_at, updated_at, pending_push)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          photo_path, photo_local_uri, deleted_at, updated_at, pending_push)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        on conflict (id) do update set
          food_id = excluded.food_id,
          meal = excluded.meal,
@@ -315,6 +398,8 @@ export class SQLiteStore implements FoodLogStore {
          carb = excluded.carb,
          fat = excluded.fat,
          fiber = excluded.fiber,
+         photo_path = excluded.photo_path,
+         photo_local_uri = excluded.photo_local_uri,
          deleted_at = excluded.deleted_at,
          updated_at = excluded.updated_at,
          pending_push = excluded.pending_push`,
@@ -331,6 +416,8 @@ export class SQLiteStore implements FoodLogStore {
       entry.carb,
       entry.fat,
       entry.fiber,
+      entry.photoPath,
+      entry.photoLocalUri,
       entry.deletedAt,
       entry.updatedAt,
       entry.pendingPush ? 1 : 0,
@@ -440,20 +527,38 @@ export class SQLiteStore implements FoodLogStore {
   }
 
   async listPendingPush(): Promise<PendingPush> {
-    const [foods, entries, favorites] = await Promise.all([
+    const [foods, entries, favorites, overrides] = await Promise.all([
       this.db.getAllAsync<FoodRow>('select * from foods where pending_push = 1'),
       this.db.getAllAsync<EntryRow>('select * from log_entries where pending_push = 1'),
       this.db.getAllAsync<FavoriteRow>('select * from favorites where pending_push = 1'),
+      this.db.getAllAsync<OverrideRow>('select * from food_unit_overrides where pending_push = 1'),
     ]);
     return {
       foods: foods.map(foodFromDb),
       entries: entries.map(entryFromDb),
       favorites: favorites.map(favoriteFromDb),
+      overrides: overrides.map(overrideFromDb),
     };
   }
 
-  async markPushed(kind: 'foods' | 'entries' | 'favorites', ids: string[]): Promise<void> {
+  async markPushed(kind: PendingPushKind, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
+
+    // Overrides are keyed on a pair, so they can't be cleared by a single `in`
+    // list like the other three.
+    if (kind === 'overrides') {
+      for (const id of ids) {
+        const parsed = parseOverrideExternalId(id);
+        if (parsed === null) continue;
+        await this.db.runAsync(
+          'update food_unit_overrides set pending_push = 0 where food_id = ? and unit_id = ?',
+          parsed.foodId,
+          parsed.unitId,
+        );
+      }
+      return;
+    }
+
     const placeholders = ids.map(() => '?').join(',');
     const table = kind === 'foods' ? 'foods' : kind === 'entries' ? 'log_entries' : 'favorites';
     const idCol = kind === 'favorites' ? 'food_id' : 'id';

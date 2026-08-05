@@ -1,5 +1,5 @@
 import type { FoodLogRemoteStore } from './remote';
-import { KV, type FoodLogStore } from './store';
+import { KV, overrideExternalId, type FoodLogStore } from './store';
 
 export interface FoodLogSyncDeps {
   store: FoodLogStore;
@@ -21,6 +21,11 @@ export const FOOD_LOG_SYNC_THROTTLE_MINUTES = 15;
  * Food-Log Supabase sync-on-open — mirrors data-sync/sync.ts's outbox push +
  * remote pull, minus the Health Connect leg (food log has no external device
  * source). Remote failures are expected offline and never block local writes.
+ *
+ * The foods leg is the odd one out: it reads the shared, unfiltered
+ * `food_catalog`, so it pulls foods authored by other users as well as your own,
+ * and it keeps its own paging cursor (KV.lastFoodsPulledAt) because a shared
+ * table can hand back more rows than one page.
  */
 export async function foodLogSyncOnOpen(
   deps: FoodLogSyncDeps,
@@ -43,9 +48,14 @@ export async function foodLogSyncOnOpen(
   let remoteError: string | null = null;
 
   try {
+    const myUserId = await remote.currentUserId();
+
     const pending = await store.listPendingPush();
     if (pending.foods.length > 0) {
-      await remote.pushFoods(pending.foods);
+      // Rows authored by someone else are filtered out inside pushFoods (the
+      // catalog only lets you update your own), but they must still be cleared
+      // locally or they'd be retried on every sync forever.
+      await remote.pushFoods(pending.foods, myUserId);
       await store.markPushed('foods', pending.foods.map((f) => f.id));
       pushed += pending.foods.length;
     }
@@ -59,22 +69,47 @@ export async function foodLogSyncOnOpen(
       await store.markPushed('favorites', pending.favorites.map((f) => f.foodId));
       pushed += pending.favorites.length;
     }
+    if (pending.overrides.length > 0) {
+      await remote.pushOverrides(pending.overrides);
+      await store.markPushed(
+        'overrides',
+        pending.overrides.map((o) => overrideExternalId(o.foodId, o.unitId)),
+      );
+      pushed += pending.overrides.length;
+    }
 
     const lastPulledAt = await store.getKV(KV.lastPulledAt);
+    const lastFoodsPulledAt = await store.getKV(KV.lastFoodsPulledAt);
 
-    const remoteFoods = await remote.pullFoodsSince(lastPulledAt);
+    const remoteFoods = await remote.pullFoodsSince(lastFoodsPulledAt);
     for (const row of remoteFoods) {
       const local = await store.getFood(row.id);
       if (local?.pendingPush) continue; // local unpushed edit wins over the pull
-      await store.upsertFood({ ...row, pendingPush: false });
+      await store.upsertFood({
+        ...row,
+        // archivedAt and photoLocalUri are device-local and have no server
+        // column. Taking the pulled row's nulls verbatim would silently un-hide
+        // every food the user archived.
+        archivedAt: local?.archivedAt ?? null,
+        photoLocalUri: local?.photoLocalUri ?? null,
+        pendingPush: false,
+      });
       pulled += 1;
     }
+    // Advance to the last row we actually saw, so a catalog bigger than one page
+    // keeps draining across syncs instead of skipping the remainder.
+    const lastFood = remoteFoods[remoteFoods.length - 1];
+    await store.setKV(KV.lastFoodsPulledAt, lastFood?.updatedAt ?? nowUtc);
 
     const remoteEntries = await remote.pullEntriesSince(lastPulledAt);
     for (const row of remoteEntries) {
       const local = await store.getEntry(row.id);
       if (local?.pendingPush) continue;
-      await store.upsertEntry({ ...row, pendingPush: false });
+      await store.upsertEntry({
+        ...row,
+        photoLocalUri: local?.photoLocalUri ?? null,
+        pendingPush: false,
+      });
       pulled += 1;
     }
 
@@ -83,6 +118,14 @@ export async function foodLogSyncOnOpen(
       const local = await store.getFavorite(row.foodId);
       if (local?.pendingPush) continue;
       await store.upsertFavorite({ ...row, pendingPush: false });
+      pulled += 1;
+    }
+
+    const remoteOverrides = await remote.pullOverridesSince(lastPulledAt);
+    for (const row of remoteOverrides) {
+      const local = await store.getOverride(row.foodId, row.unitId);
+      if (local?.pendingPush) continue;
+      await store.upsertOverride({ ...row, pendingPush: false });
       pulled += 1;
     }
 

@@ -1,7 +1,11 @@
-import { archiveFood, createFood, searchFoods } from '../foods';
+import { addFavorite } from '../favorites';
+import { archiveFood, createFood, editFood, searchFoods } from '../foods';
 import { MemoryStore } from '../store.memory';
 
 const NOW = '2026-07-15T10:00:00.000Z';
+const LATER = '2026-07-16T00:00:00.000Z';
+const ME = 'user-me';
+const SOMEONE_ELSE = 'user-someone-else';
 
 const riceInput = {
   name: 'Rice',
@@ -58,6 +62,59 @@ describe('createFood — kcal derivation', () => {
   });
 });
 
+describe('editFood — shared catalog is append-only', () => {
+  const edit = { ...riceInput, name: 'Basmati rice' };
+
+  it('edits your own food in place, keeping its catalog id', async () => {
+    const store = new MemoryStore();
+    const food = await createFood(store, { ...riceInput, createdBy: ME }, NOW);
+
+    const res = await editFood(store, food, edit, LATER, ME);
+
+    expect(res.forked).toBe(false);
+    expect(res.food.id).toBe(food.id);
+    expect(res.food.name).toBe('Basmati rice');
+    expect(await store.listFoods()).toHaveLength(1);
+  });
+
+  it('claims authorship of a pre-catalog row rather than forking it', async () => {
+    const store = new MemoryStore();
+    const food = await createFood(store, { ...riceInput, createdBy: null }, NOW);
+
+    const res = await editFood(store, food, edit, LATER, ME);
+
+    expect(res.forked).toBe(false);
+    expect(res.food.createdBy).toBe(ME);
+  });
+
+  it("forks someone else's food, leaving the original untouched for everyone else", async () => {
+    const store = new MemoryStore();
+    const food = await createFood(store, { ...riceInput, createdBy: SOMEONE_ELSE }, NOW);
+
+    const res = await editFood(store, food, edit, LATER, ME);
+
+    expect(res.forked).toBe(true);
+    expect(res.food.id).not.toBe(food.id);
+    expect(res.food.createdBy).toBe(ME);
+
+    const original = await store.getFood(food.id);
+    expect(original!.name).toBe('Rice');
+    expect(original!.createdBy).toBe(SOMEONE_ELSE);
+  });
+
+  it('moves the favorite onto the fork so the edited version is what shows up next', async () => {
+    const store = new MemoryStore();
+    const food = await createFood(store, { ...riceInput, createdBy: SOMEONE_ELSE }, NOW);
+    await addFavorite(store, food.id, 'lunch', NOW);
+
+    const res = await editFood(store, food, edit, LATER, ME);
+
+    const favorites = await store.listFavorites();
+    expect(favorites.map((f) => f.foodId)).toEqual([res.food.id]);
+    expect(favorites[0].mealHint).toBe('lunch');
+  });
+});
+
 describe('archiveFood — Food-Log BRD §10 AT8', () => {
   it('sets archivedAt and excludes the food from listFoods by default', async () => {
     const store = new MemoryStore();
@@ -66,6 +123,17 @@ describe('archiveFood — Food-Log BRD §10 AT8', () => {
     expect(await store.listFoods(false)).toHaveLength(0);
     const archived = await store.listFoods(true);
     expect(archived[0].archivedAt).toBe('2026-07-16T00:00:00.000Z');
+  });
+
+  it('leaves the catalog fields alone — hiding is local, the definition survives', async () => {
+    const store = new MemoryStore();
+    const food = await createFood(store, { ...riceInput, createdBy: ME }, NOW);
+    await archiveFood(store, food.id, LATER);
+
+    const hidden = (await store.listFoods(true))[0];
+    expect(hidden.name).toBe(food.name);
+    expect(hidden.kcalPer100g).toBe(food.kcalPer100g);
+    expect(hidden.createdBy).toBe(ME);
   });
 
   it('archiving a food that does not exist is a no-op', async () => {

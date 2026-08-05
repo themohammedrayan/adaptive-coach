@@ -1,11 +1,9 @@
 import type { IsoDate } from '../engine';
 import { DEFAULT_UNITS } from './constants';
-import type { FoodLogStore, PendingPush } from './store';
+import { overrideExternalId, type FoodLogStore, type PendingPush, type PendingPushKind } from './store';
 import type { Favorite, Food, FoodUnitOverride, LogEntry, Meal, Unit } from './types';
 
-function overrideKey(foodId: string, unitId: string): string {
-  return `${foodId}:${unitId}`;
-}
+const overrideKey = overrideExternalId;
 
 /** In-memory store for tests (and web runtime). Mirrors the SQLite implementation's semantics. */
 export class MemoryStore implements FoodLogStore {
@@ -43,6 +41,10 @@ export class MemoryStore implements FoodLogStore {
 
   async getOverride(foodId: string, unitId: string): Promise<FoodUnitOverride | null> {
     return this.overrides.get(overrideKey(foodId, unitId)) ?? null;
+  }
+
+  async listOverrides(): Promise<FoodUnitOverride[]> {
+    return [...this.overrides.values()].filter((o) => o.deletedAt === null);
   }
 
   async upsertEntry(entry: LogEntry): Promise<void> {
@@ -116,19 +118,23 @@ export class MemoryStore implements FoodLogStore {
       foods: [...this.foods.values()].filter((f) => f.pendingPush),
       entries: [...this.entries.values()].filter((e) => e.pendingPush),
       favorites: [...this.favorites.values()].filter((f) => f.pendingPush),
+      overrides: [...this.overrides.values()].filter((o) => o.pendingPush),
     };
   }
 
-  async markPushed(kind: 'foods' | 'entries' | 'favorites', ids: string[]): Promise<void> {
+  async markPushed(kind: PendingPushKind, ids: string[]): Promise<void> {
     const idSet = new Set(ids);
     if (kind === 'foods') {
       for (const [id, food] of this.foods) if (idSet.has(id)) this.foods.set(id, { ...food, pendingPush: false });
     } else if (kind === 'entries') {
       for (const [id, entry] of this.entries)
         if (idSet.has(id)) this.entries.set(id, { ...entry, pendingPush: false });
-    } else {
+    } else if (kind === 'favorites') {
       for (const [id, fav] of this.favorites)
         if (idSet.has(id)) this.favorites.set(id, { ...fav, pendingPush: false });
+    } else {
+      for (const [key, o] of this.overrides)
+        if (idSet.has(key)) this.overrides.set(key, { ...o, pendingPush: false });
     }
   }
 

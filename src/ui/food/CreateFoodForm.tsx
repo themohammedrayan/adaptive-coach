@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { createFood, type Food, type Unit } from '../food-log';
-import { getFoodLogRuntime } from '../food-log/runtime';
-import { AppButton, Chip, Field, Row } from './kit';
-import { space, type, useTheme } from './theme';
+import type { CreateFoodInput, Food, FoodSource, Unit } from '../../food-log';
+import { AppButton, Chip, Field, Row } from '../kit';
+import { space, type, useTheme } from '../theme';
+import { FOOD_PHOTO_BUCKET, useFoodData, type PickedPhoto } from './FoodDataContext';
+import { FoodPhoto } from './components/FoodPhoto';
+import { useImagePick } from './useImagePick';
 
 export interface CreateFoodFormInitialValues {
   name?: string;
@@ -13,6 +15,10 @@ export interface CreateFoodFormInitialValues {
   fiberPer100g?: number | null;
   /** Present when macros aren't all known (kcal-only), same as manual entry's toggle. */
   kcalPer100g?: number | null;
+  /** Provenance for a food the AI proposed; defaults to 'manual'. */
+  source?: FoodSource;
+  /** Photo already in hand — e.g. the plate the estimate was made from. */
+  photo?: PickedPhoto | null;
 }
 
 function fieldString(n: number | null | undefined): string {
@@ -28,26 +34,37 @@ function parseNonNegNumber(s: string): number | null {
 }
 
 /**
- * Food-Log BRD §2/§9 create-food form. Extracted out of FoodLogScreen so
- * both manual "create new food" and v2's AI meal-estimation review screen
- * share one implementation instead of two hand-maintained copies —
- * initialValues pre-fills the fields (e.g. from an AI estimate) but every
- * field stays user-editable before Save.
+ * Food-Log BRD §2/§9 create-food form — and the edit form too: `food: null`
+ * means create, the same idiom the finance modals use. Manual entry, the AI
+ * meal-estimation review and the food editor all share this one implementation
+ * rather than three hand-maintained copies; `initialValues` pre-fills the fields
+ * but every field stays user-editable before Save.
+ *
+ * Editing a catalog food someone else authored forks it rather than rewriting it
+ * (see editFood), so `onDone` receives `forked` and the caller can say so.
  */
 export function CreateFoodForm({
+  food = null,
   defaultUnitId,
   units,
   initialValues,
+  submitTitle,
   onDone,
   onCancel,
 }: {
+  /** null = create a new catalog food; otherwise edit (or fork) this one. */
+  food?: Food | null;
   defaultUnitId: string;
   units: Unit[];
   initialValues?: CreateFoodFormInitialValues;
-  onDone: (food: Food) => void;
+  submitTitle?: string;
+  onDone: (food: Food, forked: boolean) => void;
   onCancel: () => void;
 }) {
   const t = useTheme();
+  const { saveFood } = useFoodData();
+  const image = useImagePick();
+
   const iv = initialValues ?? {};
   const hasFullMacros = iv.proteinPer100g != null && iv.carbPer100g != null && iv.fatPer100g != null;
   const [name, setName] = useState(iv.name ?? '');
@@ -58,6 +75,15 @@ export function CreateFoodForm({
   const [fiber, setFiber] = useState(fieldString(iv.fiberPer100g));
   const [kcal, setKcal] = useState(fieldString(iv.kcalPer100g));
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  // Seeded through an effect rather than useState so that a caller handing over
+  // the estimate's photo doesn't clobber one the user picks afterwards.
+  const seededPhoto = iv.photo ?? null;
+  useEffect(() => {
+    if (seededPhoto !== null) image.set(seededPhoto);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seededPhoto]);
 
   const save = async () => {
     if (name.trim() === '') return setError('Enter a food name.');
@@ -66,7 +92,8 @@ export function CreateFoodForm({
     const fiberN = fiberTrimmed === '' ? null : parseNonNegNumber(fiberTrimmed);
     if (fiberTrimmed !== '' && fiberN === null) return setError('Fiber must be a non-negative number.');
 
-    let input: Parameters<typeof createFood>[1];
+    const source = iv.source ?? food?.source ?? 'manual';
+    let input: CreateFoodInput;
     if (kcalOnly) {
       const kcalN = parseNonNegNumber(kcal);
       if (kcalN === null) return setError('Enter calories per 100g.');
@@ -78,6 +105,7 @@ export function CreateFoodForm({
         fiberPer100g: fiberN,
         kcalPer100g: kcalN,
         defaultUnitId,
+        source,
       };
     } else {
       const proteinN = protein.trim() === '' ? 0 : parseNonNegNumber(protein);
@@ -93,23 +121,49 @@ export function CreateFoodForm({
         fatPer100g: fatN,
         fiberPer100g: fiberN,
         defaultUnitId,
+        source,
       };
     }
 
     setError(null);
+    setBusy(true);
     try {
-      const rt = await getFoodLogRuntime();
-      const food = await createFood(rt.store, input, rt.nowUtc());
-      onDone(food);
-      void rt.sync(true); // opportunistic push; offline is fine, outbox retries
+      const result = await saveFood(food, input, image.photo);
+      onDone(result.food, result.forked);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
     }
   };
 
+  const isEdit = food !== null;
+
   return (
     <View style={styles.sheetBody}>
-      <Text style={[type.heading, { color: t.ink }]}>New food (per 100g)</Text>
+      <Text style={[type.heading, { color: t.ink }]}>
+        {isEdit ? 'Edit food (per 100g)' : 'New food (per 100g)'}
+      </Text>
+
+      <Row gap={space.m}>
+        <FoodPhoto
+          bucket={FOOD_PHOTO_BUCKET}
+          photoPath={image.photo === null ? (food?.photoPath ?? null) : null}
+          photoLocalUri={image.photo?.uri ?? food?.photoLocalUri ?? null}
+          size={64}
+        />
+        <View style={styles.photoActions}>
+          <Row gap={space.s}>
+            <AppButton title="Photo" onPress={() => void image.pick('camera')} variant="secondary" small />
+            <AppButton title="Choose" onPress={() => void image.pick('library')} variant="secondary" small />
+          </Row>
+          {image.photo !== null && (
+            <AppButton title="Remove photo" onPress={image.clear} variant="ghost" small />
+          )}
+        </View>
+      </Row>
+      {image.error !== null && <Text style={[type.caption, { color: t.danger }]}>{image.error}</Text>}
+
       <Field label="Name" placeholder="Chicken curry" value={name} onChangeText={setName} />
       <Row>
         <Chip label="Full macros" active={!kcalOnly} onPress={() => setKcalOnly(false)} />
@@ -137,7 +191,7 @@ export function CreateFoodForm({
         </Text>
       )}
       {error !== null && <Text style={[type.caption, { color: t.danger }]}>{error}</Text>}
-      <AppButton title="Save food" onPress={save} />
+      <AppButton title={submitTitle ?? (isEdit ? 'Save changes' : 'Save food')} onPress={save} busy={busy} />
       <AppButton title="Cancel" onPress={onCancel} variant="ghost" />
     </View>
   );
@@ -146,4 +200,5 @@ export function CreateFoodForm({
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   sheetBody: { padding: space.l, gap: space.m },
+  photoActions: { flex: 1, gap: space.s, justifyContent: 'center' },
 });

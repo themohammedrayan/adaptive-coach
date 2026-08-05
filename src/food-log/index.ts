@@ -4,8 +4,8 @@ export { deviceLocalDate, offsetLocalDate, type InstantToLocalDate } from './dat
 export { computeGrams } from './grams';
 export { computeEntryMacros, deriveKcalPer100g, sumEntryMacros } from './macros';
 export { toDayLog } from './dayLog';
-export { KV } from './store';
-export type { FoodLogStore, PendingPush } from './store';
+export { KV, overrideExternalId, parseOverrideExternalId } from './store';
+export type { FoodLogStore, PendingPush, PendingPushKind } from './store';
 export { MemoryStore } from './store.memory';
 export {
   foodLogSyncOnOpen,
@@ -13,7 +13,25 @@ export {
   type FoodLogSyncDeps,
   type FoodLogSyncResult,
 } from './sync';
-export { createFood, archiveFood, searchFoods, type CreateFoodInput } from './foods';
+export {
+  createFood,
+  editFood,
+  archiveFood,
+  searchFoods,
+  normalizeFoodName,
+  type CreateFoodInput,
+  type EditFoodInput,
+} from './foods';
+export {
+  resolveMealItems,
+  type ParsedMealItem,
+  type ResolvedMealItem,
+} from './resolveMealItems';
+// photos.ts is deliberately NOT re-exported here. It imports the Supabase
+// client, which throws at module-eval time when env vars are unset — exporting
+// it from the barrel would drag that into every module that merely imports a
+// food-log type, breaking tests. Import './photos' directly instead, the same
+// way remote.ts is treated.
 export { resolveGrams, setFoodUnitOverride } from './units';
 export {
   addLogEntry,

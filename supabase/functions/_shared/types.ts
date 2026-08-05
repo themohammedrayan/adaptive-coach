@@ -142,3 +142,41 @@ export interface MealEstimate extends RawMealEstimate {
   source: 'model';
   model: string;
 }
+
+/**
+ * Conversational meal logging — the raw shape the model is asked to produce for
+ * one food in a sentence like "two rotis, dal and a katori of rice".
+ */
+export interface RawParsedMealItem {
+  matchedCatalogId: string | null;
+  name: string;
+  quantity: number;
+  unitId: string;
+  gramsPerUnit: number | null;
+  proteinPer100g: number | null;
+  carbPer100g: number | null;
+  fatPer100g: number | null;
+  fiberPer100g: number | null;
+  kcalPer100g: number | null;
+  confidence: 'low' | 'medium' | 'high';
+}
+
+export interface RawMealLog {
+  items: RawParsedMealItem[];
+  clarification: string | null;
+}
+
+/**
+ * A validated item. Identical in shape to the raw form, but every field has
+ * passed validateMealLog's plausibility guard, `matchedCatalogId` is guaranteed
+ * to be an id the client actually supplied, and `kcalPer100g` is null whenever
+ * macros are known (the client derives 4P+4C+9F itself).
+ */
+export type ParsedMealItem = RawParsedMealItem;
+
+/** log-meal response. Ephemeral — nothing here is persisted server-side. */
+export interface MealLogResult {
+  items: ParsedMealItem[];
+  clarification: string | null;
+  model: string;
+}

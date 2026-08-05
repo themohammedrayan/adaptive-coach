@@ -197,12 +197,15 @@ export function AccountsScreen() {
     ]);
   };
 
-  /** For accounts created by mistake (typo'd name, duplicate) — unlike archive, this removes it (and its history) from Reports entirely. */
+  /** For accounts created by mistake (typo'd name, duplicate) — unlike archive, this removes it and its transaction history entirely. */
   const confirmDelete = (account: Account) => {
-    const hasHistory = transactions.some((tx) => tx.accountExternalId === account.externalId || tx.counterAccountExternalId === account.externalId);
-    const message = hasHistory
-      ? `"${account.name}" has logged transactions. Deleting the account removes it everywhere, including past reports — those transactions will show as "Unknown account" instead of being cleaned up. If you want to keep the history, use Archive instead.`
-      : `"${account.name}" will be permanently deleted. This can't be undone.`;
+    const historyCount = transactions.filter(
+      (tx) => tx.accountExternalId === account.externalId || tx.counterAccountExternalId === account.externalId,
+    ).length;
+    const message =
+      historyCount > 0
+        ? `"${account.name}" and its ${historyCount} logged transaction${historyCount === 1 ? '' : 's'} will be permanently deleted, including from past reports. This can't be undone. If you want to keep the history, use Archive instead.`
+        : `"${account.name}" will be permanently deleted. This can't be undone.`;
     Alert.alert('Delete account?', message, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => void deleteAccount(account.externalId) },

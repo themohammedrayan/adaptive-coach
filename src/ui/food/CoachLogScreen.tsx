@@ -8,7 +8,7 @@ import { AppButton, Card, EmptyState, Field, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { MEAL_PHOTO_BUCKET, useFoodData } from './FoodDataContext';
 import { FoodPhoto } from './components/FoodPhoto';
-import { MealItemCard, type MealItemDraft } from './components/MealItemCard';
+import { MealItemCard, draftPortionKcal, type MealItemDraft } from './components/MealItemCard';
 import { useImagePick } from './useImagePick';
 
 const MEAL_LABELS: Record<Meal, string> = {
@@ -118,6 +118,27 @@ export function CoachLogScreen({ meal }: { meal: Meal | null }) {
 
   const loggable = (drafts ?? []).filter((d) => d.included && d.approved);
   const awaitingApproval = (drafts ?? []).filter((d) => d.included && !d.approved).length;
+
+  /**
+   * Grams per unit for one draft, following the same precedence logEntry will:
+   * the user's own per-food override first, then the unit default. Anything the
+   * review screen shows has to be resolved the same way the entry is, or the
+   * total previewed here wouldn't be the total that lands in the log.
+   */
+  const gramsPerUnitFor = (draft: MealItemDraft) => (unitId: string) => {
+    const foodId = draft.resolved.kind === 'matched' ? draft.resolved.food.id : null;
+    const override =
+      foodId === null
+        ? null
+        : (overrides.find((o) => o.foodId === foodId && o.unitId === unitId && o.deletedAt === null) ??
+          null);
+    if (override !== null) return override.grams;
+    return units.find((u) => u.id === unitId)?.defaultGrams ?? 1;
+  };
+
+  const portions = loggable.map((d) => draftPortionKcal(d, gramsPerUnitFor(d)(d.unitId)));
+  const totalKcal = portions.reduce((sum, p) => sum + (p?.kcal ?? 0), 0);
+  const totalIncomplete = portions.some((p) => p === null);
 
   const logAll = async () => {
     if (loggable.length === 0) return;
@@ -238,9 +259,29 @@ export function CoachLogScreen({ meal }: { meal: Meal | null }) {
                   key={`${draft.resolved.name}-${i}`}
                   draft={draft}
                   units={units}
+                  gramsPerUnit={gramsPerUnitFor(draft)}
                   onChange={(next) => updateDraft(i, next)}
                 />
               ))}
+              {loggable.length > 0 && (
+                <Card>
+                  <Row style={styles.spaceBetween}>
+                    <Text style={[type.body, { color: t.secondary }]}>
+                      {loggable.length === 1 ? '1 item' : `${loggable.length} items`} to {mealLabel}
+                    </Text>
+                    <Text style={[type.title, { color: t.ink }]}>
+                      {totalIncomplete ? '≥ ' : ''}
+                      {Math.round(totalKcal)}
+                      <Text style={[type.caption, { color: t.muted }]}> kcal</Text>
+                    </Text>
+                  </Row>
+                  {totalIncomplete && (
+                    <Text style={[type.caption, { color: t.muted }]}>
+                      Some items are still missing macros or a quantity, so they aren’t counted yet.
+                    </Text>
+                  )}
+                </Card>
+              )}
               {awaitingApproval > 0 && (
                 <Text style={[type.caption, { color: t.warning }]}>
                   {awaitingApproval} new {awaitingApproval === 1 ? 'food needs' : 'foods need'} your approval
@@ -280,4 +321,5 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 60 },
   scroll: { padding: space.l, gap: space.m },
   card: { gap: space.m },
+  spaceBetween: { justifyContent: 'space-between', alignItems: 'center' },
 });

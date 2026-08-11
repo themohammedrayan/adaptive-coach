@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
-import type { ResolvedMealItem, Unit } from '../../../food-log';
+import { resolveKcalPer100g, type ResolvedMealItem, type Unit } from '../../../food-log';
 import { AppButton, Card, Chip, Field, Row } from '../../kit';
 import { space, type, useTheme } from '../../theme';
 import { FOOD_PHOTO_BUCKET } from '../FoodDataContext';
@@ -26,6 +26,40 @@ export interface MealItemDraft {
   name: string;
 }
 
+function parseField(s: string): number | null {
+  const trimmed = s.trim();
+  if (trimmed === '') return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/**
+ * What this item will actually add to the day, at the quantity currently typed.
+ *
+ * Matched items read the saved food; new ones read the fields being edited, so
+ * the calorie figure tracks a corrected macro as it's typed. Null whenever the
+ * portion or the density isn't computable yet — the card says so rather than
+ * showing a zero that looks like a real answer.
+ */
+export function draftPortionKcal(draft: MealItemDraft, gramsPerUnit: number): { grams: number; kcal: number } | null {
+  const quantity = parseField(draft.quantity);
+  if (quantity === null || quantity <= 0) return null;
+
+  const kcalPer100g =
+    draft.resolved.kind === 'matched'
+      ? draft.resolved.food.kcalPer100g
+      : resolveKcalPer100g({
+          proteinPer100g: parseField(draft.protein),
+          carbPer100g: parseField(draft.carb),
+          fatPer100g: parseField(draft.fat),
+          kcalPer100g: parseField(draft.kcal),
+        });
+  if (kcalPer100g === null) return null;
+
+  const grams = quantity * gramsPerUnit;
+  return { grams, kcal: (kcalPer100g * grams) / 100 };
+}
+
 /**
  * One reviewable item from "tell the coach what you ate".
  *
@@ -33,20 +67,28 @@ export interface MealItemDraft {
  * left is the portion. New items carry a visible "new food" banner and stay out
  * of the log until explicitly approved; that per-item gate is what keeps a model
  * parse from silently adding foods and macros the user never saw.
+ *
+ * The macro fields are densities per 100g, which is not the number anyone is
+ * deciding on — so the card also states the portion's own calories, resolved
+ * exactly the way the log entry will resolve them.
  */
 export function MealItemCard({
   draft,
   units,
+  gramsPerUnit,
   onChange,
 }: {
   draft: MealItemDraft;
   units: Unit[];
+  /** Grams one of `unitId` weighs for this food — the user's override, else the unit default. */
+  gramsPerUnit: (unitId: string) => number;
   onChange: (next: MealItemDraft) => void;
 }) {
   const t = useTheme();
   const isNew = draft.resolved.kind === 'new';
   const matchedFood = draft.resolved.kind === 'matched' ? draft.resolved.food : null;
   const kcalOnly = draft.protein.trim() === '' && draft.carb.trim() === '' && draft.fat.trim() === '';
+  const portion = draftPortionKcal(draft, gramsPerUnit(draft.unitId));
 
   const set = (patch: Partial<MealItemDraft>) => onChange({ ...draft, ...patch });
 
@@ -106,6 +148,23 @@ export function MealItemCard({
           </Row>
         </View>
       </Row>
+
+      {portion === null ? (
+        <Text style={[type.caption, { color: t.muted }]}>
+          {isNew
+            ? 'Fill in the macros or calories below to see this portion’s total.'
+            : 'Enter a quantity to see this portion’s total.'}
+        </Text>
+      ) : (
+        <Text style={[type.body, { color: t.ink, fontWeight: '600' }]}>
+          ≈ {Math.round(portion.kcal)} kcal
+          <Text style={[type.caption, { color: t.muted }]}>
+            {'  '}
+            {Math.round(portion.grams)} g
+            {matchedFood !== null ? ` · ${Math.round(matchedFood.kcalPer100g)} kcal/100g` : ''}
+          </Text>
+        </Text>
+      )}
 
       {isNew && (
         <>

@@ -7,7 +7,16 @@ const MAX_CLARIFICATION_CHARS = 200;
 const MAX_ITEMS = 12;
 /** ≈ pure fat's ~884 kcal/100g, a generous ceiling covering oils/nuts. */
 const MAX_KCAL_PER_100G = 900;
+/** Countable units — 100 rotis is already well past anything a person eats. */
 const MAX_QUANTITY = 100;
+/**
+ * Weighed units are quantities of mass/volume, not counts, so they need a
+ * ceiling of a different order: "250 gram cooked rice" is an everyday portion.
+ * Sharing the countable ceiling rejected every weighed portion over 100 g/ml —
+ * and since one bad item fails the whole parse, that surfaced to the user as
+ * "the coach couldn't make sense of that" for a perfectly clear sentence.
+ */
+const MAX_QUANTITY_BY_UNIT: Record<string, number> = { gram: 5000, ml: 5000 };
 const MAX_GRAMS_PER_UNIT = 2000;
 
 function inRange(n: unknown, min: number, max: number): n is number {
@@ -40,8 +49,10 @@ function validateItem(raw: RawParsedMealItem, allowedCatalogIds: Set<string>): P
     if (!allowedCatalogIds.has(raw.matchedCatalogId)) return null;
   }
 
-  if (!inRange(raw.quantity, 0, MAX_QUANTITY) || raw.quantity <= 0) return null;
+  // Unit first: it decides which quantity ceiling applies.
   if (typeof raw.unitId !== 'string' || !(KNOWN_UNIT_IDS as readonly string[]).includes(raw.unitId)) return null;
+  const maxQuantity = MAX_QUANTITY_BY_UNIT[raw.unitId] ?? MAX_QUANTITY;
+  if (!inRange(raw.quantity, 0, maxQuantity) || raw.quantity <= 0) return null;
   if (!nullOrInRange(raw.gramsPerUnit, 1, MAX_GRAMS_PER_UNIT)) return null;
 
   for (const m of [raw.proteinPer100g, raw.carbPer100g, raw.fatPer100g, raw.fiberPer100g]) {

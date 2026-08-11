@@ -5,6 +5,33 @@ export function deriveKcalPer100g(proteinG: number, carbG: number, fatG: number)
   return 4 * proteinG + 4 * carbG + 9 * fatG;
 }
 
+/** Per-100g figures as a review form holds them, before there is a saved Food. */
+export interface MacroDensity {
+  proteinPer100g: number | null;
+  carbPer100g: number | null;
+  fatPer100g: number | null;
+  /** Only meaningful when the macros aren't all known (kcal-only entry). */
+  kcalPer100g: number | null;
+}
+
+/**
+ * Food-Log BRD §4 — the kcal/100g a food *would* have once saved.
+ *
+ * computeEntryMacros needs a Food; the coach-log and create-food review forms
+ * need the same number while the food is still a draft, so that a portion's
+ * calories can be shown before anything is written. Same precedence as the
+ * stored figure: derived from macros whenever all three are known (kcal is never
+ * independent when macros exist), otherwise the user's own kcal-only input.
+ * Null means "not computable yet" — nothing to show, not zero.
+ */
+export function resolveKcalPer100g(density: MacroDensity): number | null {
+  const { proteinPer100g, carbPer100g, fatPer100g } = density;
+  if (proteinPer100g !== null && carbPer100g !== null && fatPer100g !== null) {
+    return deriveKcalPer100g(proteinPer100g, carbPer100g, fatPer100g);
+  }
+  return density.kcalPer100g;
+}
+
 /**
  * Food-Log BRD §4 — entry.macros = food.per100g × grams / 100; entry.kcal = 4P+4C+9F.
  * When the food is kcal-only (macros unknown), the entry's macros stay null — never

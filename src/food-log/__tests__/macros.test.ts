@@ -1,4 +1,4 @@
-import { computeEntryMacros, deriveKcalPer100g, sumEntryMacros } from '../macros';
+import { computeEntryMacros, deriveKcalPer100g, resolveKcalPer100g, sumEntryMacros } from '../macros';
 import type { Food } from '../types';
 
 function food(overrides: Partial<Food> = {}): Food {
@@ -99,5 +99,37 @@ describe('sumEntryMacros', () => {
     const b = computeEntryMacros(food(), 50);
     const totals = sumEntryMacros([a, b]);
     expect(totals.macrosIncomplete).toBe(false);
+  });
+});
+
+describe('resolveKcalPer100g', () => {
+  it('derives from macros when all three are known, ignoring any kcal alongside them', () => {
+    const kcal = resolveKcalPer100g({
+      proteinPer100g: 2.7,
+      carbPer100g: 28,
+      fatPer100g: 0.3,
+      kcalPer100g: 9999,
+    });
+    expect(kcal).toBeCloseTo(deriveKcalPer100g(2.7, 28, 0.3));
+  });
+
+  it('falls back to the kcal-only figure when a macro is missing', () => {
+    const kcal = resolveKcalPer100g({
+      proteinPer100g: 2.7,
+      carbPer100g: null,
+      fatPer100g: 0.3,
+      kcalPer100g: 240,
+    });
+    expect(kcal).toBe(240);
+  });
+
+  it('is null when neither macros nor kcal are available', () => {
+    const kcal = resolveKcalPer100g({
+      proteinPer100g: null,
+      carbPer100g: null,
+      fatPer100g: null,
+      kcalPer100g: null,
+    });
+    expect(kcal).toBeNull();
   });
 });

@@ -3,7 +3,13 @@ export { DEFAULT_RECENTS_LIMIT, DEFAULT_UNITS } from './constants';
 export { deviceLocalDate, offsetLocalDate, type InstantToLocalDate } from './dates';
 export { computeGrams } from './grams';
 export { inferDefaultUnitId } from './defaultUnit';
-export { computeEntryMacros, deriveKcalPer100g, sumEntryMacros } from './macros';
+export {
+  computeEntryMacros,
+  deriveKcalPer100g,
+  resolveKcalPer100g,
+  sumEntryMacros,
+  type MacroDensity,
+} from './macros';
 export { toDayLog } from './dayLog';
 export { KV, overrideExternalId, parseOverrideExternalId } from './store';
 export type { FoodLogStore, PendingPush, PendingPushKind } from './store';

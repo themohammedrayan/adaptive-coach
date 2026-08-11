@@ -100,6 +100,42 @@ describe('validateMealLog — per-item plausibility guard', () => {
     expect(result).toBeNull();
   });
 
+  it('accepts a weighed portion above the countable ceiling — "250 gram cooked rice"', () => {
+    const result = validateMealLog(
+      log({ items: [item({ name: 'Cooked rice', quantity: 250, unitId: 'gram', gramsPerUnit: 1 })] }),
+      CATALOG_IDS,
+      'gpt-5-mini',
+    );
+    expect(result?.items[0].quantity).toBe(250);
+  });
+
+  it('accepts a millilitre portion above the countable ceiling', () => {
+    const result = validateMealLog(
+      log({ items: [item({ quantity: 500, unitId: 'ml', gramsPerUnit: 1 })] }),
+      CATALOG_IDS,
+      'gpt-5-mini',
+    );
+    expect(result?.items[0].quantity).toBe(500);
+  });
+
+  it('still rejects an absurd weighed portion', () => {
+    const result = validateMealLog(
+      log({ items: [item({ quantity: 9000, unitId: 'gram', gramsPerUnit: 1 })] }),
+      CATALOG_IDS,
+      'gpt-5-mini',
+    );
+    expect(result).toBeNull();
+  });
+
+  it('keeps the tight ceiling for countable units', () => {
+    const result = validateMealLog(
+      log({ items: [item({ quantity: 250, unitId: 'roti' })] }),
+      CATALOG_IDS,
+      'gpt-5-mini',
+    );
+    expect(result).toBeNull();
+  });
+
   it('discards a model-supplied kcal when macros are known — the client derives 4P+4C+9F', () => {
     const result = validateMealLog(
       log({ items: [item({ kcalPer100g: 9999 })] }),

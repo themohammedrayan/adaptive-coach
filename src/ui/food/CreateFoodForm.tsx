@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { inferDefaultUnitId, type CreateFoodInput, type Food, type FoodSource, type Unit } from '../../food-log';
+import {
+  deriveKcalPer100g,
+  inferDefaultUnitId,
+  type CreateFoodInput,
+  type Food,
+  type FoodSource,
+  type Unit,
+} from '../../food-log';
 import { AppButton, Chip, Field, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { FOOD_PHOTO_BUCKET, useFoodData, type PickedPhoto } from './FoodDataContext';
@@ -158,6 +165,18 @@ export function CreateFoodForm({
 
   const isEdit = food !== null;
 
+  // kcal is derived, never typed (BRD §4) — so in full-macro mode the only way
+  // to see what a correction does to the calories is to show the derived figure
+  // as it's edited. Blank fields count as 0, exactly as save() treats them.
+  const derivedKcal = (() => {
+    if (kcalOnly) return null;
+    const raw = [protein, carb, fat];
+    if (raw.every((f) => f.trim() === '')) return null;
+    const parsed = raw.map((f) => (f.trim() === '' ? 0 : parseNonNegNumber(f)));
+    if (parsed.some((n) => n === null)) return null;
+    return deriveKcalPer100g(parsed[0] as number, parsed[1] as number, parsed[2] as number);
+  })();
+
   return (
     <View style={styles.sheetBody}>
       <Text style={[type.heading, { color: t.ink }]}>
@@ -202,6 +221,12 @@ export function CreateFoodForm({
           <Field label="Carb g" placeholder="0" keyboardType="decimal-pad" value={carb} onChangeText={setCarb} style={styles.flex} />
           <Field label="Fat g" placeholder="0" keyboardType="decimal-pad" value={fat} onChangeText={setFat} style={styles.flex} />
         </Row>
+      )}
+      {derivedKcal !== null && (
+        <Text style={[type.caption, { color: t.secondary }]}>
+          = {Math.round(derivedKcal)} kcal per 100g — calories are always derived from these macros
+          (4·protein + 4·carb + 9·fat), never stored separately.
+        </Text>
       )}
       <Field label="Fiber g (optional)" placeholder="0" keyboardType="decimal-pad" value={fiber} onChangeText={setFiber} />
       {units.length > 0 && (

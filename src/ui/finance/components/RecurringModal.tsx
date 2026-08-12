@@ -4,7 +4,9 @@ import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, 
 import { defaultGenId } from '../../../finance/ids';
 import { currencySymbol, formatMoneyMinor, moneyInputValue, parseDayOfMonth, parseMoneyInput } from '../../../finance/money';
 import { UNCATEGORISED_EXTERNAL_ID } from '../../../finance/presetCategories';
+import { occurrenceDatesBetween } from '../../../finance/recurrenceDates';
 import type { Account, Category, RecurrenceFrequency, RecurringTransaction } from '../../../finance/types';
+import { deviceLocalDate } from '../../../lib/dates';
 import { AppButton, AppSwitch, Card, Chip, ErrorText, Field, Overline, Row } from '../../kit';
 import { space, type, useTheme } from '../../theme';
 import { useFinanceData } from '../FinanceDataContext';
@@ -206,26 +208,49 @@ function RecurringForm({
     if (endDate !== null && endDate < startDate) return setError('End date must be on or after the start date.');
 
     const externalId = rule?.externalId ?? defaultGenId();
+    const next: RecurringTransaction = {
+      id: rule?.id ?? externalId,
+      externalId,
+      type: kind,
+      accountExternalId,
+      counterAccountExternalId: kind === 'transfer' ? counterAccountExternalId : null,
+      categoryExternalId: kind === 'transfer' ? null : categoryExternalId,
+      amountMinor,
+      currency,
+      note: note.trim() === '' ? null : note.trim(),
+      frequency,
+      interval,
+      dayOfMonth,
+      startDate,
+      endDate,
+      lastMaterializedDate: rule?.lastMaterializedDate ?? null,
+      active: rule?.active ?? true,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // A brand-new rule with a past start date backfills every occurrence
+    // between then and today on first materialization — confirm rather than
+    // silently dropping in a run of transactions.
+    if (rule === null && startDate < today) {
+      const backfillCount = occurrenceDatesBetween(next, null, today).length;
+      if (backfillCount > 1) {
+        Alert.alert(
+          'Backfill past occurrences?',
+          `This will create ${backfillCount} transactions from ${startDate} through today.`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Create', onPress: () => void persist(next) },
+          ],
+        );
+        return;
+      }
+    }
+    await persist(next);
+  };
+
+  const persist = async (next: RecurringTransaction) => {
     try {
-      await saveRecurringTransaction({
-        id: rule?.id ?? externalId,
-        externalId,
-        type: kind,
-        accountExternalId,
-        counterAccountExternalId: kind === 'transfer' ? counterAccountExternalId : null,
-        categoryExternalId: kind === 'transfer' ? null : categoryExternalId,
-        amountMinor,
-        currency,
-        note: note.trim() === '' ? null : note.trim(),
-        frequency,
-        interval,
-        dayOfMonth,
-        startDate,
-        endDate,
-        lastMaterializedDate: rule?.lastMaterializedDate ?? null,
-        active: rule?.active ?? true,
-        updatedAt: new Date().toISOString(),
-      });
+      await saveRecurringTransaction(next);
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -342,7 +367,9 @@ function RecurringForm({
             display="default"
             onChange={(_event, selected) => {
               setShowStartPicker(false);
-              if (selected) setStartDate(selected.toISOString().slice(0, 10));
+              // toISOString().slice(0,10) would convert to UTC before slicing,
+              // shifting the date back a day for any timezone east of UTC.
+              if (selected) setStartDate(deviceLocalDate(selected.toISOString()));
             }}
           />
         )}
@@ -365,7 +392,8 @@ function RecurringForm({
                 display="default"
                 onChange={(_event, selected) => {
                   setShowEndPicker(false);
-                  if (selected) setEndDate(selected.toISOString().slice(0, 10));
+                  // Same UTC-conversion fix as the start-date picker above.
+                  if (selected) setEndDate(deviceLocalDate(selected.toISOString()));
                 }}
               />
             )}

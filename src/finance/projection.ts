@@ -21,3 +21,16 @@ export function projectNetWorth(series: NetWorthPoint[], monthsAhead: number[]):
   const avgDelta = deltas.reduce((sum, d) => sum + d, 0) / deltas.length;
   return monthsAhead.map((m) => ({ monthsAhead: m, projectedNetWorthMinor: Math.round(last + avgDelta * m) }));
 }
+
+/**
+ * Index of the first point where a series crosses from negative into
+ * non-negative territory — used to mark "when net worth turns positive" on
+ * the projected chart. Null if it never crosses (already non-negative
+ * throughout, or never recovers).
+ */
+export function zeroCrossingIndex(values: number[]): number | null {
+  for (let i = 1; i < values.length; i++) {
+    if (values[i - 1] < 0 && values[i] >= 0) return i;
+  }
+  return null;
+}

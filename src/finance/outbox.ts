@@ -3,6 +3,7 @@ import {
   deleteAccount,
   deleteRecurringTransaction,
   deleteTransaction,
+  deleteValuation,
   upsertAccount,
   upsertBudget,
   upsertCategory,
@@ -52,6 +53,20 @@ export interface OutboxEntry {
   queuedAt: string;
   /** Present only when this entry replays a soft-delete instead of an upsert. */
   deletedAtIso?: string;
+  /** Failed replay attempts since this entry was last (re)queued with fresh content. */
+  attempts: number;
+  /** Message from the most recent failed replay, for surfacing a poisoned entry. */
+  lastError?: string;
+}
+
+/** Caller-supplied shape — `attempts`/`lastError` are outbox-internal bookkeeping, not something callers set. */
+export type OutboxEntryInput = Omit<OutboxEntry, 'attempts' | 'lastError'>;
+
+/** An entry that has failed to replay this many times stops being auto-retried and is surfaced separately. */
+export const OUTBOX_POISON_THRESHOLD = 5;
+
+export function isPoisoned(entry: OutboxEntry): boolean {
+  return entry.attempts >= OUTBOX_POISON_THRESHOLD;
 }
 
 /**
@@ -64,24 +79,54 @@ export async function readOutbox(): Promise<OutboxEntry[]> {
   const raw = await AsyncStorage.getItem(OUTBOX_KEY);
   if (raw === null) return [];
   try {
-    return JSON.parse(raw) as OutboxEntry[];
+    const parsed = JSON.parse(raw) as OutboxEntry[];
+    // Entries queued before attempts-tracking existed have no `attempts` field.
+    return parsed.map((e) => ({ ...e, attempts: e.attempts ?? 0 }));
   } catch {
     return [];
   }
 }
 
-export async function enqueueOutbox(entry: OutboxEntry): Promise<void> {
+async function writeOutbox(entries: OutboxEntry[]): Promise<void> {
+  await AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify(entries));
+}
+
+/**
+ * Re-queuing an entity that's already queued replaces its payload in place
+ * (same array position) rather than moving it to the end, so a create that
+ * gets re-edited while offline doesn't get sequenced behind entries that
+ * depend on it. Fresh content means fresh attempts.
+ */
+export async function enqueueOutbox(entry: OutboxEntryInput): Promise<void> {
   const entries = await readOutbox();
-  const withoutDuplicate = entries.filter(
-    (e) => !(e.entityType === entry.entityType && e.externalId === entry.externalId),
-  );
-  await AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify([...withoutDuplicate, entry]));
+  const idx = entries.findIndex((e) => e.entityType === entry.entityType && e.externalId === entry.externalId);
+  const next: OutboxEntry = { ...entry, attempts: 0 };
+  if (idx === -1) {
+    await writeOutbox([...entries, next]);
+  } else {
+    const updated = [...entries];
+    updated[idx] = next;
+    await writeOutbox(updated);
+  }
 }
 
 async function removeFromOutbox(entityType: OutboxEntityType, externalId: string): Promise<void> {
   const entries = await readOutbox();
   const remaining = entries.filter((e) => !(e.entityType === entityType && e.externalId === externalId));
-  await AsyncStorage.setItem(OUTBOX_KEY, JSON.stringify(remaining));
+  await writeOutbox(remaining);
+}
+
+async function recordFailure(entityType: OutboxEntityType, externalId: string, error: unknown): Promise<void> {
+  const entries = await readOutbox();
+  const idx = entries.findIndex((e) => e.entityType === entityType && e.externalId === externalId);
+  if (idx === -1) return; // removed or replaced concurrently — nothing to record onto
+  const updated = [...entries];
+  updated[idx] = {
+    ...updated[idx],
+    attempts: updated[idx].attempts + 1,
+    lastError: error instanceof Error ? error.message : String(error),
+  };
+  await writeOutbox(updated);
 }
 
 /** Must be called from resetUserData() — nothing else clears this key. */
@@ -98,6 +143,9 @@ async function replayEntry(entry: OutboxEntry): Promise<void> {
   }
   if (entry.deletedAtIso !== undefined && entry.entityType === 'account') {
     return deleteAccount(entry.externalId, entry.deletedAtIso);
+  }
+  if (entry.deletedAtIso !== undefined && entry.entityType === 'valuation') {
+    return deleteValuation(entry.externalId, entry.deletedAtIso);
   }
   switch (entry.entityType) {
     case 'account':
@@ -121,15 +169,37 @@ async function replayEntry(entry: OutboxEntry): Promise<void> {
   }
 }
 
-/** Attempts to replay every queued write; entries that still fail (e.g. still offline) stay queued for the next flush. */
-export async function flushOutbox(): Promise<void> {
+let inFlightFlush: Promise<void> | null = null;
+
+/**
+ * Attempts to replay every queued write; entries that still fail (e.g. still
+ * offline) stay queued for the next flush. Poisoned entries (failed
+ * `OUTBOX_POISON_THRESHOLD` times) are skipped — they'd otherwise retry
+ * forever with no visible outcome — but stay in the queue so their count is
+ * still surfaced.
+ *
+ * Single-flight: `load()` calls this on every refresh, so a slow flush and a
+ * concurrent one must not both walk the same snapshot of entries and race
+ * on removal — callers overlapping in time share one in-progress flush.
+ */
+export function flushOutbox(): Promise<void> {
+  if (inFlightFlush !== null) return inFlightFlush;
+  inFlightFlush = doFlush().finally(() => {
+    inFlightFlush = null;
+  });
+  return inFlightFlush;
+}
+
+async function doFlush(): Promise<void> {
   const entries = await readOutbox();
   for (const entry of entries) {
+    if (isPoisoned(entry)) continue;
     try {
       await replayEntry(entry);
       await removeFromOutbox(entry.entityType, entry.externalId);
-    } catch {
+    } catch (e) {
       // still offline or a transient failure — leave queued, retry next flush
+      await recordFailure(entry.entityType, entry.externalId, e);
     }
   }
 }

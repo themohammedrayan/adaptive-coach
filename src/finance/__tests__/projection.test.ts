@@ -1,4 +1,4 @@
-import { projectNetWorth } from '../projection';
+import { projectNetWorth, zeroCrossingIndex } from '../projection';
 import type { NetWorthPoint } from '../netWorth';
 
 function series(values: number[]): NetWorthPoint[] {
@@ -22,5 +22,32 @@ describe('projectNetWorth', () => {
   it('projects a decline when net worth is trending down', () => {
     const points = projectNetWorth(series([100_000, 80_000, 60_000]), [1]);
     expect(points).toEqual([{ monthsAhead: 1, projectedNetWorthMinor: 40_000 }]);
+  });
+});
+
+describe('zeroCrossingIndex', () => {
+  it('finds the first index where the series moves from negative to non-negative', () => {
+    expect(zeroCrossingIndex([-500, -200, 100, 300])).toBe(2);
+  });
+
+  it('treats landing exactly on zero as the crossing', () => {
+    expect(zeroCrossingIndex([-500, 0, 100])).toBe(1);
+  });
+
+  it('returns null when the series is already non-negative throughout', () => {
+    expect(zeroCrossingIndex([100, 200, 300])).toBeNull();
+  });
+
+  it('returns null when the series never recovers', () => {
+    expect(zeroCrossingIndex([-100, -200, -300])).toBeNull();
+  });
+
+  it('returns null for a series too short to cross', () => {
+    expect(zeroCrossingIndex([])).toBeNull();
+    expect(zeroCrossingIndex([-100])).toBeNull();
+  });
+
+  it('only reports the first crossing when the series dips back below zero later', () => {
+    expect(zeroCrossingIndex([-100, 50, -20, 80])).toBe(1);
   });
 });

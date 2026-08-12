@@ -5,6 +5,7 @@ import { defaultGenId } from '../../finance/ids';
 import { currencySymbol, formatMoneyMinor, moneyInputValue, parseMoneyInput } from '../../finance/money';
 import { UNCATEGORISED_EXTERNAL_ID } from '../../finance/presetCategories';
 import type { Transaction, TransactionType } from '../../finance/types';
+import { deviceLocalDate } from '../../lib/dates';
 import { AppButton, Card, Chip, EmptyState, ErrorText, FAB, Field, Overline, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { CategoryEditorModal } from './components/CategoryEditorModal';
@@ -374,7 +375,9 @@ export function AddTransactionModal({
                   maximumDate={new Date()}
                   onChange={(_event, selected) => {
                     setShowDatePicker(false);
-                    if (selected) setTxnDate(selected.toISOString().slice(0, 10));
+                    // toISOString().slice(0,10) would convert to UTC before slicing,
+                    // shifting the date back a day for any timezone east of UTC.
+                    if (selected) setTxnDate(deviceLocalDate(selected.toISOString()));
                   }}
                 />
               )}

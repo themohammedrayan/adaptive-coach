@@ -205,6 +205,12 @@ export function iouPosition(ious: Iou[]): IouPosition {
   return { netMinor: owedToMeMinor - iOweMinor, owedToMeMinor, iOweMinor, openCount: open.length };
 }
 
+export interface PayoffMonth {
+  /** 0 = today's starting balance, before any simulated payment. */
+  month: number;
+  totalBalanceMinor: MoneyMinor;
+}
+
 export interface PayoffPlan {
   strategy: PayoffStrategy;
   months: number;
@@ -212,6 +218,8 @@ export interface PayoffPlan {
   debtFreeDate: IsoDate;
   /** Account externalIds in the order they get cleared. */
   order: string[];
+  /** Total outstanding balance at month 0 (today) through the month it hits zero — the payoff chart's line. */
+  balanceByMonth: PayoffMonth[];
 }
 
 /** A runaway plan terminates rather than looping — 50 years is well past useful. */
@@ -253,6 +261,9 @@ export function simulatePayoff(
   const order: string[] = [];
   let totalInterestMinor = 0;
   let months = 0;
+  const balanceByMonth: PayoffMonth[] = [
+    { month: 0, totalBalanceMinor: balances.reduce((sum, d) => sum + d.balanceMinor, 0) },
+  ];
 
   while (balances.length > 0 && months < MAX_SIMULATED_MONTHS) {
     months += 1;
@@ -278,6 +289,8 @@ export function simulatePayoff(
       remaining -= pay;
     }
 
+    balanceByMonth.push({ month: months, totalBalanceMinor: balances.reduce((sum, d) => sum + d.balanceMinor, 0) });
+
     for (const d of balances) {
       if (d.balanceMinor <= 0) order.push(d.externalId);
     }
@@ -292,7 +305,30 @@ export function simulatePayoff(
     totalInterestMinor,
     debtFreeDate: monthsAfter(today, months),
     order,
+    balanceByMonth,
   };
+}
+
+/**
+ * Right-pads the shorter of two payoff series with its final (zero) balance
+ * so both plot on the same x-axis — once a plan reaches debt-free it just
+ * flatlines at zero rather than stopping short of the longer plan's chart.
+ */
+export function alignPayoffSeries(
+  a: PayoffMonth[],
+  b: PayoffMonth[],
+): { a: PayoffMonth[]; b: PayoffMonth[] } {
+  const length = Math.max(a.length, b.length);
+  const padTo = (series: PayoffMonth[]): PayoffMonth[] => {
+    if (series.length >= length || series.length === 0) return series;
+    const last = series[series.length - 1];
+    const extra = Array.from({ length: length - series.length }, (_, i) => ({
+      month: last.month + i + 1,
+      totalBalanceMinor: last.totalBalanceMinor,
+    }));
+    return [...series, ...extra];
+  };
+  return { a: padTo(a), b: padTo(b) };
 }
 
 /** `today` advanced by whole months, clamped for short months. */

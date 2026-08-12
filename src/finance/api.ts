@@ -98,6 +98,15 @@ export async function archiveAccount(externalId: string, archivedAtIso: string):
   if (error) throw new Error(error.message);
 }
 
+/** Symmetric to archiveAccount — restores a previously archived account back into view. */
+export async function unarchiveAccount(externalId: string): Promise<void> {
+  const { error } = await supabase
+    .from('finance_accounts')
+    .update({ archived_at: null })
+    .eq('external_id', externalId);
+  if (error) throw new Error(error.message);
+}
+
 /** Permanent delete — for accounts created by mistake. Prefer archiveAccount when history matters. */
 export async function deleteAccount(externalId: string, deletedAtIso: string): Promise<void> {
   const { error } = await supabase
@@ -292,6 +301,14 @@ export async function upsertValuation(valuation: AccountValuation): Promise<void
   const { error } = await supabase
     .from('finance_valuations')
     .upsert(valuationToServer(valuation), { onConflict: 'user_id,account_external_id,as_of_date' });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteValuation(externalId: string, deletedAtIso: string): Promise<void> {
+  const { error } = await supabase
+    .from('finance_valuations')
+    .update({ deleted_at: deletedAtIso })
+    .eq('external_id', externalId);
   if (error) throw new Error(error.message);
 }
 

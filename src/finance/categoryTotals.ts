@@ -39,6 +39,27 @@ export function categoryBreakdown(
     .sort((a, b) => b.totalMinor - a.totalMinor);
 }
 
+export interface CategoryTotalLike {
+  categoryName: string;
+  totalMinor: number;
+  color: string | null;
+}
+
+/**
+ * Buckets everything past the top `topN` (by `totalMinor` — callers pass an
+ * already-sorted-largest-first list, e.g. `categoryBreakdown`'s output) into
+ * one "Other" row, so a breakdown chart doesn't have to render a long tail of
+ * slivers. No-op when there aren't more than `topN` categories. Generic over
+ * the minimal shape a chart needs, so it works for the full `CategoryTotal`
+ * as well as a narrower chart-prop projection of it.
+ */
+export function bucketTopCategories<T extends CategoryTotalLike>(totals: T[], topN: number): (T | CategoryTotalLike)[] {
+  if (totals.length <= topN) return totals;
+  const rest = totals.slice(topN);
+  const otherTotalMinor = rest.reduce((sum, c) => sum + c.totalMinor, 0);
+  return [...totals.slice(0, topN), { categoryName: 'Other', totalMinor: otherTotalMinor, color: null }];
+}
+
 export interface MonthTotals {
   /** 'YYYY-MM' */
   month: string;

@@ -126,6 +126,7 @@ export async function resetUserData(): Promise<void> {
   const { REMINDER_IDS } = await import('../dashboard/reminderSchedule');
   const { clearFinanceCache } = await import('../finance/cache');
   const { clearOutbox } = await import('../finance/outbox');
+  const { clearPeakDebt } = await import('../finance/wallpaperBits');
   const { clearGoalsCache } = await import('../goals/cache');
   const { clearCalendarCache } = await import('../calendar/cache');
   const { clearMedicationsCache } = await import('../medications/cache');
@@ -174,9 +175,14 @@ export async function resetUserData(): Promise<void> {
     ]).then(() => undefined);
 
   const clearLocalCaches = () =>
-    Promise.all([clearFinanceCache(), clearOutbox(), clearGoalsCache(), clearCalendarCache(), clearMedicationsCache()]).then(
-      () => undefined,
-    );
+    Promise.all([
+      clearFinanceCache(),
+      clearOutbox(),
+      clearPeakDebt(),
+      clearGoalsCache(),
+      clearCalendarCache(),
+      clearMedicationsCache(),
+    ]).then(() => undefined);
 
   await resetUserDataCore(auth, remote, stores, hc, cancelAllReminders, clearLocalCaches);
 }

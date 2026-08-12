@@ -1,4 +1,4 @@
-import { categoryBreakdown, incomeVsExpense } from '../categoryTotals';
+import { bucketTopCategories, categoryBreakdown, incomeVsExpense, type CategoryTotal } from '../categoryTotals';
 import type { Category, Transaction } from '../types';
 
 function txn(overrides: Partial<Transaction>): Transaction {
@@ -77,5 +77,27 @@ describe('incomeVsExpense', () => {
       { month: '2026-06', incomeMinor: 0, expenseMinor: 500 },
       { month: '2026-07', incomeMinor: 50000, expenseMinor: 8000 },
     ]);
+  });
+});
+
+describe('bucketTopCategories', () => {
+  function total(name: string, totalMinor: number): CategoryTotal {
+    return { categoryExternalId: name, categoryName: name, totalMinor, icon: '•', color: null };
+  }
+
+  it('leaves the list untouched when there are no more than topN categories', () => {
+    const totals = [total('a', 300), total('b', 200), total('c', 100)];
+    expect(bucketTopCategories(totals, 3)).toEqual(totals);
+    expect(bucketTopCategories(totals, 5)).toEqual(totals);
+  });
+
+  it('sums everything past topN into a single Other row', () => {
+    const totals = [total('a', 500), total('b', 300), total('c', 100), total('d', 60), total('e', 40)];
+    const bucketed = bucketTopCategories(totals, 2);
+    expect(bucketed).toHaveLength(3);
+    expect(bucketed[0]).toEqual(total('a', 500));
+    expect(bucketed[1]).toEqual(total('b', 300));
+    expect(bucketed[2].categoryName).toBe('Other');
+    expect(bucketed[2].totalMinor).toBe(200); // 100 + 60 + 40
   });
 });

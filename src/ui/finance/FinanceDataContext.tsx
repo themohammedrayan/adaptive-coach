@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import * as api from '../../finance/api';
 import { readFinanceCache, writeFinanceCache } from '../../finance/cache';
-import { defaultGenId } from '../../finance/ids';
-import { materializeDueRecurrences } from '../../finance/recurrence';
+import { materializedTransactionExternalId, materializeDueRecurrences } from '../../finance/recurrence';
 import type {
   Account,
   AccountValuation,
@@ -13,8 +12,9 @@ import type {
   RecurringTransaction,
   Transaction,
 } from '../../finance/types';
-import { enqueueOutbox, flushOutbox, readOutbox } from '../../finance/outbox';
+import { enqueueOutbox, flushOutbox, isPoisoned, readOutbox } from '../../finance/outbox';
 import { deviceLocalDate } from '../../lib/dates';
+import { scheduleFinanceWallpaperSync } from '../../wallpaper';
 
 interface FinanceData {
   accounts: Account[];
@@ -43,12 +43,16 @@ interface FinanceDataValue extends FinanceData {
   today: string;
   /** Queued writes waiting to sync — surfaced as a small banner so a stuck offline write isn't invisible. */
   pendingOutboxCount: number;
+  /** Writes that failed to replay OUTBOX_POISON_THRESHOLD times — no longer auto-retried, surfaced separately. */
+  poisonedOutboxCount: number;
   refresh: () => Promise<void>;
   saveAccount: (account: Account) => Promise<void>;
   archiveAccount: (externalId: string) => Promise<void>;
+  unarchiveAccount: (externalId: string) => Promise<void>;
   deleteAccount: (externalId: string) => Promise<void>;
   saveCategory: (category: Category) => Promise<void>;
   saveValuation: (valuation: AccountValuation) => Promise<void>;
+  deleteValuation: (externalId: string) => Promise<void>;
   saveTransaction: (txn: Transaction) => Promise<void>;
   deleteTransaction: (externalId: string) => Promise<void>;
   saveRecurringTransaction: (rule: RecurringTransaction) => Promise<void>;
@@ -71,19 +75,25 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<FinanceData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
+  const [poisonedOutboxCount, setPoisonedOutboxCount] = useState(0);
   const today = deviceLocalDate(new Date().toISOString());
 
   const applyAndCache = useCallback((updater: (prev: FinanceData) => FinanceData) => {
     setData((prev) => {
       const next = updater(prev);
       void writeFinanceCache({ ...next, cachedAt: new Date().toISOString() });
+      // Debounced — the wallpaper's debt ring reads the cache just written above,
+      // so it stays current on finance activity, not just dashboard/profile opens.
+      scheduleFinanceWallpaperSync(deviceLocalDate(new Date().toISOString()));
       return next;
     });
   }, []);
 
   const refreshOutboxCount = useCallback(async () => {
     const entries = await readOutbox();
-    setPendingOutboxCount(entries.length);
+    const poisoned = entries.filter(isPoisoned).length;
+    setPendingOutboxCount(entries.length - poisoned);
+    setPoisonedOutboxCount(poisoned);
   }, []);
 
   /** Every mutation's failure path queues through here instead of calling enqueueOutbox directly, so the pending-count banner never drifts from the real queue. */
@@ -101,8 +111,8 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
 
     const nowIso = new Date().toISOString();
     const materialized: Transaction[] = drafts.map((d) => ({
-      id: defaultGenId(),
-      externalId: defaultGenId(),
+      id: materializedTransactionExternalId(d.ruleExternalId, d.txnDate),
+      externalId: materializedTransactionExternalId(d.ruleExternalId, d.txnDate),
       type: d.type as Transaction['type'],
       accountExternalId: d.accountExternalId,
       counterAccountExternalId: d.counterAccountExternalId,
@@ -227,6 +237,29 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     [applyAndCache, data.accounts, enqueue],
   );
 
+  const unarchiveAccount = useCallback(
+    async (externalId: string) => {
+      applyAndCache((prev) => ({
+        ...prev,
+        accounts: prev.accounts.map((a) => (a.externalId === externalId ? { ...a, archivedAt: null } : a)),
+      }));
+      try {
+        await api.unarchiveAccount(externalId);
+      } catch {
+        const account = data.accounts.find((a) => a.externalId === externalId);
+        if (account !== undefined) {
+          await enqueue({
+            entityType: 'account',
+            externalId,
+            payload: { ...account, archivedAt: null },
+            queuedAt: new Date().toISOString(),
+          });
+        }
+      }
+    },
+    [applyAndCache, data.accounts, enqueue],
+  );
+
   /**
    * Deleting an account also removes every transaction that touches it (either
    * side of a transfer) and any recurring rule that would keep generating new
@@ -337,6 +370,31 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
       }
     },
     [applyAndCache, enqueue],
+  );
+
+  const deleteValuation = useCallback(
+    async (externalId: string) => {
+      const nowIso = new Date().toISOString();
+      const valuation = data.valuations.find((v) => v.externalId === externalId);
+      applyAndCache((prev) => ({
+        ...prev,
+        valuations: prev.valuations.filter((v) => v.externalId !== externalId),
+      }));
+      try {
+        await api.deleteValuation(externalId, nowIso);
+      } catch {
+        if (valuation !== undefined) {
+          await enqueue({
+            entityType: 'valuation',
+            externalId,
+            payload: valuation,
+            queuedAt: nowIso,
+            deletedAtIso: nowIso,
+          });
+        }
+      }
+    },
+    [applyAndCache, data.valuations, enqueue],
   );
 
   const saveTransaction = useCallback(
@@ -525,12 +583,15 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     loading,
     today,
     pendingOutboxCount,
+    poisonedOutboxCount,
     refresh: load,
     saveAccount,
     archiveAccount,
+    unarchiveAccount,
     deleteAccount,
     saveCategory,
     saveValuation,
+    deleteValuation,
     saveTransaction,
     deleteTransaction,
     saveRecurringTransaction,

@@ -28,4 +28,20 @@ describe('buildWallpaperSnapshot', () => {
     expect(snapshot.totalBudgetKcal).toBe(0);
     expect(snapshot.percentComplete).toBeNull();
   });
+
+  it('omits the finance field entirely when no finance bits are given, matching pre-existing snapshots', () => {
+    const progress = buildChallengeProgress(GOAL, START_DATE, HORIZON_DAYS, 100, 95, '2026-06-01', '2026-01-22', KCAL_PER_KG);
+    const snapshot = buildWallpaperSnapshot(progress, UPDATED_AT);
+
+    expect(snapshot.finance).toBeUndefined();
+    expect('finance' in snapshot).toBe(false);
+  });
+
+  it('merges finance bits in when given', () => {
+    const progress = buildChallengeProgress(GOAL, START_DATE, HORIZON_DAYS, 100, 95, '2026-06-01', '2026-01-22', KCAL_PER_KG);
+    const financeBits = { payoffPct: 0.4, daysToFreedom: 120, nextDueDays: 5 };
+    const snapshot = buildWallpaperSnapshot(progress, UPDATED_AT, financeBits);
+
+    expect(snapshot.finance).toEqual(financeBits);
+  });
 });

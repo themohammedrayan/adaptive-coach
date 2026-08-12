@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { AccountsScreen } from './AccountsScreen';
 import { BudgetScreen } from './BudgetScreen';
 import { CashflowScreen } from './CashflowScreen';
@@ -38,11 +39,53 @@ export function FinanceApp() {
   );
 }
 
+/** Cross-fades between tab panes that stay mounted once visited, so switching tabs never resets scroll position or in-progress input. */
+function AnimatedTabPane({ active, children }: { active: boolean; children: ReactNode }) {
+  const opacity = useSharedValue(active ? 1 : 0);
+
+  useEffect(() => {
+    opacity.value = withTiming(active ? 1 : 0, { duration: 180 });
+  }, [active, opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, animatedStyle]} pointerEvents={active ? 'auto' : 'none'}>
+      {children}
+    </Animated.View>
+  );
+}
+
 function FinanceAppBody({ tab, onChangeTab }: { tab: FinanceTab; onChangeTab: (tab: FinanceTab) => void }) {
   const t = useTheme();
   const router = useRouter();
   const { pendingOutboxCount, poisonedOutboxCount } = useFinanceData();
   const active = TABS.find((x) => x.key === tab)!;
+
+  // Lazy-mount-then-retain: a tab only pays its mount cost once it's actually
+  // opened, but after that it stays mounted so switching away and back is
+  // instant and keeps whatever state it had.
+  const [visited, setVisited] = useState<Set<FinanceTab>>(() => new Set([tab]));
+  useEffect(() => {
+    setVisited((prev) => (prev.has(tab) ? prev : new Set(prev).add(tab)));
+  }, [tab]);
+
+  const renderScreen = (key: FinanceTab): ReactNode => {
+    switch (key) {
+      case 'cashflow':
+        return <CashflowScreen />;
+      case 'transactions':
+        return <TransactionsScreen />;
+      case 'accounts':
+        return <AccountsScreen />;
+      case 'budget':
+        return <BudgetScreen />;
+      case 'debt':
+        return <DebtScreen onNavigateToAccounts={() => onChangeTab('accounts')} />;
+      case 'reports':
+        return <ReportsScreen />;
+    }
+  };
 
   return (
     <>
@@ -70,12 +113,13 @@ function FinanceAppBody({ tab, onChangeTab }: { tab: FinanceTab; onChangeTab: (t
       )}
 
       <View style={styles.content}>
-        {tab === 'cashflow' && <CashflowScreen />}
-        {tab === 'transactions' && <TransactionsScreen />}
-        {tab === 'accounts' && <AccountsScreen />}
-        {tab === 'budget' && <BudgetScreen />}
-        {tab === 'debt' && <DebtScreen onNavigateToAccounts={() => onChangeTab('accounts')} />}
-        {tab === 'reports' && <ReportsScreen />}
+        {TABS.map(({ key }) =>
+          visited.has(key) ? (
+            <AnimatedTabPane key={key} active={tab === key}>
+              {renderScreen(key)}
+            </AnimatedTabPane>
+          ) : null,
+        )}
       </View>
 
       <BottomTabBar tabs={TABS} active={tab} onChange={onChangeTab} />

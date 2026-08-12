@@ -54,6 +54,30 @@ class LiveWallpaperService : WallpaperService() {
       textSize = 12f * density
     }
 
+    // Unlabeled second ring for the finance payoff bit — deliberately styled
+    // as a plain progress ring + bare number, with no "debt"/"payoff" text
+    // anywhere, so it reads as generic to anyone but the owner.
+    private val financeRingTrackPaint = Paint().apply {
+      color = Color.DKGRAY
+      style = Paint.Style.STROKE
+      strokeWidth = 5f * density
+      strokeCap = Paint.Cap.ROUND
+      isAntiAlias = true
+    }
+    private val financeRingFillPaint = Paint().apply {
+      color = Color.rgb(0x4F, 0xC3, 0xF7)
+      style = Paint.Style.STROKE
+      strokeWidth = 5f * density
+      strokeCap = Paint.Cap.ROUND
+      isAntiAlias = true
+    }
+    private val financeRingNumberPaint = Paint().apply {
+      color = Color.LTGRAY
+      isAntiAlias = true
+      textAlign = Paint.Align.CENTER
+      textSize = 13f * density
+    }
+
     private var visible = false
 
     override fun onCreate(surfaceHolder: SurfaceHolder) {
@@ -135,6 +159,32 @@ class LiveWallpaperService : WallpaperService() {
       canvas.drawText(bankedText, centerX, y, labelPaint)
 
       canvas.drawText("Updated ${snapshot.updatedAt}", centerX, h * 0.9f, captionPaint)
+
+      // Isolated from the fitness draw above — a bad finance payload must not
+      // blank out the meter that already rendered successfully.
+      val finance = snapshot.finance
+      if (finance != null) {
+        try {
+          drawFinanceRing(canvas, w, h, finance)
+        } catch (e: Exception) {
+        }
+      }
+    }
+
+    private fun drawFinanceRing(canvas: Canvas, w: Float, h: Float, finance: FinanceBits) {
+      val ringRadius = 22f * density
+      val cx = w - ringRadius - 24f * density
+      val cy = h * 0.12f
+      val rect = RectF(cx - ringRadius, cy - ringRadius, cx + ringRadius, cy + ringRadius)
+      canvas.drawArc(rect, 0f, 360f, false, financeRingTrackPaint)
+      val sweep = (max(0.0, min(1.0, finance.payoffPct)) * 360.0).toFloat()
+      if (sweep > 0f) {
+        canvas.drawArc(rect, -90f, sweep, false, financeRingFillPaint)
+      }
+      val days = finance.daysToFreedom
+      if (days != null) {
+        canvas.drawText("$days", cx, cy + 5f * density, financeRingNumberPaint)
+      }
     }
   }
 }

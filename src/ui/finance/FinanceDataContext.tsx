@@ -14,6 +14,7 @@ import type {
 } from '../../finance/types';
 import { enqueueOutbox, flushOutbox, isPoisoned, readOutbox } from '../../finance/outbox';
 import { deviceLocalDate } from '../../lib/dates';
+import { scheduleFinanceWallpaperSync } from '../../wallpaper';
 
 interface FinanceData {
   accounts: Account[];
@@ -79,6 +80,9 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     setData((prev) => {
       const next = updater(prev);
       void writeFinanceCache({ ...next, cachedAt: new Date().toISOString() });
+      // Debounced — the wallpaper's debt ring reads the cache just written above,
+      // so it stays current on finance activity, not just dashboard/profile opens.
+      scheduleFinanceWallpaperSync(deviceLocalDate(new Date().toISOString()));
       return next;
     });
   }, []);

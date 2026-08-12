@@ -3,7 +3,7 @@ import { Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View }
 import { accountBalanceAsOf } from '../../../finance/netWorth';
 import { defaultGenId } from '../../../finance/ids';
 import { CURRENCY_CODES, currencySymbol, formatMoneyMinor, moneyInputValue, parseMoneyInput } from '../../../finance/money';
-import type { Account, AccountType, CurrencyCode } from '../../../finance/types';
+import type { Account, AccountType, AccountValuation, CurrencyCode } from '../../../finance/types';
 import { AppButton, AppSwitch, Card, Chip, ErrorText, Field, Overline, Row } from '../../kit';
 import { space, type, useTheme } from '../../theme';
 import { useFinanceData } from '../FinanceDataContext';
@@ -90,8 +90,18 @@ export function AccountEditorModal({
   account: Account | null;
 }) {
   const t = useTheme();
-  const { transactions, valuations, today, saveAccount, saveValuation, saveTransaction, archiveAccount, unarchiveAccount, deleteAccount } =
-    useFinanceData();
+  const {
+    transactions,
+    valuations,
+    today,
+    saveAccount,
+    saveValuation,
+    deleteValuation,
+    saveTransaction,
+    archiveAccount,
+    unarchiveAccount,
+    deleteAccount,
+  } = useFinanceData();
 
   const [name, setName] = useState('');
   const [accountType, setAccountType] = useState<AccountType>('bank');
@@ -137,6 +147,29 @@ export function AccountEditorModal({
   }, [visible, account]);
 
   const balanceMode = defaultBalanceMode(accountType);
+
+  const latestValuation: AccountValuation | null =
+    account === null
+      ? null
+      : valuations
+          .filter((v) => v.accountExternalId === account.externalId)
+          .reduce<AccountValuation | null>((best, v) => {
+            if (best === null || v.asOfDate > best.asOfDate) return v;
+            if (v.asOfDate === best.asOfDate && v.updatedAt > best.updatedAt) return v;
+            return best;
+          }, null);
+
+  const confirmDeleteValuation = () => {
+    if (latestValuation === null) return;
+    Alert.alert(
+      'Remove this value entry?',
+      `The entry of ${formatMoneyMinor(latestValuation.amountMinor, currency)} as of ${latestValuation.asOfDate} will be removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: () => void deleteValuation(latestValuation.externalId) },
+      ],
+    );
+  };
 
   const selectType = (next: AccountType) => {
     setAccountType(next);
@@ -358,18 +391,28 @@ export function AccountEditorModal({
               </Row>
 
               {account !== null && balanceMode === 'valuation' && (
-                <Row gap={space.m}>
-                  <Field
-                    label={`Current value (${currency})`}
-                    prefix={currencySymbol(currency)}
-                    placeholder="0.00"
-                    keyboardType="decimal-pad"
-                    value={valuationInput}
-                    onChangeText={setValuationInput}
-                    style={{ flex: 1 }}
-                  />
-                  <AppButton title="Update" onPress={submitValuation} small />
-                </Row>
+                <>
+                  <Row gap={space.m}>
+                    <Field
+                      label={`Current value (${currency})`}
+                      prefix={currencySymbol(currency)}
+                      placeholder="0.00"
+                      keyboardType="decimal-pad"
+                      value={valuationInput}
+                      onChangeText={setValuationInput}
+                      style={{ flex: 1 }}
+                    />
+                    <AppButton title="Update" onPress={submitValuation} small />
+                  </Row>
+                  {latestValuation !== null && (
+                    <AppButton
+                      title={`Remove entry of ${formatMoneyMinor(latestValuation.amountMinor, currency)} (${latestValuation.asOfDate})`}
+                      onPress={confirmDeleteValuation}
+                      variant="ghost"
+                      small
+                    />
+                  )}
+                </>
               )}
               {account !== null && balanceMode === 'ledger' && (
                 <>

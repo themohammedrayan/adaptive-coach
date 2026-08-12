@@ -304,6 +304,14 @@ export async function upsertValuation(valuation: AccountValuation): Promise<void
   if (error) throw new Error(error.message);
 }
 
+export async function deleteValuation(externalId: string, deletedAtIso: string): Promise<void> {
+  const { error } = await supabase
+    .from('finance_valuations')
+    .update({ deleted_at: deletedAtIso })
+    .eq('external_id', externalId);
+  if (error) throw new Error(error.message);
+}
+
 /* ------------------------------------------------- recurring transactions */
 
 interface ServerRecurringTransactionRow {

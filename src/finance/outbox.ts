@@ -3,6 +3,7 @@ import {
   deleteAccount,
   deleteRecurringTransaction,
   deleteTransaction,
+  deleteValuation,
   upsertAccount,
   upsertBudget,
   upsertCategory,
@@ -142,6 +143,9 @@ async function replayEntry(entry: OutboxEntry): Promise<void> {
   }
   if (entry.deletedAtIso !== undefined && entry.entityType === 'account') {
     return deleteAccount(entry.externalId, entry.deletedAtIso);
+  }
+  if (entry.deletedAtIso !== undefined && entry.entityType === 'valuation') {
+    return deleteValuation(entry.externalId, entry.deletedAtIso);
   }
   switch (entry.entityType) {
     case 'account':

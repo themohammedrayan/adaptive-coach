@@ -52,6 +52,7 @@ interface FinanceDataValue extends FinanceData {
   deleteAccount: (externalId: string) => Promise<void>;
   saveCategory: (category: Category) => Promise<void>;
   saveValuation: (valuation: AccountValuation) => Promise<void>;
+  deleteValuation: (externalId: string) => Promise<void>;
   saveTransaction: (txn: Transaction) => Promise<void>;
   deleteTransaction: (externalId: string) => Promise<void>;
   saveRecurringTransaction: (rule: RecurringTransaction) => Promise<void>;
@@ -371,6 +372,31 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     [applyAndCache, enqueue],
   );
 
+  const deleteValuation = useCallback(
+    async (externalId: string) => {
+      const nowIso = new Date().toISOString();
+      const valuation = data.valuations.find((v) => v.externalId === externalId);
+      applyAndCache((prev) => ({
+        ...prev,
+        valuations: prev.valuations.filter((v) => v.externalId !== externalId),
+      }));
+      try {
+        await api.deleteValuation(externalId, nowIso);
+      } catch {
+        if (valuation !== undefined) {
+          await enqueue({
+            entityType: 'valuation',
+            externalId,
+            payload: valuation,
+            queuedAt: nowIso,
+            deletedAtIso: nowIso,
+          });
+        }
+      }
+    },
+    [applyAndCache, data.valuations, enqueue],
+  );
+
   const saveTransaction = useCallback(
     async (txn: Transaction) => {
       applyAndCache((prev) => ({
@@ -565,6 +591,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     deleteAccount,
     saveCategory,
     saveValuation,
+    deleteValuation,
     saveTransaction,
     deleteTransaction,
     saveRecurringTransaction,

@@ -21,6 +21,17 @@ export interface MaterializeResult {
 }
 
 /**
+ * Deterministic id for a materialized occurrence, keyed by (rule, date) —
+ * the same identity `cashflow.ts`'s forecast-side dedupe already uses. Makes
+ * re-materializing the same occurrence (e.g. after a crash between the
+ * transaction upsert and the lastMaterializedDate write) resolve to a no-op
+ * update instead of a duplicate row, regardless of write-order or timing.
+ */
+export function materializedTransactionExternalId(ruleExternalId: string, txnDate: IsoDate): string {
+  return `rec-${ruleExternalId}-${txnDate}`;
+}
+
+/**
  * Pure: given recurrence rules and today's date, produces the transaction
  * drafts due since each rule's last materialization.
  *

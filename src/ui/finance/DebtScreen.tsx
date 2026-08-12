@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { buildDebtOverview, iouPosition, simulatePayoff, type PayoffStrategy } from '../../finance/debt';
+import { alignPayoffSeries, buildDebtOverview, iouPosition, simulatePayoff, type PayoffStrategy } from '../../finance/debt';
 import { formatMoneyMinor, parseMoneyInput } from '../../finance/money';
 import { formatDayLabel } from '../../finance/periods';
 import type { Account } from '../../finance/types';
 import { AppButton, Card, EmptyState, Field, Overline, Row, SegmentedControl } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { DebtLineCard } from './components/DebtLineCard';
+import { DebtPayoffChart } from './components/DebtPayoffChart';
 import { IouSection } from './components/IouSection';
 import { useFinanceData } from './FinanceDataContext';
 import { AddTransactionModal } from './TransactionsScreen';
@@ -141,6 +142,19 @@ export function DebtScreen({ onNavigateToAccounts }: { onNavigateToAccounts: () 
                             }`
                           : ''}
                       </Text>
+                      <DebtPayoffChart
+                        plan={
+                          otherPlan !== null
+                            ? alignPayoffSeries(plan.balanceByMonth, otherPlan.balanceByMonth).a
+                            : plan.balanceByMonth
+                        }
+                        planLabel={STRATEGY_OPTIONS.find((o) => o.value === strategy)!.label}
+                        otherPlan={
+                          otherPlan !== null ? alignPayoffSeries(plan.balanceByMonth, otherPlan.balanceByMonth).b : null
+                        }
+                        otherPlanLabel={STRATEGY_OPTIONS.find((o) => o.value !== strategy)!.label}
+                        currency={currency}
+                      />
                     </>
                   ) : (
                     <>

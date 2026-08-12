@@ -41,7 +41,7 @@ export function FinanceApp() {
 function FinanceAppBody({ tab, onChangeTab }: { tab: FinanceTab; onChangeTab: (tab: FinanceTab) => void }) {
   const t = useTheme();
   const router = useRouter();
-  const { pendingOutboxCount } = useFinanceData();
+  const { pendingOutboxCount, poisonedOutboxCount } = useFinanceData();
   const active = TABS.find((x) => x.key === tab)!;
 
   return (
@@ -57,6 +57,14 @@ function FinanceAppBody({ tab, onChangeTab }: { tab: FinanceTab; onChangeTab: (t
           <Dot color={t.warning} />
           <Text style={[type.caption, { color: t.muted }]}>
             {pendingOutboxCount} change{pendingOutboxCount === 1 ? '' : 's'} not yet synced
+          </Text>
+        </Row>
+      )}
+      {poisonedOutboxCount > 0 && (
+        <Row style={styles.syncBanner} gap={space.s}>
+          <Dot color={t.danger} />
+          <Text style={[type.caption, { color: t.danger }]}>
+            Couldn't sync {poisonedOutboxCount} change{poisonedOutboxCount === 1 ? '' : 's'} after repeated attempts
           </Text>
         </Row>
       )}

@@ -1,4 +1,5 @@
 import {
+  alignPayoffSeries,
   buildDebtOverview,
   iouPosition,
   paidInCycle,
@@ -344,6 +345,25 @@ describe('simulatePayoff', () => {
     expect(plan.order).toEqual(['free']);
   });
 
+  it('reports the total balance declining to zero month by month, starting from month 0', () => {
+    const plan = simulatePayoff([line('free', 1000000, 0, 100000)], 200000, 'avalanche', '2026-08-15')!;
+    expect(plan.balanceByMonth).toEqual([
+      { month: 0, totalBalanceMinor: 1000000 },
+      { month: 1, totalBalanceMinor: 800000 },
+      { month: 2, totalBalanceMinor: 600000 },
+      { month: 3, totalBalanceMinor: 400000 },
+      { month: 4, totalBalanceMinor: 200000 },
+      { month: 5, totalBalanceMinor: 0 },
+    ]);
+  });
+
+  it('sums the balance across every debt still active that month', () => {
+    const plan = simulatePayoff([expensive, small], 300000, 'avalanche', '2026-08-15')!;
+    expect(plan.balanceByMonth[0].totalBalanceMinor).toBe(expensive.balanceMinor + small.balanceMinor);
+    expect(plan.balanceByMonth[plan.balanceByMonth.length - 1].totalBalanceMinor).toBe(0);
+    expect(plan.balanceByMonth).toHaveLength(plan.months + 1);
+  });
+
   it('avalanche costs less interest than snowball on the same debts and budget', () => {
     const budget = 300000; // ₹3,000/mo, above the ₹1,500 of minimums
     const avalanche = simulatePayoff([expensive, small], budget, 'avalanche', '2026-08-15')!;
@@ -384,5 +404,34 @@ describe('simulatePayoff', () => {
     const plan = simulatePayoff([line('free', 200000, 0, 100000)], 100000, 'avalanche', '2026-12-31')!;
     expect(plan.months).toBe(2);
     expect(plan.debtFreeDate).toBe('2027-02-28');
+  });
+});
+
+describe('alignPayoffSeries', () => {
+  it('right-pads the shorter series with its final balance so both span the same x-axis', () => {
+    const short = [
+      { month: 0, totalBalanceMinor: 100000 },
+      { month: 1, totalBalanceMinor: 0 },
+    ];
+    const long = [
+      { month: 0, totalBalanceMinor: 100000 },
+      { month: 1, totalBalanceMinor: 60000 },
+      { month: 2, totalBalanceMinor: 20000 },
+      { month: 3, totalBalanceMinor: 0 },
+    ];
+    const { a, b } = alignPayoffSeries(short, long);
+    expect(a).toEqual([
+      { month: 0, totalBalanceMinor: 100000 },
+      { month: 1, totalBalanceMinor: 0 },
+      { month: 2, totalBalanceMinor: 0 },
+      { month: 3, totalBalanceMinor: 0 },
+    ]);
+    expect(b).toEqual(long);
+  });
+
+  it('leaves two equal-length series untouched', () => {
+    const a = [{ month: 0, totalBalanceMinor: 500 }];
+    const b = [{ month: 0, totalBalanceMinor: 900 }];
+    expect(alignPayoffSeries(a, b)).toEqual({ a, b });
   });
 });

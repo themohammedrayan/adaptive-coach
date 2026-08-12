@@ -1,4 +1,4 @@
-import { materializeDueRecurrences } from '../recurrence';
+import { materializeDueRecurrences, materializedTransactionExternalId } from '../recurrence';
 import type { RecurringTransaction } from '../types';
 
 function rule(overrides: Partial<RecurringTransaction>): RecurringTransaction {
@@ -103,5 +103,24 @@ describe('materializeDueRecurrences — daily and weekly', () => {
       '2026-07-29',
     );
     expect(drafts.map((d) => d.txnDate)).toEqual(['2026-07-15', '2026-07-29']);
+  });
+});
+
+describe('materializedTransactionExternalId', () => {
+  it('is deterministic for the same rule and date, so re-materializing after a crash is a no-op upsert', () => {
+    const first = materializedTransactionExternalId('r1', '2026-07-01');
+    const second = materializedTransactionExternalId('r1', '2026-07-01');
+    expect(first).toBe(second);
+  });
+
+  it('differs across rules and across dates for the same rule', () => {
+    const base = materializedTransactionExternalId('r1', '2026-07-01');
+    expect(materializedTransactionExternalId('r2', '2026-07-01')).not.toBe(base);
+    expect(materializedTransactionExternalId('r1', '2026-08-01')).not.toBe(base);
+  });
+
+  it('produces the same key shape the cashflow forecast dedupe already uses (ruleExternalId|txnDate)', () => {
+    const id = materializedTransactionExternalId('r1', '2026-07-01');
+    expect(id).toBe('rec-r1-2026-07-01');
   });
 });

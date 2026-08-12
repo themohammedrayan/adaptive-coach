@@ -24,3 +24,13 @@ export interface ProjectedNetWorthChartProps {
   projection: { monthsAhead: number; projectedNetWorthMinor: number }[];
   currency: string;
 }
+
+export interface DebtPayoffChartProps {
+  /** The plan for the strategy currently selected on screen — solid line. */
+  plan: { month: number; totalBalanceMinor: number }[];
+  planLabel: string;
+  /** The opposite strategy, for comparison — dashed line. Absent when there's nothing to compare against. */
+  otherPlan: { month: number; totalBalanceMinor: number }[] | null;
+  otherPlanLabel: string;
+  currency: string;
+}

@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import * as api from '../../finance/api';
 import { readFinanceCache, writeFinanceCache } from '../../finance/cache';
-import { defaultGenId } from '../../finance/ids';
-import { materializeDueRecurrences } from '../../finance/recurrence';
+import { materializedTransactionExternalId, materializeDueRecurrences } from '../../finance/recurrence';
 import type {
   Account,
   AccountValuation,
@@ -13,7 +12,7 @@ import type {
   RecurringTransaction,
   Transaction,
 } from '../../finance/types';
-import { enqueueOutbox, flushOutbox, readOutbox } from '../../finance/outbox';
+import { enqueueOutbox, flushOutbox, isPoisoned, readOutbox } from '../../finance/outbox';
 import { deviceLocalDate } from '../../lib/dates';
 
 interface FinanceData {
@@ -43,6 +42,8 @@ interface FinanceDataValue extends FinanceData {
   today: string;
   /** Queued writes waiting to sync — surfaced as a small banner so a stuck offline write isn't invisible. */
   pendingOutboxCount: number;
+  /** Writes that failed to replay OUTBOX_POISON_THRESHOLD times — no longer auto-retried, surfaced separately. */
+  poisonedOutboxCount: number;
   refresh: () => Promise<void>;
   saveAccount: (account: Account) => Promise<void>;
   archiveAccount: (externalId: string) => Promise<void>;
@@ -71,6 +72,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<FinanceData>(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [pendingOutboxCount, setPendingOutboxCount] = useState(0);
+  const [poisonedOutboxCount, setPoisonedOutboxCount] = useState(0);
   const today = deviceLocalDate(new Date().toISOString());
 
   const applyAndCache = useCallback((updater: (prev: FinanceData) => FinanceData) => {
@@ -83,7 +85,9 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
 
   const refreshOutboxCount = useCallback(async () => {
     const entries = await readOutbox();
-    setPendingOutboxCount(entries.length);
+    const poisoned = entries.filter(isPoisoned).length;
+    setPendingOutboxCount(entries.length - poisoned);
+    setPoisonedOutboxCount(poisoned);
   }, []);
 
   /** Every mutation's failure path queues through here instead of calling enqueueOutbox directly, so the pending-count banner never drifts from the real queue. */
@@ -101,8 +105,8 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
 
     const nowIso = new Date().toISOString();
     const materialized: Transaction[] = drafts.map((d) => ({
-      id: defaultGenId(),
-      externalId: defaultGenId(),
+      id: materializedTransactionExternalId(d.ruleExternalId, d.txnDate),
+      externalId: materializedTransactionExternalId(d.ruleExternalId, d.txnDate),
       type: d.type as Transaction['type'],
       accountExternalId: d.accountExternalId,
       counterAccountExternalId: d.counterAccountExternalId,
@@ -525,6 +529,7 @@ export function FinanceDataProvider({ children }: { children: ReactNode }) {
     loading,
     today,
     pendingOutboxCount,
+    poisonedOutboxCount,
     refresh: load,
     saveAccount,
     archiveAccount,

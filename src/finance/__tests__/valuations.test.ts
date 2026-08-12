@@ -34,4 +34,25 @@ describe('latestValuationAsOf', () => {
     const valuations = [valuation({ accountExternalId: 'acc-other' })];
     expect(latestValuationAsOf(valuations, 'acc-invest', '2026-07-15')).toBeNull();
   });
+
+  it('tie-breaks same-day valuations on updatedAt, not array order', () => {
+    const first = valuation({
+      id: 'first',
+      externalId: 'first',
+      asOfDate: '2026-07-01',
+      amountMinor: 90000,
+      updatedAt: '2026-07-01T09:00:00.000Z',
+    });
+    const correction = valuation({
+      id: 'correction',
+      externalId: 'correction',
+      asOfDate: '2026-07-01',
+      amountMinor: 105000,
+      updatedAt: '2026-07-01T15:00:00.000Z',
+    });
+    // The later-updated same-day entry must win regardless of which order the
+    // rows happen to come back from the server in.
+    expect(latestValuationAsOf([first, correction], 'acc-invest', '2026-07-01')).toBe(105000);
+    expect(latestValuationAsOf([correction, first], 'acc-invest', '2026-07-01')).toBe(105000);
+  });
 });

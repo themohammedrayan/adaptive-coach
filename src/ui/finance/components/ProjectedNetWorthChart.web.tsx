@@ -1,6 +1,19 @@
-import { CartesianGrid, Line, LineChart as RLineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  CartesianGrid,
+  Label,
+  Line,
+  LineChart as RLineChart,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import { formatMoneyMinor } from '../../../finance/money';
 import { formatPeriodLabel } from '../../../finance/periods';
+import { zeroCrossingIndex } from '../../../finance/projection';
+import { EmptyState } from '../../kit';
 import { useTheme } from '../../theme';
 import type { ProjectedNetWorthChartProps } from './types';
 
@@ -13,6 +26,10 @@ interface ChartPoint {
 /** Web export variant, same data contract as the native chart (ProjectedNetWorthChart.tsx). */
 export function ProjectedNetWorthChart({ historical, projection, currency }: ProjectedNetWorthChartProps) {
   const t = useTheme();
+  if (historical.length === 0 && projection.length === 0) {
+    return <EmptyState message="Not enough history yet to project a trend." />;
+  }
+
   const historicalData: ChartPoint[] = historical.map((d) => ({
     label: formatPeriodLabel(d.date, 'month'),
     netWorth: d.netWorthMinor / 100,
@@ -34,6 +51,10 @@ export function ProjectedNetWorthChart({ historical, projection, currency }: Pro
       : historicalData;
   const chartData = [...bridged, ...projectedData];
 
+  const combinedValues = chartData.map((d) => d.netWorth ?? d.netWorthProjected ?? 0);
+  const crossing = zeroCrossingIndex(combinedValues);
+  const crossingPoint = crossing !== null && crossing >= historicalData.length ? chartData[crossing] : null;
+
   return (
     <ResponsiveContainer width="100%" height={180}>
       <RLineChart data={chartData}>
@@ -41,6 +62,7 @@ export function ProjectedNetWorthChart({ historical, projection, currency }: Pro
         <XAxis dataKey="label" tick={{ fontSize: 10, fill: t.muted }} stroke={t.chart.grid} />
         <YAxis tick={{ fontSize: 10, fill: t.muted }} stroke="transparent" />
         <Tooltip formatter={(value) => formatMoneyMinor(Number(value) * 100, currency)} />
+        <ReferenceLine y={0} stroke={t.chart.grid} strokeDasharray="4 4" />
         <Line type="monotone" dataKey="netWorth" stroke={t.accent} strokeWidth={2} dot={false} connectNulls={false} />
         <Line
           type="monotone"
@@ -51,6 +73,17 @@ export function ProjectedNetWorthChart({ historical, projection, currency }: Pro
           dot={false}
           connectNulls={false}
         />
+        {crossingPoint !== null && (
+          <ReferenceDot
+            x={crossingPoint.label}
+            y={crossingPoint.netWorthProjected ?? 0}
+            r={4}
+            fill={t.good}
+            stroke="none"
+          >
+            <Label value="Turns positive" position="top" fill={t.good} fontSize={11} fontWeight={600} />
+          </ReferenceDot>
+        )}
       </RLineChart>
     </ResponsiveContainer>
   );

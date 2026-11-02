@@ -16,6 +16,8 @@ export interface RefreshDeps {
   foodLogStore: FoodLogStore;
   dataSyncStore: BodyMetricsStore;
   challengeStore: ChallengeStore;
+  /** Clock for the challenge's updatedAt stamp (cross-device LWW); defaults to the device clock. */
+  nowUtc?: () => string;
 }
 
 /**
@@ -88,7 +90,7 @@ export async function refreshDashboardSnapshot(
 
   if (result !== null) {
     const next = nextEngineState(engineState, result, today);
-    const updatedChallenge = withEngineState(primary, next);
+    const updatedChallenge = withEngineState(primary, next, deps.nowUtc?.() ?? new Date().toISOString());
     await challengeStore.upsert(updatedChallenge);
     await dashStore.setLastResult(today, result);
     // Recompute→coach note→reminder wiring (BRD §B2.3): fire-and-forget, never blocks the snapshot.

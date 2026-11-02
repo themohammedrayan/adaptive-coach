@@ -41,6 +41,8 @@ export const RESET_REMOTE_TABLES = [
   'calendar_overrides',
   'medications',
   'medication_doses',
+  'person_profiles',
+  'challenges',
 ] as const;
 
 export interface ResetAuth {

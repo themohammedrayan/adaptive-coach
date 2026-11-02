@@ -30,10 +30,15 @@ export function toEngineState(challenge: WeightChallenge): EngineState {
   };
 }
 
-/** Folds a fresh EngineState (from engine's nextEngineState()) back onto the challenge. */
-export function withEngineState(challenge: WeightChallenge, next: EngineState): WeightChallenge {
+/**
+ * Folds a fresh EngineState (from engine's nextEngineState()) back onto the
+ * challenge. Stamps updatedAt so the bookkeeping wins last-write-wins sync
+ * against other devices' older copies.
+ */
+export function withEngineState(challenge: WeightChallenge, next: EngineState, nowUtc: string): WeightChallenge {
   return {
     ...challenge,
+    updatedAt: nowUtc,
     prevTargetKcal: next.prevTargetKcal,
     lastRecomputeDate: next.lastRecomputeDate,
     mode: next.mode,

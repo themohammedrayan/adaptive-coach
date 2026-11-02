@@ -86,8 +86,12 @@ supabase-js touches `window` at import). Rules for web-safe code:
 - Use `showAlert` from `src/lib/alert.ts`, never `Alert.alert` — it is a
   silent no-op on react-native-web.
 - Synced data (body metrics, food log, finance, goals…) rebuilds from
-  Supabase. Profile/engine result/challenges are device-local: SQLite on
-  Android, `store.local.ts` (localStorage) on web — not shared across devices.
+  Supabase. Profile and challenges sync via `person_profiles` / `challenges`
+  (write-through decorators in `dashboard/profileSync.ts` and
+  `challenges/sync.ts`, last-write-wins on client `updatedAt`, reconciled on
+  app open). Any challenge write must bump `updatedAt` or it won't sync.
+  The cached engine result and reminder config stay per-device (SQLite on
+  Android, `store.local.ts` localStorage on web).
 
 ## Commands
 

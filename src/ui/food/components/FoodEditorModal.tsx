@@ -1,9 +1,10 @@
-import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Food } from '../../../food-log';
 import { AppButton, Card, Overline } from '../../kit';
 import { space, type, useTheme } from '../../theme';
 import { CreateFoodForm } from '../CreateFoodForm';
 import { useFoodData } from '../FoodDataContext';
+import { showAlert } from '../../../lib/alert';
 
 /**
  * Edit or hide a catalog food. `food: null` means the modal is closed — the same
@@ -33,7 +34,7 @@ export function FoodEditorModal({
   const isMine = food.createdBy === null || food.createdBy === myUserId;
 
   const confirmArchive = () => {
-    Alert.alert(
+    showAlert(
       'Remove from your foods?',
       `${food.name} disappears from your list. It stays in the shared library, and your past entries keep the numbers they were logged with.`,
       [
@@ -45,7 +46,7 @@ export function FoodEditorModal({
             void archiveFood(food.id)
               .then(onClose)
               .catch((e: unknown) =>
-                Alert.alert('Couldn’t remove', e instanceof Error ? e.message : String(e)),
+                showAlert('Couldn’t remove', e instanceof Error ? e.message : String(e)),
               );
           },
         },
@@ -81,7 +82,7 @@ export function FoodEditorModal({
                   onDone={(_saved, forked) => {
                     onClose();
                     if (forked) {
-                      Alert.alert(
+                      showAlert(
                         'Saved as your copy',
                         'The original stays in the shared library for everyone who logged it.',
                       );

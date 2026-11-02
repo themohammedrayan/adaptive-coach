@@ -1,6 +1,6 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { defaultGenId } from '../../finance/ids';
 import { currencySymbol, formatMoneyMinor, moneyInputValue, parseMoneyInput } from '../../finance/money';
 import { UNCATEGORISED_EXTERNAL_ID } from '../../finance/presetCategories';
@@ -13,6 +13,7 @@ import { CategoryManagerModal } from './components/CategoryManagerModal';
 import { RecurringModal } from './components/RecurringModal';
 import { useFinanceData } from './FinanceDataContext';
 import { accountName, categoryName } from './labels';
+import { showAlert } from '../../lib/alert';
 
 const KIND_OPTIONS: { value: TransactionType; label: string }[] = [
   { value: 'expense', label: 'Expense' },
@@ -66,7 +67,7 @@ export function TransactionsScreen() {
   const isFiltering = searchQuery.trim() !== '' || kindFilter !== 'all';
 
   const confirmDelete = (txn: Transaction) => {
-    Alert.alert('Delete this transaction?', `${formatMoneyMinor(txn.amountMinor, txn.currency)} on ${txn.txnDate}`, [
+    showAlert('Delete this transaction?', `${formatMoneyMinor(txn.amountMinor, txn.currency)} on ${txn.txnDate}`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => void deleteTransaction(txn.externalId) },
     ]);

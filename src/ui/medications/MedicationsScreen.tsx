@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { addDays, dateRange } from '../../engine';
 import { buildMedicationAdherence, currentStreak, type DayAdherence } from '../../medications/adherence';
 import { expectedDosesForDate } from '../../medications/schedule';
@@ -9,6 +9,7 @@ import { radius, space, type, useTheme } from '../theme';
 import { formatClockInput } from '../calendar/timeInput';
 import { MedicationFormSheet } from './MedicationFormSheet';
 import { useMedicationsData } from './MedicationsDataContext';
+import { showAlert } from '../../lib/alert';
 
 type MedsView = 'today' | 'medications' | 'history';
 
@@ -53,7 +54,7 @@ export function MedicationsScreen() {
   };
 
   const confirmStop = (med: Medication) => {
-    Alert.alert('Stop taking this medication?', med.name, [
+    showAlert('Stop taking this medication?', med.name, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Stop', style: 'destructive', onPress: () => void archiveMedication(med.externalId) },
     ]);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { BuildRoutineBlockInput } from '../../calendar/crud';
 import { ROUTINE_CATEGORIES, WEEKDAY_LABELS, type RoutineBlock, type RoutineCategory } from '../../calendar/types';
 import { AppButton, Card, Chip, EmptyState, ErrorText, Field, Row } from '../kit';
@@ -7,6 +7,7 @@ import { space, type, useTheme } from '../theme';
 import { useCalendarData } from './CalendarDataContext';
 import { formatClockInput } from './timeInput';
 import { TimeFieldBox, WheelTimePicker } from './WheelTimePicker';
+import { showAlert } from '../../lib/alert';
 
 type Screen = { kind: 'list' } | { kind: 'edit'; block: RoutineBlock | null };
 
@@ -96,7 +97,7 @@ function TemplateBlockForm({
 
   const confirmDelete = () => {
     if (onDelete === undefined) return;
-    Alert.alert('Delete this routine block?', `"${label}" will be removed from your weekly routine.`, [
+    showAlert('Delete this routine block?', `"${label}" will be removed from your weekly routine.`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => void onDelete() },
     ]);

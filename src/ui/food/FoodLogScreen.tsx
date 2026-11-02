@@ -1,7 +1,6 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Pressable,
@@ -29,6 +28,7 @@ import { FOOD_PHOTO_BUCKET, MEAL_PHOTO_BUCKET, useFoodData } from './FoodDataCon
 import { FoodEditorModal } from './components/FoodEditorModal';
 import { FoodPhoto } from './components/FoodPhoto';
 import { useImagePick } from './useImagePick';
+import { showAlert } from '../../lib/alert';
 
 const MEALS: { key: Meal; label: string }[] = [
   { key: 'breakfast', label: 'Breakfast' },
@@ -83,7 +83,7 @@ export function FoodLogScreen() {
     try {
       await toggleFavorite(foodId, activeMeal);
     } catch (e) {
-      Alert.alert('Couldn’t update favorite', e instanceof Error ? e.message : String(e));
+      showAlert('Couldn’t update favorite', e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -511,7 +511,7 @@ function EntryActionSheet({
   }, [picked]);
 
   const confirmDelete = () => {
-    Alert.alert('Delete entry?', `${foodName} · ${Math.round(entry.kcal)} kcal`, [
+    showAlert('Delete entry?', `${foodName} · ${Math.round(entry.kcal)} kcal`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -522,7 +522,7 @@ function EntryActionSheet({
               await deleteEntry(entry.id);
               onClose();
             } catch (e) {
-              Alert.alert('Delete failed', e instanceof Error ? e.message : String(e));
+              showAlert('Delete failed', e instanceof Error ? e.message : String(e));
             }
           })();
         },

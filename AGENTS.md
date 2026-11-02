@@ -71,11 +71,27 @@ flows, inconsistent field labeling) from not having one.
 - API keys never ship in the client; all model API calls go through the
   `coach-note` Supabase Edge Function (currently OpenAI `gpt-5-mini`;
   provider is swappable server-side only).
-- Android-only v1, Expo **dev build** (native Health Connect module — not
-  Expo Go).
+- Android-first v1, Expo **dev build** (native Health Connect module — not
+  Expo Go). A web build also ships from this repo (see below).
+
+## Web build
+
+Same codebase and Supabase backend, exported as a single-page app
+(`app.json` → `web.output: "single"`; static rendering breaks because
+supabase-js touches `window` at import). Rules for web-safe code:
+
+- Native-only features need a web path: Health Connect is stubbed
+  (`src/data-sync/hc/adapter.ts`), notification reminders are hidden,
+  charts have `.web.tsx` recharts variants.
+- Use `showAlert` from `src/lib/alert.ts`, never `Alert.alert` — it is a
+  silent no-op on react-native-web.
+- Synced data (body metrics, food log, finance, goals…) rebuilds from
+  Supabase. Profile/engine result/challenges are device-local: SQLite on
+  Android, `store.local.ts` (localStorage) on web — not shared across devices.
 
 ## Commands
 
 - `npm test` — jest (engine is test-driven; run before committing)
 - `npx tsc --noEmit` — typecheck
 - `npx expo start` — dev server
+- `npx expo export --platform web` — static web build into `dist/`

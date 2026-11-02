@@ -1,6 +1,6 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { iouPosition } from '../../../finance/debt';
 import { defaultGenId } from '../../../finance/ids';
 import { currencySymbol, formatMoneyMinor, parseMoneyInput } from '../../../finance/money';
@@ -9,6 +9,7 @@ import type { Iou, IouDirection } from '../../../finance/types';
 import { AppButton, Card, Chip, EmptyState, ErrorText, Field, Overline, Row } from '../../kit';
 import { space, type, useTheme } from '../../theme';
 import { useFinanceData } from '../FinanceDataContext';
+import { showAlert } from '../../../lib/alert';
 
 const DIRECTIONS: { value: IouDirection; label: string }[] = [
   { value: 'owed_to_me', label: 'They owe me' },
@@ -24,7 +25,7 @@ export function IouSection({ currency }: { currency: string }) {
   const open = ious.filter((i) => i.settledAt === null);
 
   const confirmSettle = (iou: Iou) => {
-    Alert.alert(
+    showAlert(
       'Settle this IOU?',
       `${iou.personName} · ${formatMoneyMinor(iou.amountMinor, iou.currency)} will be marked settled.`,
       [

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { defaultGenId } from '../../../finance/ids';
 import { parseMoneyInput } from '../../../finance/money';
 import type { Budget } from '../../../finance/types';
 import { AppButton, Card, ErrorText, Field, Overline, Row } from '../../kit';
 import { space } from '../../theme';
 import { useFinanceData } from '../FinanceDataContext';
+import { showAlert } from '../../../lib/alert';
 
 /**
  * One amount field per category plus an overall cap. Reuses an existing
@@ -54,7 +55,7 @@ export function EditBudgetsModal({
   const confirmRemove = (categoryExternalId: string | null, label: string) => {
     const existing = findBudget(categoryExternalId);
     if (existing === null) return;
-    Alert.alert('Remove this budget?', `The "${label}" budget will be removed.`, [
+    showAlert('Remove this budget?', `The "${label}" budget will be removed.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { getChallengeRuntime } from '../challenges/runtime';
 import { getDataSyncRuntime } from '../data-sync/runtime';
 import {
@@ -20,6 +20,7 @@ import { supabase } from '../lib/supabase';
 import { openWallpaperChooser, syncWallpaperSnapshot } from '../wallpaper';
 import { AppButton, AppSwitch, Card, Chip, Field, Overline, ProgressBar, Row } from './kit';
 import { space, type, useTheme } from './theme';
+import { showAlert } from '../lib/alert';
 
 function fmtTime(hour: number, minute: number): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
@@ -107,7 +108,7 @@ export function ProfileScreen() {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     } catch (e) {
-      Alert.alert('Sign out failed', e instanceof Error ? e.message : String(e));
+      showAlert('Sign out failed', e instanceof Error ? e.message : String(e));
     } finally {
       setSigningOut(false);
     }
@@ -135,7 +136,7 @@ export function ProfileScreen() {
   };
 
   const confirmReset = () => {
-    Alert.alert(
+    showAlert(
       'Reset all data?',
       'This permanently deletes your profile, weights, food log, and coach history from this device and the server, then signs you out. This can’t be undone.',
       [
@@ -150,7 +151,7 @@ export function ProfileScreen() {
                 await resetUserData();
               } catch (e) {
                 setResetting(false);
-                Alert.alert('Reset failed', e instanceof Error ? e.message : String(e));
+                showAlert('Reset failed', e instanceof Error ? e.message : String(e));
               }
             })();
           },
@@ -247,7 +248,7 @@ export function ProfileScreen() {
         <AppButton title="Edit profile" onPress={() => setEditing(true)} variant="secondary" small />
       </Card>
 
-      {reminders !== null && (
+      {reminders !== null && Platform.OS !== 'web' && (
         <Card style={styles.card}>
           <Overline>Reminders</Overline>
           <ToggleRow

@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { resolveMealItems, type CreateFoodInput, type Meal, type ResolvedMealItem } from '../../food-log';
 import { EstimateUnavailableError, logMeal } from '../../meal-estimate';

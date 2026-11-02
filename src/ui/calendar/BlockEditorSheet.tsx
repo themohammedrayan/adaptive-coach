@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { ROUTINE_CATEGORIES, type ResolvedBlock, type RoutineCategory } from '../../calendar/types';
 import { AppButton, Card, Chip, ErrorText, Field, Row, SegmentedControl } from '../kit';
 import { radius, space, type, useTheme } from '../theme';
 import { TimeFieldBox, WheelTimePicker } from './WheelTimePicker';
+import { showAlert } from '../../lib/alert';
 
 export type EditScope = 'today' | 'always';
 
@@ -74,7 +75,7 @@ export function BlockEditorSheet({
 
   const remove = () => {
     if (onDelete === undefined) return;
-    Alert.alert(
+    showAlert(
       'Delete this block?',
       scope === 'today'
         ? `"${label}" will be removed from today's schedule only.`

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { accountBalanceAsOf } from '../../../finance/netWorth';
 import { defaultGenId } from '../../../finance/ids';
 import { CURRENCY_CODES, currencySymbol, formatMoneyMinor, moneyInputValue, parseMoneyInput } from '../../../finance/money';
@@ -7,6 +7,7 @@ import type { Account, AccountType, AccountValuation, CurrencyCode } from '../..
 import { AppButton, AppSwitch, Card, Chip, ErrorText, Field, Overline, Row } from '../../kit';
 import { space, type, useTheme } from '../../theme';
 import { useFinanceData } from '../FinanceDataContext';
+import { showAlert } from '../../../lib/alert';
 
 export const ACCOUNT_TYPES: { value: AccountType; label: string }[] = [
   { value: 'bank', label: 'Bank' },
@@ -161,7 +162,7 @@ export function AccountEditorModal({
 
   const confirmDeleteValuation = () => {
     if (latestValuation === null) return;
-    Alert.alert(
+    showAlert(
       'Remove this value entry?',
       `The entry of ${formatMoneyMinor(latestValuation.amountMinor, currency)} as of ${latestValuation.asOfDate} will be removed.`,
       [
@@ -277,7 +278,7 @@ export function AccountEditorModal({
 
   const confirmArchive = () => {
     if (account === null) return;
-    Alert.alert('Archive account?', `"${account.name}" will be hidden but kept for historical reports.`, [
+    showAlert('Archive account?', `"${account.name}" will be hidden but kept for historical reports.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Archive',
@@ -300,7 +301,7 @@ export function AccountEditorModal({
       historyCount > 0
         ? `"${account.name}" and its ${historyCount} logged transaction${historyCount === 1 ? '' : 's'} will be permanently deleted, including from past reports. This can't be undone. If you want to keep the history, use Archive instead.`
         : `"${account.name}" will be permanently deleted. This can't be undone.`;
-    Alert.alert('Delete account?', message, [
+    showAlert('Delete account?', message, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',

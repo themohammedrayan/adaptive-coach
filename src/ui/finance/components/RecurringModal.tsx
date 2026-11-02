@@ -1,6 +1,6 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { defaultGenId } from '../../../finance/ids';
 import { currencySymbol, formatMoneyMinor, moneyInputValue, parseDayOfMonth, parseMoneyInput } from '../../../finance/money';
 import { UNCATEGORISED_EXTERNAL_ID } from '../../../finance/presetCategories';
@@ -11,6 +11,7 @@ import { AppButton, AppSwitch, Card, Chip, ErrorText, Field, Overline, Row } fro
 import { space, type, useTheme } from '../../theme';
 import { useFinanceData } from '../FinanceDataContext';
 import { accountName, categoryName } from '../labels';
+import { showAlert } from '../../../lib/alert';
 
 const FREQUENCY_OPTIONS: { value: RecurrenceFrequency; label: string }[] = [
   { value: 'monthly', label: 'Monthly' },
@@ -65,7 +66,7 @@ export function RecurringModal({ visible, onClose }: { visible: boolean; onClose
   };
 
   const confirmDelete = (rule: RecurringTransaction) => {
-    Alert.alert('Delete this recurring rule?', describeRule(rule, accounts, categories), [
+    showAlert('Delete this recurring rule?', describeRule(rule, accounts, categories), [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => void deleteRecurringTransaction(rule.externalId) },
     ]);
@@ -234,7 +235,7 @@ function RecurringForm({
     if (rule === null && startDate < today) {
       const backfillCount = occurrenceDatesBetween(next, null, today).length;
       if (backfillCount > 1) {
-        Alert.alert(
+        showAlert(
           'Backfill past occurrences?',
           `This will create ${backfillCount} transactions from ${startDate} through today.`,
           [

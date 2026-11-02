@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { inferDefaultUnitId, type Food, type Meal } from '../../food-log';
 import {
@@ -16,6 +16,7 @@ import { MEAL_PHOTO_BUCKET, useFoodData } from './FoodDataContext';
 import { PortionForm } from './FoodLogScreen';
 import { FoodPhoto } from './components/FoodPhoto';
 import { useImagePick } from './useImagePick';
+import { showAlert } from '../../lib/alert';
 
 const MEAL_LABELS: Record<Meal, string> = {
   breakfast: 'Breakfast',
@@ -86,7 +87,7 @@ export function EstimateMealScreen({ meal }: { meal: Meal | null }) {
       await toggleFavorite(reviewed.id, targetMeal);
       router.back();
     } catch (e) {
-      Alert.alert('Couldn’t log that', e instanceof Error ? e.message : String(e));
+      showAlert('Couldn’t log that', e instanceof Error ? e.message : String(e));
     }
   };
 

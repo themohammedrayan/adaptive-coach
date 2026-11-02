@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   deleteChallenge,
   pauseChallenge,
@@ -25,6 +25,7 @@ import type { GoalProgress } from '../../goals/types';
 import { AppButton, Card, EmptyState, Field, ProgressBar, Row } from '../kit';
 import { space, type, useTheme } from '../theme';
 import { useGoalsData } from './GoalsDataContext';
+import { showAlert } from '../../lib/alert';
 
 function Header({ title, onBack }: { title: string; onBack: () => void }) {
   const t = useTheme();
@@ -80,7 +81,7 @@ export function GoalDetailScreen({ goalId, onBack }: { goalId: string; onBack: (
           <AppButton
             title="Archive goal"
             onPress={() =>
-              Alert.alert('Archive this goal?', `"${goal.title}" will be removed from your active goals.`, [
+              showAlert('Archive this goal?', `"${goal.title}" will be removed from your active goals.`, [
                 { text: 'Cancel', style: 'cancel' },
                 {
                   text: 'Archive',
@@ -88,7 +89,7 @@ export function GoalDetailScreen({ goalId, onBack }: { goalId: string; onBack: (
                   onPress: () =>
                     void goalsData
                       .archiveGoal(goal.externalId)
-                      .catch((e) => Alert.alert('Archive failed', e instanceof Error ? e.message : String(e))),
+                      .catch((e) => showAlert('Archive failed', e instanceof Error ? e.message : String(e))),
                 },
               ])
             }
@@ -196,7 +197,7 @@ function MetricDetail({
         <AppButton
           title="Restart"
           onPress={() => {
-            Alert.alert(
+            showAlert(
               'Restart this goal?',
               'Day count and kcal bank reset to today, using your current trend weight as the new starting point. The goal stays the same.',
               [
@@ -226,7 +227,7 @@ function MetricDetail({
         <AppButton
           title="Delete"
           onPress={() => {
-            Alert.alert('Delete this goal?', `Goal: ${challenge.goalWeightKg}kg`, [
+            showAlert('Delete this goal?', `Goal: ${challenge.goalWeightKg}kg`, [
               { text: 'Cancel', style: 'cancel' },
               {
                 text: 'Delete',

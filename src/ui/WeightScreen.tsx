@@ -1,7 +1,7 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as ImagePicker from 'expo-image-picker';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Image, KeyboardAvoidingView, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { deviceLocalDate } from '../data-sync/normalize';
 import { uploadProgressPhoto } from '../data-sync/progressPhotos';
@@ -9,6 +9,7 @@ import { getDataSyncRuntime } from '../data-sync/runtime';
 import type { BodyMetricRow, MetricType, SyncResult } from '../data-sync/types';
 import { AppButton, Card, Dot, EmptyState, FAB, Field, Overline, Row } from './kit';
 import { radius, space, type, useTheme } from './theme';
+import { showAlert } from '../lib/alert';
 
 const HC_LABEL: Record<SyncResult['hc'], string> = {
   synced: 'Health Connect synced',
@@ -151,7 +152,7 @@ export function WeightScreen() {
 
   const confirmDeleteWeight = (item: BodyMetricRow) => {
     if (item.source !== 'manual') return; // Health Connect rows aren't user-deletable this way
-    Alert.alert('Delete weigh-in?', `${item.valueSI.toFixed(1)} kg on ${item.localDate}`, [
+    showAlert('Delete weigh-in?', `${item.valueSI.toFixed(1)} kg on ${item.localDate}`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -164,7 +165,7 @@ export function WeightScreen() {
               await refresh();
               void runSync(true); // opportunistic push; propagates the soft-delete
             } catch (e) {
-              Alert.alert('Delete failed', e instanceof Error ? e.message : String(e));
+              showAlert('Delete failed', e instanceof Error ? e.message : String(e));
             }
           })();
         },
